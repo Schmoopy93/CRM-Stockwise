@@ -247,7 +247,7 @@ export default function DashboardPage() {
                     {product.imageUrl ? (
                       <Image src={product.imageUrl} alt={product.name} width={42} height={42} style={{ width: 42, height: 42, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />
                     ) : (
-                      <div style={{ width: 42, height: 42, background: "var(--bg-3)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, flexShrink: 0 }}>📦</div>
+                      <Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={42} height={42} style={{ width: 42, height: 42, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontWeight: 700, fontSize: "0.88rem", color: "var(--text-1)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{product.name}</p>

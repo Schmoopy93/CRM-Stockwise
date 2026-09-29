@@ -160,7 +160,7 @@ export default function ProductsListPage() {
                   {p.imageUrl ? (
                     <Image src={p.imageUrl} alt={p.name} width={40} height={40} className="products-thumb" />
                   ) : (
-                    <div className="products-thumb products-thumb--empty" aria-hidden="true">📦</div>
+                    <Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={40} height={40} className="products-thumb" />
                   )}
                   <span className="products-name">{p.name}</span>
                 </div>

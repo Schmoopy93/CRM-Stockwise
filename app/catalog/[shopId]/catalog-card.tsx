@@ -39,7 +39,7 @@ export default function CatalogCard({ item, locale, index, onOpen, onQuickAdd }:
         {images[0] ? (
           <Image src={images[0]} alt={item.name} fill sizes="(max-width: 760px) 50vw, 240px" quality={90} style={{ objectFit: "cover" }} />
         ) : (
-          <div className="cat-card-placeholder" aria-hidden="true">📦</div>
+          <Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={512} height={512} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
         )}
         <div className="cat-card-shade" aria-hidden="true" />
         {item.category && <span className="cat-card-cat">{item.category}</span>}

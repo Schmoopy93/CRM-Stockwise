@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import { useProducts } from "@/lib/hooks";
 import { useLowStockNotifications } from "@/lib/notifications";
@@ -98,7 +99,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <button className="mobile-menu-button" type="button" aria-label={mobileNavOpen ? t("nav.closeMenu") : t("nav.openMenu")} aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((open) => !open)}>
           {mobileNavOpen ? <X size={21} /> : <Menu size={21} />}
         </button>
-        <span className="mobile-brand"><span aria-hidden="true">📦</span> {t("brand")}</span>
+        <span className="mobile-brand"><Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={20} height={20} style={{ width: 20, height: 20, borderRadius: 5, objectFit: "cover", verticalAlign: "-5px", marginRight: 4 }} />{t("brand")}</span>
         <span className="mobile-user-name">{profile?.displayName ?? "—"}</span>
       </header>
 
@@ -107,8 +108,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <aside className={`app-sidebar${mobileNavOpen ? " app-sidebar-open" : ""}`}>
         {/* Brand */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 0.5rem", marginBottom: "1.75rem" }}>
-          <div style={{ width: 32, height: 32, background: "linear-gradient(135deg, var(--accent), var(--accent-2))", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, boxShadow: "0 4px 12px var(--accent-glow)" }}>
-            📦
+          <div style={{ width: 32, height: 32, borderRadius: 8, overflow: "hidden", boxShadow: "0 4px 12px var(--accent-glow)", flexShrink: 0 }}>
+            <Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={32} height={32} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           </div>
           <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-1)" }}>{t("brand")}</span>
         </div>

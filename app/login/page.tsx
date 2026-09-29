@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { signInWithGoogle } from "@/lib/actions";
 import { useI18n } from "@/lib/i18n-context";
@@ -124,7 +125,7 @@ export default function LoginPage() {
       <nav style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", background: "color-mix(in srgb, var(--bg-2) 72%, transparent)", gap: 8 }}>
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <div style={{ width: 32, height: 32, background: "linear-gradient(135deg, #6366f1, #a855f7)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, boxShadow: "0 4px 14px rgba(99,102,241,0.45)", flexShrink: 0 }}>📦</div>
+          <div style={{ width: 32, height: 32, borderRadius: 9, overflow: "hidden", boxShadow: "0 4px 14px rgba(99,102,241,0.45)", flexShrink: 0 }}><Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={32} height={32} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /></div>
           <span className="nav-brand" style={{ fontSize: "0.92rem", fontWeight: 800, color: "var(--text-1)", letterSpacing: "-0.02em" }}>{t("brand")}</span>
         </div>
         {/* Actions */}
@@ -226,7 +227,7 @@ export default function LoginPage() {
 
             {/* Logo */}
             <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: "1.5rem" }}>
-              <div style={{ width: 32, height: 32, background: "linear-gradient(135deg, #6366f1, #a855f7)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, boxShadow: "0 4px 12px rgba(99,102,241,0.4)" }}>📦</div>
+              <div style={{ width: 32, height: 32, borderRadius: 9, overflow: "hidden", boxShadow: "0 4px 12px rgba(99,102,241,0.4)" }}><Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={32} height={32} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /></div>
               <span style={{ fontSize: "0.9rem", fontWeight: 800, color: "var(--text-1)", letterSpacing: "-0.02em" }}>{t("brand")}</span>
             </div>
 
@@ -306,7 +307,7 @@ export default function LoginPage() {
       {/* Footer */}
       <footer style={{ position: "relative", zIndex: 1, borderTop: "1px solid var(--border)", padding: "1.5rem 2rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", flex: 1 }}>
-          <div style={{ width: 22, height: 22, background: "linear-gradient(135deg, #6366f1, #a855f7)", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>📦</div>
+          <div style={{ width: 22, height: 22, borderRadius: 6, overflow: "hidden" }}><Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={22} height={22} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /></div>
           <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-3)" }}>{t("brand")}</span>
           <span style={{ fontSize: "0.78rem", color: "var(--border)" }}>·</span>
           <span style={{ fontSize: "0.75rem", color: "var(--text-3)" }}>{new Date().getFullYear()}</span>

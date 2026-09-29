@@ -79,7 +79,7 @@ export default function CatalogCart({ lines, locale, shopId, channels, onQuantit
                 return (
                   <li key={`${item.id}-${variant}`} className="cat-line">
                     <div className="cat-line-media">
-                      {image ? <Image src={image} alt="" fill sizes="64px" quality={90} style={{ objectFit: "cover" }} /> : <span aria-hidden="true">📦</span>}
+                      {image ? <Image src={image} alt="" fill sizes="64px" quality={90} style={{ objectFit: "cover" }} /> : <Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={64} height={64} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
                     </div>
                     <div className="cat-line-info">
                       <p className="cat-line-name">{item.name}</p>

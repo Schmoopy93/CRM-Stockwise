@@ -119,7 +119,7 @@ export default function ProductDetailPage() {
           {product.imageUrl ? (
             <Image src={product.imageUrl} alt={product.name} width={72} height={72} style={{ width: 72, height: 72, borderRadius: 12, objectFit: "cover", flexShrink: 0 }} />
           ) : (
-            <div style={{ width: 72, height: 72, background: "var(--bg-3)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0 }}>📦</div>
+            <Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={72} height={72} style={{ width: 72, height: 72, borderRadius: 12, objectFit: "cover", flexShrink: 0 }} />
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ fontSize: "1.25rem", fontWeight: 700, margin: 0, color: "var(--text-1)", wordBreak: "break-word" }}>{product.name}</h1>

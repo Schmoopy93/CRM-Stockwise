@@ -90,7 +90,7 @@ export default function CatalogDetail({ item, locale, shopId, channels, onClose,
                 <Image src={src} alt={`${item.name} — ${i + 1}`} fill sizes="(max-width: 760px) 100vw, 520px" quality={90} style={{ objectFit: "cover" }} loading={i === 0 ? "eager" : "lazy"} />
               </div>
             )) : (
-              <div className="cat-modal-slide cat-card-placeholder" aria-hidden="true">📦</div>
+              <div className="cat-modal-slide" aria-hidden="true"><Image src="/android-chrome-512x512.png" alt="" width={512} height={512} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /></div>
             )}
           </div>
           {images.length > 1 && (
