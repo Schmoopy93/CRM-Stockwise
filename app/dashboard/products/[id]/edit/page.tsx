@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n-context";
 import { useProduct, useVariants } from "@/lib/hooks";
 import { saveProduct } from "@/lib/actions";
 import { ProductCustomField, ProductVariant } from "@/lib/types";
 import ProductCustomFields from "@/components/ProductCustomFields";
-import { ArrowLeft, Plus, Trash2, ImageIcon } from "lucide-react";
+import ProductImages, { ProductImageSlot } from "@/components/ProductImages";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 
 function newVariant(): ProductVariant { return { id: "", label: "", sku: "", quantity: 0 }; }
 
@@ -29,11 +29,10 @@ export default function ProductEditPage() {
   const [customFieldDefinitions, setCustomFieldDefinitions] = useState<ProductCustomField[]>([]);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string | number | boolean>>({});
   const [variants, setVariants] = useState<ProductVariant[]>([newVariant()]);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState("");
+  const [imageSlots, setImageSlots] = useState<ProductImageSlot[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [catalogHidden, setCatalogHidden] = useState(false);
 
   useEffect(() => {
     if (product) {
@@ -43,9 +42,10 @@ export default function ProductEditPage() {
       setSku(product.sku);
       setCategory(product.category);
       setMinStock(product.minStock);
-      setImagePreview(product.imageUrl);
+      setImageSlots((product.images?.length ? product.images : product.imageUrl ? [product.imageUrl] : []).map((url) => ({ file: null, url })));
       setCustomFieldDefinitions(product.customFieldDefinitions ?? []);
       setCustomFieldValues(product.customFieldValues ?? {});
+      setCatalogHidden(product.catalogHidden === true);
     }
   }, [product]);
 
@@ -64,7 +64,7 @@ export default function ProductEditPage() {
     if (!profile) return;
     setError(""); setSaving(true);
     try {
-      const savedId = await saveProduct(profile.shopId, id, name, sku, category, minStock, imageFile, !imageFile ? imagePreview : "", variants, customFieldDefinitions, customFieldValues);
+      const savedId = await saveProduct(profile.shopId, id, name, sku, category, minStock, imageSlots, variants, customFieldDefinitions, customFieldValues, undefined, undefined, undefined, catalogHidden);
       router.replace(`/dashboard/products/${savedId}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t("product.saveError"));
@@ -80,7 +80,7 @@ export default function ProductEditPage() {
   ];
 
   return (
-    <div className="fade-up" style={{ maxWidth: 540 }}>
+    <div className="fade-up" style={{ maxWidth: 900 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.875rem", marginBottom: "1.75rem" }}>
         <Link href={`/dashboard/products/${id}`} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.82rem", color: "var(--text-2)", textDecoration: "none" }}>
           <ArrowLeft size={14} /> {t("back")}
@@ -89,33 +89,7 @@ export default function ProductEditPage() {
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-        {/* Image */}
-        <div>
-          <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--text-2)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("product.image")}</label>
-          <div
-            onClick={() => fileRef.current?.click()}
-            style={{
-              height: 130,
-              background: "var(--bg-3)",
-              border: "1px dashed var(--border-hover)",
-              borderRadius: 12,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer",
-              overflow: "hidden",
-              transition: "border-color 0.15s",
-            }}
-          >
-            {imagePreview ? (
-              <Image src={imagePreview} alt={t("product.image")} width={200} height={130} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, color: "var(--text-3)" }}>
-                <ImageIcon size={28} />
-                <span style={{ fontSize: "0.78rem" }}>{t("product.imageClick")}</span>
-              </div>
-            )}
-          </div>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setImageFile(f); setImagePreview(URL.createObjectURL(f)); } }} />
-        </div>
+        <ProductImages slots={imageSlots} onChange={setImageSlots} />
 
         {/* Fields */}
         {fields.map(({ label, value, setter, required, placeholder }) => (
@@ -138,6 +112,11 @@ export default function ProductEditPage() {
           <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--text-2)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("product.minStock")}</label>
           <input className="input" type="number" min="0" value={minStock} onChange={(e) => setMinStock(parseInt(e.target.value) || 0)} />
         </div>
+
+        <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: "0.82rem", color: "var(--text-2)" }}>
+          <input type="checkbox" checked={!catalogHidden} onChange={(e) => setCatalogHidden(!e.target.checked)} style={{ width: 16, height: 16, accentColor: "var(--accent)" }} />
+          <span>{t("catalog.productVisible")}<span style={{ display: "block", fontSize: "0.7rem", color: "var(--text-3)" }}>{t("catalog.productVisibleHint")}</span></span>
+        </label>
 
         {/* Variants */}
         <div>

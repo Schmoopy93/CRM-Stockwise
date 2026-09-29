@@ -8,7 +8,8 @@ import { useI18n } from "@/lib/i18n-context";
 import { useProducts } from "@/lib/hooks";
 import { usePagination } from "@/lib/use-pagination";
 import ListPagination from "@/components/ListPagination";
-import { Plus, Search, AlertTriangle, ArrowRight, Package, X } from "lucide-react";
+import CategoriesManager from "@/components/CategoriesManager";
+import { Plus, Search, AlertTriangle, ArrowRight, Package, X, Tags } from "lucide-react";
 
 export default function ProductsListPage() {
   const { profile } = useAuth();
@@ -17,11 +18,13 @@ export default function ProductsListPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [sort, setSort] = useState<"name" | "qty">("name");
+  const [manageOpen, setManageOpen] = useState(false);
 
   const categories = useMemo(
     () => ["all", ...Array.from(new Set(products.map((p) => p.category).filter(Boolean)))],
     [products]
   );
+  const categoryNames = categories.filter((c) => c !== "all");
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -66,10 +69,18 @@ export default function ProductsListPage() {
           <h1 className="products-title">{t("products.title")}</h1>
           <p className="products-subtitle">{t("products.count", { n: products.length })}</p>
         </div>
-        <Link href="/dashboard/products/new" className="btn-primary products-new-btn">
-          <Plus size={15} />
-          <span>{t("products.new")}</span>
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {categoryNames.length > 0 && (
+            <button onClick={() => setManageOpen(true)} title={t("categories.manage")} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.82rem", fontWeight: 600, padding: "0.55rem 0.9rem", borderRadius: 10, cursor: "pointer", background: "var(--bg-3)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
+              <Tags size={14} />
+              <span>{t("categories.manage")}</span>
+            </button>
+          )}
+          <Link href="/dashboard/products/new" className="btn-primary products-new-btn">
+            <Plus size={15} />
+            <span>{t("products.new")}</span>
+          </Link>
+        </div>
       </header>
 
       {/* Sticky filters */}
@@ -99,7 +110,7 @@ export default function ProductsListPage() {
           <option value="qty">{t("products.sortQuantity")}</option>
         </select>
 
-        {categories.length > 1 && (
+        {categoryNames.length > 0 && (
           <div className="products-chips">
             {categories.map((cat) => (
               <button key={cat} onClick={() => setCategory(cat)} className="products-chip" data-active={category === cat}>
@@ -109,6 +120,15 @@ export default function ProductsListPage() {
           </div>
         )}
       </div>
+
+      {manageOpen && profile && (
+        <CategoriesManager
+          shopId={profile.shopId}
+          categories={categoryNames}
+          onRenamed={(oldName) => { if (category === oldName) setCategory("all"); }}
+          onClose={() => setManageOpen(false)}
+        />
+      )}
 
       {/* List */}
       {filtered.length === 0 ? (

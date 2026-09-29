@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n-context";
 import { saveProduct } from "@/lib/actions";
 import { ProductCustomField, ProductVariant } from "@/lib/types";
 import ProductCustomFields from "@/components/ProductCustomFields";
-import { ArrowLeft, Plus, Trash2, ImageIcon } from "lucide-react";
+import ProductImages, { ProductImageSlot } from "@/components/ProductImages";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 
 function newVariant(): ProductVariant { return { id: "", label: "", sku: "", quantity: 0 }; }
 
@@ -25,11 +25,9 @@ export default function NewProductPage() {
   const [customFieldDefinitions, setCustomFieldDefinitions] = useState<ProductCustomField[]>([]);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string | number | boolean>>({});
   const [variants, setVariants] = useState<ProductVariant[]>([newVariant()]);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState("");
+  const [imageSlots, setImageSlots] = useState<ProductImageSlot[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
 
   function updateVariant(i: number, field: keyof ProductVariant, value: string | number) {
     setVariants((p) => p.map((v, idx) => idx === i ? { ...v, [field]: value } : v));
@@ -40,7 +38,7 @@ export default function NewProductPage() {
     if (!profile) return;
     setError(""); setSaving(true);
     try {
-      const savedId = await saveProduct(profile.shopId, null, name, sku, category, minStock, imageFile, "", variants, customFieldDefinitions, customFieldValues);
+      const savedId = await saveProduct(profile.shopId, null, name, sku, category, minStock, imageSlots, variants, customFieldDefinitions, customFieldValues);
       router.replace(`/dashboard/products/${savedId}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t("product.saveError"));
@@ -54,7 +52,7 @@ export default function NewProductPage() {
   ];
 
   return (
-    <div className="fade-up" style={{ maxWidth: 540 }}>
+    <div className="fade-up" style={{ maxWidth: 900 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.875rem", marginBottom: "1.75rem" }}>
         <Link href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.82rem", color: "var(--text-2)", textDecoration: "none" }}>
           <ArrowLeft size={14} /> {t("back")}
@@ -63,24 +61,7 @@ export default function NewProductPage() {
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-        <div>
-          <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--text-2)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("product.image")}</label>
-          <div
-            onClick={() => fileRef.current?.click()}
-            style={{ height: 130, background: "var(--bg-3)", border: "1px dashed var(--border-hover)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", overflow: "hidden" }}
-          >
-            {imagePreview ? (
-                <Image src={imagePreview} alt={t("product.image")} width={200} height={130} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, color: "var(--text-3)" }}>
-                <ImageIcon size={28} />
-                <span style={{ fontSize: "0.78rem" }}>{t("product.imageClick")}</span>
-              </div>
-            )}
-          </div>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) { setImageFile(f); setImagePreview(URL.createObjectURL(f)); } }} />
-        </div>
+        <ProductImages slots={imageSlots} onChange={setImageSlots} />
 
         {fields.map(({ label, value, setter, required, placeholder }) => (
           <div key={label}>

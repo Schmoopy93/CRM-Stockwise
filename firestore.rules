@@ -37,6 +37,12 @@ service cloud.firestore {
         && get(userPath(request.auth.uid)).data.role == 'owner';
     }
 
+    function validProductImages(data) {
+      return !('images' in data)
+        || (data.images is list && data.images.size() == 0)
+        || (data.images is list && data.images.size() <= 6 && data.images[0] is string);
+    }
+
     function validProductPricing(data) {
       return (!('costPrice' in data) || (data.costPrice is number && data.costPrice >= 0))
         && (!('salePrice' in data) || (data.salePrice is number && data.salePrice >= 0))
@@ -88,9 +94,10 @@ service cloud.firestore {
     }
 
     match /shops/{shopId} {
-      // Authenticated users can read a known shop ID to join it. Listing shops
-      // is private to existing members.
-      allow get: if signedIn();
+      // Authenticated users can read a known shop ID to join it. When the
+      // public catalog is enabled, the shop name/contact are world-readable
+      // so the catalog page can render.
+      allow get: if signedIn() || resource.data.catalogEnabled == true;
       allow list: if isMember(shopId);
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['name', 'createdBy'])
@@ -106,9 +113,9 @@ service cloud.firestore {
         allow read: if isMember(shopId);
         allow create: if isMember(shopId)
           && request.resource.data.keys().hasOnly([
-            'name', 'sku', 'category', 'minStock', 'imageUrl', 'totalQuantity',
+            'name', 'sku', 'category', 'minStock', 'imageUrl', 'images', 'totalQuantity',
             'customFieldDefinitions', 'customFieldValues', 'updatedAt',
-            'costPrice', 'salePrice', 'supplier'
+            'costPrice', 'salePrice', 'supplier', 'catalogHidden'
           ])
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -119,14 +126,16 @@ service cloud.firestore {
           && request.resource.data.totalQuantity is int
           && request.resource.data.totalQuantity >= 0
           && request.resource.data.imageUrl is string
+          && validProductImages(request.resource.data)
           && validProductPricing(request.resource.data);
         allow delete: if isMember(shopId)
           && resource.data.totalQuantity == 0;
         allow update: if isMember(shopId)
           && (request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['name', 'sku', 'category', 'minStock', 'imageUrl', 'customFieldDefinitions', 'customFieldValues', 'updatedAt', 'costPrice', 'salePrice', 'supplier'])
+                .hasOnly(['name', 'sku', 'category', 'minStock', 'imageUrl', 'images', 'customFieldDefinitions', 'customFieldValues', 'updatedAt', 'costPrice', 'salePrice', 'supplier', 'catalogHidden'])
                 && request.resource.data.minStock is int
                 && request.resource.data.minStock >= 0
+                && validProductImages(request.resource.data)
                 && validProductPricing(request.resource.data)
               || (request.resource.data.diff(resource.data).affectedKeys()
                     .hasOnly(['totalQuantity', 'updatedAt', 'lastStockEventId'])
@@ -166,6 +175,27 @@ service cloud.firestore {
                       request.resource.data.quantity - resource.data.quantity
                     )));
         }
+      }
+
+      match /catalog/{catalogId} {
+        // World-readable: documents contain only customer-safe fields.
+        allow read: if true;
+        allow create, update: if isMember(shopId)
+          && request.resource.data.keys().hasOnly([
+            'name', 'category', 'imageUrl', 'images', 'salePrice', 'variants', 'fields', 'hidden', 'updatedAt'
+          ])
+          && request.resource.data.name is string
+          && request.resource.data.category is string
+          && request.resource.data.imageUrl is string
+          && (!('images' in request.resource.data)
+            || (request.resource.data.images is list && request.resource.data.images.size() <= 6))
+          && (!('salePrice' in request.resource.data)
+            || (request.resource.data.salePrice is number && request.resource.data.salePrice >= 0))
+          && request.resource.data.variants is list
+          && request.resource.data.fields is list
+          && request.resource.data.hidden is bool
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if isMember(shopId);
       }
 
       match /sales/{saleId} {

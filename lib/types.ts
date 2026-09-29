@@ -17,6 +17,7 @@ export interface Product {
   sku: string;
   category: string;
   imageUrl: string;
+  images: string[];
   minStock: number;
   totalQuantity: number;
   costPrice?: number;   // purchase price per unit
@@ -24,6 +25,7 @@ export interface Product {
   supplier?: Supplier;
   customFieldDefinitions: ProductCustomField[];
   customFieldValues: Record<string, string | number | boolean>;
+  catalogHidden?: boolean;
 }
 
 export type ProductCustomFieldType = "text" | "number" | "date" | "boolean" | "select";
@@ -48,6 +50,31 @@ export interface ProductVariant {
 }
 
 export type SaleChannel = "instagram" | "facebook" | "store" | "phone" | "other";
+
+export interface CatalogField {
+  label: string;
+  labels?: Partial<Record<AppLocale, string>>;
+  type: ProductCustomFieldType;
+  value: string | number | boolean;
+}
+
+export interface CatalogItem {
+  id: string;
+  name: string;
+  category: string;
+  imageUrl: string;
+  images: string[];
+  salePrice?: number;
+  variants: string[];
+  fields: CatalogField[];
+  hidden: boolean;
+}
+
+export interface ShopCatalogSettings {
+  name: string;
+  catalogEnabled: boolean;
+  catalogContact: string;
+}
 
 export interface SaleLine {
   productId: string;

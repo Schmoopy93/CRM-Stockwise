@@ -26,23 +26,23 @@
 }
 
 .light {
-  --bg: #f4f4f8;
+  --bg: #eef0f6;
   --bg-2: #ffffff;
-  --bg-3: #eeeef4;
-  --border: rgba(0, 0, 0, 0.08);
-  --border-hover: rgba(0, 0, 0, 0.16);
-  --text-1: #111118;
-  --text-2: #52526a;
-  --text-3: #9898b0;
-  --accent: #6366f1;
-  --accent-2: #4f52d9;
-  --accent-glow: rgba(99, 102, 241, 0.12);
-  --green: #16a34a;
-  --green-dim: rgba(22, 163, 74, 0.1);
+  --bg-3: #e4e7ef;
+  --border: rgba(15, 23, 42, 0.14);
+  --border-hover: rgba(15, 23, 42, 0.28);
+  --text-1: #0b0d14;
+  --text-2: #3d4157;
+  --text-3: #6b7089;
+  --accent: #4f46e5;
+  --accent-2: #4338ca;
+  --accent-glow: rgba(79, 70, 229, 0.14);
+  --green: #15803d;
+  --green-dim: rgba(21, 128, 61, 0.12);
   --red: #dc2626;
   --red-dim: rgba(220, 38, 38, 0.1);
-  --amber: #d97706;
-  --amber-dim: rgba(217, 119, 6, 0.1);
+  --amber: #b45309;
+  --amber-dim: rgba(217, 119, 6, 0.12);
 }
 
 * {
@@ -687,23 +687,19 @@ select.input { cursor: pointer; }
 }
 
 .light .glass {
-  background: rgba(255, 255, 255, 0.7);
+  background: #ffffff;
   border-color: var(--border);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
 }
 
 .light .glass:hover {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.12);
 }
 
 .light .app-sidebar {
   background: #ffffff;
   border-right-color: var(--border);
   box-shadow: 1px 0 0 var(--border);
-}
-
-.light .mobile-header {
-  background: rgba(255,255,255,0.95);
 }
 
 .light .spinner {
@@ -716,5 +712,24 @@ select.input { cursor: pointer; }
 }
 
 .light ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0,0,0,0.2);
+  background: rgba(0,0,0,0.28);
+}
+
+/* Light theme: cards need visible separation on the gray page background */
+.light .input {
+  background: #ffffff;
+}
+
+.light .app-sidebar {
+  box-shadow: 1px 0 0 var(--border), 2px 0 12px rgba(15, 23, 42, 0.05);
+}
+
+.light .mobile-header {
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+}
+
+.light .products-skeleton {
+  background: linear-gradient(90deg, #f2f4f9 25%, #e4e7ef 37%, #f2f4f9 63%);
+  background-size: 400% 100%;
 }

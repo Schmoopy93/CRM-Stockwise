@@ -4,11 +4,96 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
-import { useProducts } from "@/lib/hooks";
+import { useProducts, useShop } from "@/lib/hooks";
+import { updateCatalogSettings } from "@/lib/actions";
 import { useI18n } from "@/lib/i18n-context";
 import { usePagination } from "@/lib/use-pagination";
 import ListPagination from "@/components/ListPagination";
-import { Plus, Search, AlertTriangle, Package, TrendingDown, Layers, ArrowRight, DollarSign } from "lucide-react";
+import { Plus, Search, AlertTriangle, Package, TrendingDown, Layers, ArrowRight, DollarSign, Store, Copy, Check, ExternalLink } from "lucide-react";
+
+function CatalogSettingsCard({ shopId }: { shopId: string }) {
+  const { t } = useI18n();
+  const { name, catalogEnabled, catalogContact, loading } = useShop(shopId);
+  const [contact, setContact] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const effectiveContact = contact ?? catalogContact;
+  const catalogUrl = typeof window !== "undefined" ? `${window.location.origin}/catalog/${shopId}` : "";
+
+  async function save(enabled: boolean) {
+    setError(""); setSaving(true);
+    try {
+      await updateCatalogSettings(shopId, { enabled, contact: effectiveContact });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t("catalog.error"));
+    } finally { setSaving(false); }
+  }
+
+  if (loading) return null;
+
+  return (
+    <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.1rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--accent-glow)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Store size={17} color="var(--accent-2)" />
+          </div>
+          <div>
+            <p style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--text-1)", margin: 0 }}>{t("catalog.settingsTitle")}</p>
+            <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("catalog.settingsDesc")}</p>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          <span style={{ fontSize: "0.75rem", fontWeight: 700, color: catalogEnabled ? "var(--green)" : "var(--text-3)" }}>
+            {catalogEnabled ? t("catalog.on") : t("catalog.off")}
+          </span>
+          <button
+            onClick={() => save(!catalogEnabled)}
+            disabled={saving || (!catalogEnabled && !effectiveContact.trim())}
+            aria-pressed={catalogEnabled}
+            style={{
+              width: 44, height: 24, borderRadius: 99, position: "relative", cursor: "pointer",
+              border: "none", transition: "background 0.2s",
+              background: catalogEnabled ? "var(--accent)" : "var(--bg-3)",
+              opacity: saving ? 0.6 : 1,
+            }}>
+            <span style={{
+              position: "absolute", top: 3, left: catalogEnabled ? 23 : 3, width: 18, height: 18,
+              borderRadius: "50%", background: "white", transition: "left 0.2s",
+            }} />
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+        <input className="input" type="text" placeholder={t("catalog.contactPlaceholder")} value={effectiveContact}
+          onChange={(e) => setContact(e.target.value)} style={{ flex: "1 1 200px" }} />
+        {catalogEnabled && (
+          <>
+            <a href={`/catalog/${shopId}`} target="_blank" rel="noopener noreferrer"
+              style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.78rem", color: "var(--accent-2)", textDecoration: "none", border: "1px solid var(--border)", borderRadius: 9, padding: "0.5rem 0.8rem" }}>
+              <ExternalLink size={13} /> {t("catalog.open")}
+            </a>
+            <button
+              onClick={() => { navigator.clipboard.writeText(catalogUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+              style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.78rem", color: "var(--text-2)", background: "transparent", border: "1px solid var(--border)", borderRadius: 9, padding: "0.5rem 0.8rem", cursor: "pointer" }}>
+              {copied ? <Check size={13} color="var(--green)" /> : <Copy size={13} />}
+              {copied ? t("catalog.copied") : t("catalog.copyLink")}
+            </button>
+          </>
+        )}
+      </div>
+      {catalogEnabled && (
+        <button onClick={() => save(true)} disabled={saving || contact === null}
+          style={{ alignSelf: "flex-start", fontSize: "0.75rem", color: "var(--accent-2)", background: "none", border: "none", cursor: contact === null ? "default" : "pointer", padding: 0 }}>
+          {t("catalog.saveContact")}
+        </button>
+      )}
+      {error && <p style={{ fontSize: "0.78rem", color: "var(--red)", margin: 0 }}>{error}</p>}
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const { profile } = useAuth();
@@ -85,6 +170,9 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* Catalog settings (owner only) */}
+      {profile?.role === "owner" && profile.shopId && <CatalogSettingsCard shopId={profile.shopId} />}
 
       {/* Low stock alert */}
       {lowStock.length > 0 && (

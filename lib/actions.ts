@@ -14,8 +14,8 @@ import {
   setDoc,
   writeBatch,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { auth, db, storage } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
+import { uploadProductImage } from "@/lib/cloudinary";
 import { applyStockDelta } from "@/lib/stock-invariants";
 import { ProductCustomField, ProductVariant, SaleChannel, SaleLine } from "@/lib/types";
 
@@ -61,7 +61,102 @@ export async function signOut() {
   await firebaseSignOut(auth);
 }
 
+// ─── Catalog ─────────────────────────────────────────────────────────────────
+
+/** Public catalog documents contain only customer-safe fields — never
+ * costPrice, supplier or SKUs. */
+function buildCatalogDoc(
+  name: string,
+  category: string,
+  imageUrl: string,
+  images: string[],
+  salePrice: number | undefined,
+  variantLabels: string[],
+  definitions: ProductCustomField[],
+  values: Record<string, string | number | boolean>,
+  hidden: boolean
+) {
+  const fields = definitions
+    .map((definition) => ({
+      label: definition.label,
+      labels: definition.labels ?? {},
+      type: definition.type,
+      value: values[definition.key],
+    }))
+    .filter((field) => field.value !== undefined && field.value !== "");
+  return {
+    name: name.trim(),
+    category: category.trim(),
+    imageUrl,
+    images: images.length > 0 ? images : (imageUrl ? [imageUrl] : []),
+    ...(salePrice !== undefined ? { salePrice } : {}),
+    variants: variantLabels,
+    fields,
+    hidden,
+    updatedAt: serverTimestamp(),
+  };
+}
+
+async function isCatalogEnabled(shopId: string) {
+  const shopSnap = await getDoc(doc(db, "shops", shopId));
+  return shopSnap.data()?.catalogEnabled === true;
+}
+
+export interface CatalogSettings {
+  enabled: boolean;
+  contact: string;
+}
+
+/** Enables/disables the public catalog. Enabling publishes every product
+ * (customer-safe fields only); disabling deletes all catalog documents. */
+export async function updateCatalogSettings(shopId: string, settings: CatalogSettings) {
+  const shopRef = doc(db, "shops", shopId);
+  const contact = settings.contact.trim().slice(0, 100);
+  const batch = writeBatch(db);
+
+  if (!settings.enabled) {
+    const catalogDocs = await getDocs(collection(db, "shops", shopId, "catalog"));
+    for (const catalogDoc of catalogDocs.docs) batch.delete(catalogDoc.ref);
+    batch.update(shopRef, { catalogEnabled: false, catalogContact: contact });
+    await batch.commit();
+    return;
+  }
+
+  const productsSnap = await getDocs(collection(db, "shops", shopId, "products"));
+  for (const productDoc of productsSnap.docs) {
+    const data = productDoc.data();
+    const variantsSnap = await getDocs(collection(productDoc.ref, "variants"));
+    const variantLabels = variantsSnap.docs
+      .map((variantDoc) => (variantDoc.data().label ?? "").trim())
+      .filter(Boolean);
+    batch.set(
+      doc(db, "shops", shopId, "catalog", productDoc.id),
+      buildCatalogDoc(
+        data.name ?? "",
+        data.category ?? "",
+        data.imageUrl ?? "",
+        Array.isArray(data.images) ? data.images : [],
+        typeof data.salePrice === "number" ? data.salePrice : undefined,
+        variantLabels,
+        data.customFieldDefinitions ?? [],
+        data.customFieldValues ?? {},
+        data.catalogHidden === true
+      ),
+      { merge: true }
+    );
+  }
+  batch.update(shopRef, { catalogEnabled: true, catalogContact: contact });
+  await batch.commit();
+}
+
 // ─── Products ────────────────────────────────────────────────────────────────
+
+export const MAX_PRODUCT_IMAGES = 6;
+
+export interface ProductImageInput {
+  file: File | null;
+  url: string;
+}
 
 export async function saveProduct(
   shopId: string,
@@ -70,14 +165,14 @@ export async function saveProduct(
   sku: string,
   category: string,
   minStock: number,
-  imageFile: File | null,
-  existingImageUrl: string,
+  images: ProductImageInput[],
   variants: ProductVariant[],
   customFieldDefinitions: ProductCustomField[] = [],
   customFieldValues: Record<string, string | number | boolean> = {},
   costPrice?: number,
   salePrice?: number,
-  supplier?: { name: string; contact?: string; notes?: string }
+  supplier?: { name: string; contact?: string; notes?: string },
+  catalogHidden = false
 ): Promise<string> {
   if (variants.length === 0) throw new Error("Dodaj bar jednu varijantu");
   if (variants.length > 200) throw new Error("Artikal može imati najviše 200 varijanti");
@@ -92,12 +187,16 @@ export async function saveProduct(
   const docRef = productId ? doc(products, productId) : doc(products);
   const id = docRef.id;
 
-  let imageUrl = existingImageUrl;
-  if (imageFile) {
-    const storageRef = ref(storage, `shops/${shopId}/products/${id}.jpg`);
-    await uploadBytes(storageRef, imageFile);
-    imageUrl = await getDownloadURL(storageRef);
+  const trimmedImages = images.slice(0, MAX_PRODUCT_IMAGES);
+  const imageUrls: string[] = [];
+  for (const image of trimmedImages) {
+    if (image.file) {
+      imageUrls.push(await uploadProductImage(image.file, shopId, `${id}-${imageUrls.length}`));
+    } else if (image.url) {
+      imageUrls.push(image.url);
+    }
   }
+  const imageUrl = imageUrls[0] ?? "";
 
   const variantsCol = collection(docRef, "variants");
   const total = variants.reduce((sum, variant) => sum + variant.quantity, 0);
@@ -138,9 +237,11 @@ export async function saveProduct(
       category: category.trim(),
       minStock: Math.max(0, Math.floor(minStock)),
       imageUrl,
+      images: imageUrls,
       totalQuantity: total,
       customFieldDefinitions,
       customFieldValues,
+      catalogHidden,
       ...(costPrice !== undefined ? { costPrice } : {}),
       ...(salePrice !== undefined ? { salePrice } : {}),
       ...(supplier?.name?.trim() ? { supplier: { name: supplier.name.trim(), contact: supplier.contact?.trim() ?? "", notes: supplier.notes?.trim() ?? "" } } : {}),
@@ -159,6 +260,14 @@ export async function saveProduct(
       }, { merge: true });
     }
   });
+
+  if (await isCatalogEnabled(shopId)) {
+    await setDoc(
+      doc(db, "shops", shopId, "catalog", id),
+      buildCatalogDoc(name, category, imageUrl, imageUrls, salePrice, variants.map((variant) => variant.label.trim()).filter(Boolean), customFieldDefinitions, customFieldValues, catalogHidden),
+      { merge: true }
+    );
+  }
   return id;
 }
 
@@ -177,6 +286,39 @@ export async function deleteProduct(shopId: string, productId: string) {
   const batch = writeBatch(db);
   for (const variant of variants.docs) batch.delete(variant.ref);
   batch.delete(productRef);
+  batch.delete(doc(db, "shops", shopId, "catalog", productId));
+  await batch.commit();
+}
+
+// ─── Categories ──────────────────────────────────────────────────────────────
+
+/** Renames a category across every product in the shop and refreshes
+ * published catalog documents. Old and new name are compared trimmed and
+ * case-insensitively. */
+export async function renameCategory(shopId: string, oldName: string, newName: string) {
+  const from = oldName.trim();
+  const to = newName.trim();
+  if (!from) throw new Error("Izaberite kategoriju za preimenovanje");
+  if (!to) throw new Error("Unesite novi naziv kategorije");
+  if (to.length > 100) throw new Error("Naziv kategorije može imati najviše 100 znakova");
+  if (from.toLowerCase() === to.toLowerCase()) throw new Error("Novi naziv je isti kao stari");
+
+  const productsSnap = await getDocs(collection(db, "shops", shopId, "products"));
+  const affected = productsSnap.docs.filter((productDoc) => (productDoc.data().category ?? "").trim().toLowerCase() === from.toLowerCase());
+  if (affected.length === 0) throw new Error("Kategorija više ne postoji");
+
+  const catalogEnabled = await isCatalogEnabled(shopId);
+  const batch = writeBatch(db);
+  for (const productDoc of affected) {
+    batch.update(productDoc.ref, { category: to, updatedAt: serverTimestamp() });
+    if (catalogEnabled) {
+      batch.set(
+        doc(db, "shops", shopId, "catalog", productDoc.id),
+        { category: to, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
+    }
+  }
   await batch.commit();
 }
 

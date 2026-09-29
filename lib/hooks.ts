@@ -11,7 +11,57 @@ import {
   limit,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Product, ProductVariant, Sale, StockEvent } from "@/lib/types";
+import { Product, ProductVariant, Sale, ShopCatalogSettings, StockEvent } from "@/lib/types";
+import { CatalogItem } from "@/lib/types";
+
+export function useShop(shopId: string | undefined): ShopCatalogSettings & { loading: boolean } {
+  const [shop, setShop] = useState<ShopCatalogSettings>({ name: "", catalogEnabled: false, catalogContact: "" });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!shopId) return;
+    const unsub = onSnapshot(doc(db, "shops", shopId), (snap) => {
+      setShop({
+        name: snap.data()?.name ?? "",
+        catalogEnabled: snap.data()?.catalogEnabled === true,
+        catalogContact: snap.data()?.catalogContact ?? "",
+      });
+      setLoading(false);
+    }, () => setLoading(false));
+    return unsub;
+  }, [shopId]);
+
+  return { ...shop, loading };
+}
+
+export function useCatalog(shopId: string | undefined) {
+  const [items, setItems] = useState<CatalogItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!shopId) return;
+    const q = query(collection(db, "shops", shopId, "catalog"), orderBy("name"));
+    const unsub = onSnapshot(q, (snap) => {
+      setItems(
+        snap.docs.map((d) => ({
+          id: d.id,
+          name: d.data().name ?? "",
+          category: d.data().category ?? "",
+          imageUrl: d.data().imageUrl ?? "",
+          images: Array.isArray(d.data().images) && d.data().images.length > 0 ? d.data().images : (d.data().imageUrl ? [d.data().imageUrl] : []),
+          salePrice: typeof d.data().salePrice === "number" ? d.data().salePrice : undefined,
+          variants: Array.isArray(d.data().variants) ? d.data().variants : [],
+          fields: Array.isArray(d.data().fields) ? d.data().fields : [],
+          hidden: d.data().hidden === true,
+        }))
+      );
+      setLoading(false);
+    });
+    return unsub;
+  }, [shopId]);
+
+  return { items, loading };
+}
 
 export function useProducts(shopId: string | undefined) {
   const [products, setProducts] = useState<Product[]>([]);
@@ -31,6 +81,7 @@ export function useProducts(shopId: string | undefined) {
           sku: d.data().sku ?? "",
           category: d.data().category ?? "",
           imageUrl: d.data().imageUrl ?? "",
+          images: Array.isArray(d.data().images) && d.data().images.length > 0 ? d.data().images : (d.data().imageUrl ? [d.data().imageUrl] : []),
           minStock: d.data().minStock ?? 0,
           totalQuantity: d.data().totalQuantity ?? 0,
           costPrice: d.data().costPrice ?? undefined,
@@ -64,6 +115,7 @@ export function useProduct(shopId: string | undefined, productId: string | undef
             sku: snap.data().sku ?? "",
             category: snap.data().category ?? "",
             imageUrl: snap.data().imageUrl ?? "",
+            images: Array.isArray(snap.data().images) && snap.data().images.length > 0 ? snap.data().images : (snap.data().imageUrl ? [snap.data().imageUrl] : []),
             minStock: snap.data().minStock ?? 0,
             totalQuantity: snap.data().totalQuantity ?? 0,
             costPrice: snap.data().costPrice ?? undefined,

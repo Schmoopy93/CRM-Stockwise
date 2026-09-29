@@ -9,7 +9,8 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import LoginAskAi from "@/components/LoginAskAi";
 import {
   Package, TrendingUp, BarChart2, ClipboardList,
-  Download, Upload, ScanBarcode, Layers, Users, ArrowRight, X,
+  ScanBarcode, Layers, Users, ArrowRight, X, FileSpreadsheet,
+  ShoppingBag, Store,
 } from "lucide-react";
 
 type Mode = "login" | "newShop" | "joinShop";
@@ -17,13 +18,14 @@ type Mode = "login" | "newShop" | "joinShop";
 const FEATURE_KEYS = [
   { icon: Package,      key: "products",  color: "rgba(99,102,241,0.12)", iconColor: "#6366f1" },
   { icon: TrendingUp,   key: "receive",   color: "rgba(34,197,94,0.1)",   iconColor: "#22c55e" },
+  { icon: ShoppingBag,  key: "sales",     color: "rgba(236,72,153,0.1)",  iconColor: "#ec4899" },
+  { icon: Store,        key: "catalog",   color: "rgba(34,211,238,0.1)",  iconColor: "#22d3ee" },
   { icon: BarChart2,    key: "analytics", color: "rgba(168,85,247,0.1)",  iconColor: "#a855f7" },
+  { icon: Users,        key: "team",      color: "rgba(34,197,94,0.1)",   iconColor: "#22c55e" },
   { icon: ClipboardList,key: "audit",     color: "rgba(245,158,11,0.1)",  iconColor: "#f59e0b" },
-  { icon: Upload,       key: "import",    color: "rgba(34,211,238,0.1)",  iconColor: "#22d3ee" },
-  { icon: Download,     key: "export",    color: "rgba(99,102,241,0.12)", iconColor: "#6366f1" },
+  { icon: FileSpreadsheet, key: "importExport", color: "rgba(34,211,238,0.1)", iconColor: "#22d3ee" },
   { icon: ScanBarcode,  key: "scan",      color: "rgba(239,68,68,0.1)",   iconColor: "#ef4444" },
   { icon: Layers,       key: "variants",  color: "rgba(168,85,247,0.1)",  iconColor: "#a855f7" },
-  { icon: Users,        key: "team",      color: "rgba(34,197,94,0.1)",   iconColor: "#22c55e" },
 ] as const;
 
 export default function LoginPage() {
@@ -110,7 +112,7 @@ export default function LoginPage() {
       </div>
 
       {/* Navbar */}
-      <nav style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", background: "rgba(15,15,20,0.7)", gap: 8 }}>
+      <nav style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", background: "color-mix(in srgb, var(--bg-2) 72%, transparent)", gap: 8 }}>
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <div style={{ width: 32, height: 32, background: "linear-gradient(135deg, #6366f1, #a855f7)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, boxShadow: "0 4px 14px rgba(99,102,241,0.45)", flexShrink: 0 }}>📦</div>
@@ -170,7 +172,7 @@ export default function LoginPage() {
 
       {/* Feature grid — full width */}
       <section style={{ position: "relative", zIndex: 1, padding: "0 1.5rem 5rem", maxWidth: 1200, marginInline: "auto", width: "100%" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0.8rem" }}>
+        <div className="login-features" style={{ display: "grid", gap: "1rem" }}>
           {FEATURE_KEYS.map(({ icon: Icon, key, color, iconColor }) => (
             <div
               key={key}
@@ -305,6 +307,9 @@ export default function LoginPage() {
       <style>{`
         @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(16px) scale(0.97) } to { opacity: 1; transform: none } }
+        .login-features { grid-template-columns: 1fr; }
+        @media (min-width: 640px) { .login-features { grid-template-columns: repeat(2, 1fr); } }
+        @media (min-width: 1280px) { .login-features { grid-template-columns: repeat(5, 1fr); } }
         @media (max-width: 480px) {
           .nav-brand { display: none; }
           .nav-login-label { display: none; }
