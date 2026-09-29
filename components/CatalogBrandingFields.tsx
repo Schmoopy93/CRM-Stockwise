@@ -5,7 +5,7 @@ import Image from "next/image";
 import ImageCropper from "@/components/ImageCropper";
 import { setCatalogImage } from "@/lib/actions";
 import { translateError, useI18n } from "@/lib/i18n-context";
-import { ImagePlus, RefreshCw, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, ImagePlus, RefreshCw, Trash2 } from "lucide-react";
 
 type BrandingKind = "logo" | "cover";
 
@@ -27,6 +27,7 @@ export default function CatalogBrandingFields({ shopId, logoUrl, coverUrl }: { s
   const [crop, setCrop] = useState<{ kind: BrandingKind; src: string; name: string } | null>(null);
   const [busy, setBusy] = useState<BrandingKind | null>(null);
   const [error, setError] = useState("");
+  const [open, setOpen] = useState(false);
 
   function pick(kind: BrandingKind) {
     pickingRef.current = kind;
@@ -54,7 +55,7 @@ export default function CatalogBrandingFields({ shopId, logoUrl, coverUrl }: { s
       <div style={{ position: "relative", flexShrink: 0, width: kind === "logo" ? 84 : undefined, flex: kind === "cover" ? "1 1 220px" : undefined, aspectRatio: `${CROP[kind].aspect} / 1`, borderRadius: kind === "logo" ? 18 : 14, overflow: "hidden", background: "var(--bg-3)", border: url ? "1px solid var(--border)" : "1px dashed var(--border-hover)" }}>
         {url ? (
           <>
-            <Image src={url} alt={label} fill sizes={kind === "logo" ? "84px" : "(max-width: 760px) 100vw, 480px"} quality={90} style={{ objectFit: "cover" }} />
+            <Image src={url} alt={label} fill sizes={kind === "logo" ? "84px" : "(max-width: 760px) 100vw, 1000px"} quality={90} style={{ objectFit: "cover" }} />
             <div style={{ position: "absolute", top: 6, right: 6, display: "flex", gap: 4 }}>
               <button type="button" onClick={() => pick(kind)} disabled={busy !== null} aria-label={`${t("catalog.imageReplace")} — ${label}`} style={{ ...iconButton, color: "var(--text-1)" }}>
                 <RefreshCw size={12} />
@@ -82,17 +83,25 @@ export default function CatalogBrandingFields({ shopId, logoUrl, coverUrl }: { s
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-      <p style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-2)", margin: 0 }}>{t("catalog.brandingTitle")}</p>
-      <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start", flexWrap: "wrap" }}>
-        {renderSlot("logo", logoUrl)}
-        {renderSlot("cover", coverUrl)}
-      </div>
-      <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("catalog.brandingHint")}</p>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+        style={{ display: "flex", alignItems: "center", gap: 6, alignSelf: "flex-start", padding: 0, background: "transparent", border: "none", cursor: "pointer", fontSize: "0.75rem", fontWeight: 700, color: "var(--text-2)" }}>
+        {t("catalog.brandingTitle")}
+        {open ? <ChevronUp size={14} style={{ color: "var(--text-3)" }} /> : <ChevronDown size={14} style={{ color: "var(--text-3)" }} />}
+      </button>
+      {open && (
+        <>
+          <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start", flexWrap: "wrap" }}>
+            {renderSlot("logo", logoUrl)}
+            {renderSlot("cover", coverUrl)}
+          </div>
+          <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("catalog.brandingHint")}</p>
+        </>
+      )}
       {error && <p style={{ fontSize: "0.78rem", color: "var(--red)", margin: 0 }}>{error}</p>}
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPicked} />
 
       {crop && (
-        <ImageCropper src={crop.src} fileName={`${crop.kind}-${crop.name}`} aspect={CROP[crop.kind].aspect} outputWidth={CROP[crop.kind].outputWidth}
+        <ImageCropper src={crop.src} fileName={`${crop.kind}-${crop.name}`} aspect={CROP[crop.kind].aspect} outputWidth={CROP[crop.kind].outputWidth} fitMode="contain"
           onCancel={() => { URL.revokeObjectURL(crop.src); setCrop(null); }}
           onCropped={(file, previewUrl) => {
             URL.revokeObjectURL(previewUrl);

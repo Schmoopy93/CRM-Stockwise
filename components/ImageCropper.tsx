@@ -10,11 +10,12 @@ interface Props {
   fileName: string;
   aspect?: number;
   outputWidth?: number;
+  fitMode?: "cover" | "contain";
   onCancel: () => void;
   onCropped: (file: File, previewUrl: string) => void;
 }
 
-export default function ImageCropper({ src, fileName, aspect = 1, outputWidth = 1600, onCancel, onCropped }: Props) {
+export default function ImageCropper({ src, fileName, aspect = 1, outputWidth = 1600, fitMode = "cover", onCancel, onCropped }: Props) {
   const { t } = useI18n();
   const boxRef = useRef<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -43,7 +44,9 @@ export default function ImageCropper({ src, fileName, aspect = 1, outputWidth = 
 
   const viewHeight = view / aspect;
   const ready = natural.w > 0 && natural.h > 0;
-  const fit = ready ? Math.max(view / natural.w, viewHeight / natural.h) : 0;
+  const coverFit = ready ? Math.max(view / natural.w, viewHeight / natural.h) : 0;
+  const fit = ready && fitMode === "contain" ? Math.min(view / natural.w, viewHeight / natural.h) : coverFit;
+  const maxZoom = ready ? (4 * coverFit) / fit : 4;
 
   function onImgLoad() {
     const img = preRef.current;
@@ -63,7 +66,7 @@ export default function ImageCropper({ src, fileName, aspect = 1, outputWidth = 
   const shownOffset = ready ? clamp(offset, zoom) : offset;
 
   function handleZoom(z: number) {
-    const clamped = Math.min(4, Math.max(1, z));
+    const clamped = Math.min(maxZoom, Math.max(1, z));
     setZoom(clamped);
     setOffset((o) => clamp(o, clamped));
   }
@@ -92,8 +95,12 @@ export default function ImageCropper({ src, fileName, aspect = 1, outputWidth = 
     if (!ctx) return;
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, outWidth, outHeight);
+    const filled = width >= view - 0.5 && height >= viewHeight - 0.5;
+    const type = filled ? "image/jpeg" : "image/png";
+    if (filled) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, outWidth, outHeight);
+    }
     ctx.drawImage(
       img,
       (view / 2 - width / 2 + shownOffset.x) * scale,
@@ -103,8 +110,8 @@ export default function ImageCropper({ src, fileName, aspect = 1, outputWidth = 
     );
     canvas.toBlob((blob) => {
       if (!blob) return;
-      onCropped(new File([blob], fileName.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }), URL.createObjectURL(blob));
-    }, "image/jpeg", 0.9);
+      onCropped(new File([blob], fileName.replace(/\.[^.]+$/, "") + (filled ? ".jpg" : ".png"), { type }), URL.createObjectURL(blob));
+    }, type, 0.9);
   }
 
   const width = natural.w * fit * zoom;
@@ -148,7 +155,7 @@ export default function ImageCropper({ src, fileName, aspect = 1, outputWidth = 
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1.1rem" }}>
           <ZoomIn size={15} color="var(--text-3)" style={{ flexShrink: 0 }} />
-          <input type="range" min={1} max={4} step={0.01} value={zoom}
+          <input type="range" min={1} max={maxZoom} step={0.01} value={zoom}
             onChange={(e) => handleZoom(parseFloat(e.target.value))}
             style={{ flex: 1, accentColor: "var(--accent)" }} />
         </div>
