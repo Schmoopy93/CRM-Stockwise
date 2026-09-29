@@ -38,3 +38,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 ## Predlozi dodatnih polja artikla
 
 Forma artikla podržava dodatna polja i bez AI konfiguracije, koristeći ugrađene predloške kategorija. Za AI predloge kopirajte `.env.local.example` u `.env.local` i podesite `OPENAI_API_KEY` (po želji i `OPENAI_MODEL`). Taj ključ je serverski i ne treba ga prefiksirati sa `NEXT_PUBLIC_`. Posle izmene promenljivih okruženja ponovo pokrenite razvojni server.
+
+## Google prijava
+
+U Firebase Console otvorite **Authentication → Sign-in method**, omogućite **Google** i dodajte domen aplikacije u **Authentication → Settings → Authorized domains**. Aplikacija koristi Google prijavu za sve naloge. Za kreiranje radnje izaberite **Nova radnja**, unesite naziv radnje i nastavite sa Google nalogom; za postojeću radnju izaberite **Pridruži se**, unesite Shop ID i nastavite sa Google nalogom.

@@ -1,8 +1,7 @@
 import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
   signOut as firebaseSignOut,
-  updateProfile,
 } from "firebase/auth";
 import {
   collection,
@@ -13,6 +12,7 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
@@ -20,59 +20,44 @@ import { ProductCustomField, ProductVariant } from "@/lib/types";
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
-export async function signIn(email: string, password: string) {
-  await signInWithEmailAndPassword(auth, email.trim(), password);
+export async function signInWithGoogle(
+  mode: "login" | "newShop" | "joinShop",
+  shopName = "",
+  shopId = ""
+) {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  const credential = await signInWithPopup(auth, provider);
+  const user = credential.user;
+  const userRef = doc(db, "users", user.uid);
+  const userSnap = await getDoc(userRef);
+
+  if (userSnap.exists()) return;
+  if (mode === "login") throw new Error("GOOGLE_PROFILE_REQUIRED");
+
+  const displayName = user.displayName?.trim() || user.email?.split("@")[0] || "Google user";
+  if (mode === "newShop") {
+    const trimmedShopName = shopName.trim();
+    if (!trimmedShopName) throw new Error("GOOGLE_SHOP_NAME_REQUIRED");
+
+    const shopRef = doc(collection(db, "shops"));
+    const batch = writeBatch(db);
+    batch.set(shopRef, { name: trimmedShopName, createdBy: user.uid });
+    batch.set(userRef, { shopId: shopRef.id, displayName, role: "owner" });
+    await batch.commit();
+    return;
+  }
+
+  const trimmedShopId = shopId.trim();
+  if (!trimmedShopId) throw new Error("GOOGLE_SHOP_ID_REQUIRED");
+  const shopSnap = await getDoc(doc(db, "shops", trimmedShopId));
+  if (!shopSnap.exists()) throw new Error("GOOGLE_SHOP_NOT_FOUND");
+
+  await setDoc(userRef, { shopId: trimmedShopId, displayName, role: "staff" });
 }
 
 export async function signOut() {
   await firebaseSignOut(auth);
-}
-
-export async function registerNewShop(
-  email: string,
-  password: string,
-  displayName: string,
-  shopName: string
-) {
-  const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
-  const user = cred.user;
-  try {
-    await updateProfile(user, { displayName: displayName.trim() });
-    const shopRef = doc(collection(db, "shops"));
-    await setDoc(shopRef, { name: shopName.trim(), createdBy: user.uid });
-    await setDoc(doc(db, "users", user.uid), {
-      shopId: shopRef.id,
-      displayName: displayName.trim(),
-      role: "owner",
-    });
-  } catch (e) {
-    await user.delete();
-    throw e;
-  }
-}
-
-export async function registerJoinShop(
-  email: string,
-  password: string,
-  displayName: string,
-  shopId: string
-) {
-  const trimmedShopId = shopId.trim();
-  const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
-  const user = cred.user;
-  try {
-    const shopSnap = await getDoc(doc(db, "shops", trimmedShopId));
-    if (!shopSnap.exists()) throw new Error("Radnja sa tim kodom ne postoji");
-    await updateProfile(user, { displayName: displayName.trim() });
-    await setDoc(doc(db, "users", user.uid), {
-      shopId: trimmedShopId,
-      displayName: displayName.trim(),
-      role: "staff",
-    });
-  } catch (e) {
-    await user.delete();
-    throw e;
-  }
 }
 
 // ─── Products ────────────────────────────────────────────────────────────────

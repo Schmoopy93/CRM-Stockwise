@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn, registerNewShop, registerJoinShop } from "@/lib/actions";
+import { signInWithGoogle } from "@/lib/actions";
 import { useI18n, LOCALE_LABELS, Locale } from "@/lib/i18n-context";
 import { Globe } from "lucide-react";
 
@@ -12,25 +12,50 @@ export default function LoginPage() {
   const router = useRouter();
   const { t, locale, setLocale } = useI18n();
   const [mode, setMode] = useState<Mode>("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [shopName, setShopName] = useState("");
   const [shopId, setShopId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(""); setLoading(true);
+  async function handleGoogleSignIn() {
+    setError("");
+    if (mode === "newShop" && !shopName.trim()) {
+      setError(t("auth.googleShopNameRequired"));
+      return;
+    }
+    if (mode === "joinShop" && !shopId.trim()) {
+      setError(t("auth.googleShopIdRequired"));
+      return;
+    }
+
+    setLoading(true);
     try {
-      if (mode === "login") await signIn(email, password);
-      else if (mode === "newShop") await registerNewShop(email, password, displayName, shopName);
-      else await registerJoinShop(email, password, displayName, shopId);
+      await signInWithGoogle(mode, shopName, shopId);
       router.replace("/dashboard");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t("auth.error"));
-    } finally { setLoading(false); }
+      const code = err && typeof err === "object" && "code" in err && typeof err.code === "string" ? err.code : "";
+      const message = err instanceof Error ? err.message : "";
+      const errorKey = message === "GOOGLE_PROFILE_REQUIRED"
+        ? "auth.googleProfileRequired"
+        : message === "GOOGLE_SHOP_NAME_REQUIRED"
+          ? "auth.googleShopNameRequired"
+          : message === "GOOGLE_SHOP_ID_REQUIRED"
+            ? "auth.googleShopIdRequired"
+            : message === "GOOGLE_SHOP_NOT_FOUND"
+              ? "auth.googleShopNotFound"
+              : code === "auth/popup-closed-by-user"
+                ? "auth.googlePopupClosed"
+                : code === "auth/popup-blocked"
+                  ? "auth.googlePopupBlocked"
+                  : code === "auth/operation-not-allowed"
+                    ? "auth.googleProviderDisabled"
+                    : code === "auth/account-exists-with-different-credential"
+                      ? "auth.googleAccountConflict"
+                      : "auth.googleError";
+      setError(t(errorKey));
+    } finally {
+      setLoading(false);
+    }
   }
 
   const TABS: { id: Mode; label: string }[] = [
@@ -92,27 +117,44 @@ export default function LoginPage() {
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {mode !== "login" && (
-            <input className="input" type="text" placeholder={t("auth.displayName")} value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
-          )}
-          <input className="input" type="email" placeholder={t("auth.email")} value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <input className="input" type="password" placeholder={t("auth.password")} value={password} onChange={(e) => setPassword(e.target.value)} required />
-          {mode === "newShop" && (
-            <input className="input" type="text" placeholder={t("auth.shopName")} value={shopName} onChange={(e) => setShopName(e.target.value)} required />
-          )}
-          {mode === "joinShop" && (
-            <input className="input" type="text" placeholder={t("auth.shopId")} value={shopId} onChange={(e) => setShopId(e.target.value)} required />
-          )}
-          {error && (
-            <div style={{ background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, padding: "0.65rem 1rem", fontSize: "0.82rem", color: "var(--red)" }}>
-              {error}
-            </div>
-          )}
-          <button className="btn-primary" type="submit" disabled={loading} style={{ marginTop: "0.25rem", width: "100%", padding: "0.75rem" }}>
-            {loading ? t("loading") : mode === "login" ? t("auth.loginBtn") : mode === "newShop" ? t("auth.registerBtn") : t("auth.joinBtn")}
-          </button>
-        </form>
+        {error && (
+          <div role="alert" style={{ background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, padding: "0.65rem 1rem", fontSize: "0.82rem", color: "var(--red)", marginBottom: "0.75rem" }}>
+            {error}
+          </div>
+        )}
+
+        {mode === "newShop" && (
+          <input
+            className="input"
+            type="text"
+            placeholder={t("auth.shopName")}
+            value={shopName}
+            onChange={(e) => setShopName(e.target.value)}
+            required
+            autoFocus
+          />
+        )}
+        {mode === "joinShop" && (
+          <input
+            className="input"
+            type="text"
+            placeholder={t("auth.shopId")}
+            value={shopId}
+            onChange={(e) => setShopId(e.target.value)}
+            required
+            autoFocus
+          />
+        )}
+
+        <button
+          type="button"
+          onClick={handleGoogleSignIn}
+          disabled={loading}
+          style={{ width: "100%", minHeight: 44, marginTop: mode === "login" ? 0 : "0.75rem", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "0.65rem 1rem", border: "1px solid var(--border)", borderRadius: 10, background: "var(--bg-3)", color: "var(--text-1)", fontSize: "0.86rem", fontWeight: 600, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.65 : 1 }}
+        >
+          <span aria-hidden="true" style={{ fontSize: "1rem", fontWeight: 800, color: "#4285F4", lineHeight: 1 }}>G</span>
+          {loading ? t("loading") : t("auth.googleBtn")}
+        </button>
       </div>
     </div>
   );
