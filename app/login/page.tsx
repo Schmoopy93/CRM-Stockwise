@@ -6,6 +6,7 @@ import { signInWithGoogle } from "@/lib/actions";
 import { useI18n } from "@/lib/i18n-context";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import LoginAskAi from "@/components/LoginAskAi";
 import {
   Package, TrendingUp, BarChart2, ClipboardList,
   Download, Upload, ScanBarcode, Layers, Users, ArrowRight, X,
@@ -186,6 +187,8 @@ export default function LoginPage() {
           ))}
         </div>
       </section>
+
+      <LoginAskAi />
 
       {/* Modal backdrop */}
       {open && (

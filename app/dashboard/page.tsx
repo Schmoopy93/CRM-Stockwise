@@ -6,6 +6,8 @@ import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import { useProducts } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n-context";
+import { usePagination } from "@/lib/use-pagination";
+import ListPagination from "@/components/ListPagination";
 import { Plus, Search, AlertTriangle, Package, TrendingDown, Layers, ArrowRight, DollarSign } from "lucide-react";
 
 export default function DashboardPage() {
@@ -28,6 +30,18 @@ export default function DashboardPage() {
     const matchCat = category === "all" || p.category === category;
     return matchSearch && matchCat;
   });
+
+  const pagingLabels = {
+    loadMore: t("paging.loadMore"),
+    loading: t("paging.loading"),
+    showing: t("paging.showing"),
+    of: t("paging.of"),
+    page: t("paging.page"),
+    prev: t("paging.prev"),
+    next: t("paging.next"),
+  };
+
+  const paging = usePagination(filtered, [search, category, products.length]);
 
   if (loading) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="spinner" /></div>;
 
@@ -112,7 +126,7 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "0.875rem" }}>
-          {filtered.map((product) => {
+          {paging.visible.map((product) => {
             const isLow = product.minStock > 0 && product.totalQuantity <= product.minStock;
             return (
               <Link key={product.id} href={`/dashboard/products/${product.id}`} style={{ textDecoration: "none" }}>
@@ -162,6 +176,19 @@ export default function DashboardPage() {
             );
           })}
         </div>
+      )}
+
+      {filtered.length > 0 && (
+        <ListPagination
+          page={paging.page}
+          totalPages={paging.totalPages}
+          totalItems={paging.totalItems}
+          shown={paging.visible.length}
+          hasMore={paging.hasMore}
+          onLoadMore={paging.loadMore}
+          onGoToPage={paging.goToPage}
+          labels={pagingLabels}
+        />
       )}
     </div>
   );

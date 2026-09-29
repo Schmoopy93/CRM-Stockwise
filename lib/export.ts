@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import { AppLocale, Product, ProductVariant } from "./types";
-import { getLocalizedOptionValue } from "./product-field-templates";
+import { getLocalizedOptionValue } from "./product-field-options";
 
 const exportLabels: Record<AppLocale, Record<string, string>> = {
   sr: { product: "Artikal", sku: "SKU", category: "Kategorija", variant: "Varijanta", variantSku: "SKU varijante", quantity: "Količina", min: "Min. stanje", status: "Status", low: "⚠ Nisko", ok: "U redu", none: "—", title: "Stanje artikala", date: "Datum", products: "Artikala", total: "Ukupno komada" },

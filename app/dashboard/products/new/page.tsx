@@ -96,6 +96,7 @@ export default function NewProductPage() {
           values={customFieldValues}
           onDefinitionsChange={setCustomFieldDefinitions}
           onValuesChange={setCustomFieldValues}
+          onCategorySuggest={(suggested) => setCategory((prev) => (prev.trim() ? prev : suggested))}
         />
 
         <div>

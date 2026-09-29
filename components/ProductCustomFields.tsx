@@ -15,6 +15,7 @@ interface ProductCustomFieldsProps {
   values: Record<string, FieldValue>;
   onDefinitionsChange: (definitions: ProductCustomField[]) => void;
   onValuesChange: (values: Record<string, FieldValue>) => void;
+  onCategorySuggest?: (category: string) => void;
 }
 
 const fieldTypes: Array<{ value: ProductCustomFieldType; labelKey: string }> = [
@@ -38,6 +39,7 @@ export default function ProductCustomFields({
   values,
   onDefinitionsChange,
   onValuesChange,
+  onCategorySuggest,
 }: ProductCustomFieldsProps) {
   const { locale, t } = useI18n();
   const [suggestions, setSuggestions] = useState<ProductCustomField[]>([]);
@@ -76,9 +78,13 @@ export default function ProductCustomFields({
       const nextSuggestions = result.fields as ProductCustomField[];
       setSuggestions(nextSuggestions);
       setSelected(nextSuggestions.map((_, index) => index));
-      setMessage("notice" in result && typeof result.notice === "string"
-        ? result.notice
-        : t("product.customFieldSuggestionReady"));
+      const suggestedCategory = "category" in result && typeof result.category === "string" ? result.category.trim() : "";
+      if (suggestedCategory && onCategorySuggest && suggestedCategory.toLocaleLowerCase() !== category.trim().toLocaleLowerCase()) {
+        onCategorySuggest(suggestedCategory);
+        setMessage(t("product.customFieldCategorySuggested", { category: suggestedCategory }));
+      } else {
+        setMessage(t("product.customFieldSuggestionReady"));
+      }
     } catch (cause) {
       setError(cause instanceof UserFacingError ? cause.message : t("product.customFieldRequestError"));
     } finally {

@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n-context";
 import { useProducts } from "@/lib/hooks";
-import { Plus, Search, AlertTriangle, ArrowRight, Package } from "lucide-react";
+import { usePagination } from "@/lib/use-pagination";
+import ListPagination from "@/components/ListPagination";
+import { Plus, Search, AlertTriangle, ArrowRight, Package, X } from "lucide-react";
 
 export default function ProductsListPage() {
   const { profile } = useAuth();
@@ -16,133 +18,164 @@ export default function ProductsListPage() {
   const [category, setCategory] = useState("all");
   const [sort, setSort] = useState<"name" | "qty">("name");
 
-  const categories = ["all", ...Array.from(new Set(products.map((p) => p.category).filter(Boolean)))];
+  const categories = useMemo(
+    () => ["all", ...Array.from(new Set(products.map((p) => p.category).filter(Boolean)))],
+    [products]
+  );
 
-  const filtered = products
-    .filter((p) => {
-      const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase());
-      const matchCat = category === "all" || p.category === category;
-      return matchSearch && matchCat;
-    })
-    .sort((a, b) => sort === "name" ? a.name.localeCompare(b.name) : a.totalQuantity - b.totalQuantity);
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return products
+      .filter((p) => {
+        const matchSearch = !q || p.name.toLowerCase().includes(q) || (p.sku || "").toLowerCase().includes(q);
+        const matchCat = category === "all" || p.category === category;
+        return matchSearch && matchCat;
+      })
+      .slice()
+      .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name) : a.totalQuantity - b.totalQuantity));
+  }, [products, search, category, sort]);
 
-  if (loading) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="spinner" /></div>;
+  const pagingLabels = {
+    loadMore: t("paging.loadMore"),
+    loading: t("paging.loading"),
+    showing: t("paging.showing"),
+    of: t("paging.of"),
+    page: t("paging.page"),
+    prev: t("paging.prev"),
+    next: t("paging.next"),
+  };
+
+  const paging = usePagination(filtered, [search, category, sort, products.length]);
+
+  if (loading)
+    return (
+      <div className="fade-up products-page" aria-busy="true" aria-live="polite">
+        <div className="products-skeleton products-skeleton--head" />
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={i} className="products-skeleton" style={{ animationDelay: `${i * 65}ms` }} />
+        ))}
+      </div>
+    );
 
   return (
-    <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+    <div className="fade-up products-page">
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
-        <div>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 800, margin: 0, color: "var(--text-1)", letterSpacing: "-0.03em" }}>{t("products.title")}</h1>
-          <p style={{ fontSize: "0.82rem", color: "var(--text-3)", marginTop: 3 }}>{t("products.count", { n: products.length })}</p>
+      <header className="products-head">
+        <div className="products-head-text">
+          <h1 className="products-title">{t("products.title")}</h1>
+          <p className="products-subtitle">{t("products.count", { n: products.length })}</p>
         </div>
-        <Link href="/dashboard/products/new" className="btn-primary" style={{ display: "flex", alignItems: "center", gap: 7, textDecoration: "none", fontSize: "0.875rem" }}>
-          <Plus size={15} /> {t("products.new")}
+        <Link href="/dashboard/products/new" className="btn-primary products-new-btn">
+          <Plus size={15} />
+          <span>{t("products.new")}</span>
         </Link>
-      </div>
+      </header>
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-          <Search size={14} style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)" }} />
-          <input className="input" placeholder={t("search")} value={search} onChange={(e) => setSearch(e.target.value)} style={{ paddingLeft: "2.3rem" }} />
+      {/* Sticky filters */}
+      <div className="products-filters">
+        <div className="products-search">
+          <Search size={15} className="products-search-icon" />
+          <input
+            className="input products-search-input"
+            placeholder={t("search")}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label={t("search")}
+          />
+          {search && (
+            <button className="products-search-clear" onClick={() => setSearch("")} aria-label="Clear search">
+              <X size={13} />
+            </button>
+          )}
         </div>
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value as "name" | "qty")}
-          className="input"
-          style={{ width: "auto", paddingLeft: "0.875rem", paddingRight: "0.875rem" }}
+          className="input products-sort"
+          aria-label={t("products.sortName")}
         >
           <option value="name">{t("products.sortName")}</option>
           <option value="qty">{t("products.sortQuantity")}</option>
         </select>
-      </div>
 
-      {categories.length > 1 && (
-        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-          {categories.map((cat) => (
-            <button key={cat} onClick={() => setCategory(cat)} style={{
-              padding: "0.28rem 0.85rem", borderRadius: 99, fontSize: "0.76rem", fontWeight: 600,
-              border: "1px solid", cursor: "pointer", transition: "all 0.15s",
-              background: category === cat ? "var(--accent)" : "transparent",
-              color: category === cat ? "white" : "var(--text-3)",
-              borderColor: category === cat ? "var(--accent)" : "var(--border)",
-            }}>
-              {cat === "all" ? t("products.allCategories") : cat}
-            </button>
-          ))}
-        </div>
-      )}
+        {categories.length > 1 && (
+          <div className="products-chips">
+            {categories.map((cat) => (
+              <button key={cat} onClick={() => setCategory(cat)} className="products-chip" data-active={category === cat}>
+                {cat === "all" ? t("products.allCategories") : cat}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* List */}
       {filtered.length === 0 ? (
-        <div style={{ height: 180, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.75rem", border: "1px dashed var(--border)", borderRadius: 16, color: "var(--text-3)", fontSize: "0.875rem" }}>
+        <div className="products-empty">
           <Package size={28} strokeWidth={1.5} />
-          {t("products.empty")}
+          <span>{t("products.empty")}</span>
         </div>
       ) : (
-        <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 16, overflow: "hidden" }}>
-          {/* Header row */}
-          <div className="product-list-header" style={{ display: "grid", gridTemplateColumns: "1fr 130px 110px 90px 36px", padding: "0.65rem 1.25rem", borderBottom: "1px solid var(--border)", fontSize: "0.68rem", color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700 }}>
+        <div className="products-list">
+          <div className="products-list-head" aria-hidden="true">
             <span>{t("products.columnProduct")}</span>
             <span>{t("products.columnCategory")}</span>
             <span>{t("products.columnSku")}</span>
-            <span style={{ textAlign: "right" }}>{t("products.columnStock")}</span>
+            <span className="products-cell-qty">{t("products.columnStock")}</span>
             <span />
           </div>
 
-          {filtered.map((p, i) => {
+          {paging.visible.map((p, i) => {
             const isLow = p.minStock > 0 && p.totalQuantity <= p.minStock;
             return (
               <Link
                 key={p.id}
                 href={`/dashboard/products/${p.id}`}
-                style={{
-                  display: "grid", gridTemplateColumns: "1fr 130px 110px 90px 36px",
-                  padding: "0.8rem 1.25rem",
-                  borderBottom: i < filtered.length - 1 ? "1px solid var(--border)" : "none",
-                  textDecoration: "none", alignItems: "center",
-                  transition: "background 0.12s",
-                  background: isLow ? "rgba(245,158,11,0.03)" : "transparent",
-                }}
-                onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg-3)")}
-                onMouseOut={(e) => (e.currentTarget.style.background = isLow ? "rgba(245,158,11,0.03)" : "transparent")}
+                className="products-row"
+                data-low={isLow || undefined}
+                data-last={i === paging.visible.length - 1 || undefined}
               >
-                {/* Name + image */}
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
+                <div className="products-cell-main">
                   {p.imageUrl ? (
-                    <Image src={p.imageUrl} alt={p.name} width={34} height={34} style={{ width: 34, height: 34, borderRadius: 9, objectFit: "cover", flexShrink: 0 }} />
+                    <Image src={p.imageUrl} alt={p.name} width={40} height={40} className="products-thumb" />
                   ) : (
-                    <div style={{ width: 34, height: 34, background: "var(--bg-3)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>📦</div>
+                    <div className="products-thumb products-thumb--empty" aria-hidden="true">📦</div>
                   )}
-                  <span style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                  <span className="products-name">{p.name}</span>
                 </div>
 
-                {/* Category */}
-                <span style={{ fontSize: "0.78rem", color: "var(--text-3)" }}>
-                  {p.category ? (
-                    <span style={{ padding: "2px 8px", borderRadius: 99, background: "var(--bg-3)", border: "1px solid var(--border)", fontSize: "0.7rem", fontWeight: 600 }}>{p.category}</span>
-                  ) : "—"}
-                </span>
-
-                {/* SKU */}
-                <span style={{ fontSize: "0.78rem", color: "var(--text-3)", fontFamily: "monospace" }}>{p.sku || "—"}</span>
-
-                {/* Stock */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 5 }}>
-                  {isLow && <AlertTriangle size={12} color="var(--amber)" strokeWidth={2.5} />}
-                  <span style={{ fontWeight: 700, fontSize: "0.95rem", color: isLow ? "var(--amber)" : "var(--text-1)" }}>{p.totalQuantity}</span>
+                <div className="products-cell-cat">
+                  {p.category ? <span className="products-badge">{p.category}</span> : <span className="products-dash">—</span>}
                 </div>
 
-                {/* Arrow */}
-                <div style={{ display: "flex", justifyContent: "center" }}>
-                  <ArrowRight size={14} color="var(--text-3)" />
+                <div className="products-cell-sku">
+                  {p.sku ? <span className="products-sku">{p.sku}</span> : <span className="products-dash">—</span>}
                 </div>
+
+                <div className="products-cell-qty" data-low={isLow || undefined}>
+                  {isLow && <AlertTriangle size={13} color="var(--amber)" strokeWidth={2.5} />}
+                  <span className="products-qty">{p.totalQuantity}</span>
+                </div>
+
+                <ArrowRight size={15} className="products-arrow" />
               </Link>
             );
           })}
         </div>
+      )}
+
+      {filtered.length > 0 && (
+        <ListPagination
+          page={paging.page}
+          totalPages={paging.totalPages}
+          totalItems={paging.totalItems}
+          shown={paging.visible.length}
+          hasMore={paging.hasMore}
+          onLoadMore={paging.loadMore}
+          onGoToPage={paging.goToPage}
+          labels={pagingLabels}
+        />
       )}
     </div>
   );

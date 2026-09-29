@@ -6,8 +6,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n-context";
-import { getLocalizedOptionValue } from "@/lib/product-field-templates";
+import { getLocalizedOptionValue } from "@/lib/product-field-options";
 import { useProduct, useVariants, useStockEvents } from "@/lib/hooks";
+import { usePagination } from "@/lib/use-pagination";
+import ListPagination from "@/components/ListPagination";
 import { adjustStock, deleteProduct } from "@/lib/actions";
 import { ArrowLeft, Pencil, Trash2, Minus, Plus, Clock, TrendingUp, TrendingDown } from "lucide-react";
 
@@ -24,6 +26,19 @@ export default function ProductDetailPage() {
   const [customDelta, setCustomDelta] = useState<Record<string, string>>({});
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+
+  const pagingLabels = {
+    loadMore: t("paging.loadMore"),
+    loading: t("paging.loading"),
+    showing: t("paging.showing"),
+    of: t("paging.of"),
+    page: t("paging.page"),
+    prev: t("paging.prev"),
+    next: t("paging.next"),
+  };
+
+  const historyPaging = usePagination(events, [events.length, id], 10);
+  const variantsPaging = usePagination(variants, [variants.length, id], 8);
 
   async function handleAdjust(variantId: string, delta: number) {
     if (!profile) return;
@@ -60,123 +75,79 @@ export default function ProductDetailPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div className="spinner" />
-      </div>
-    );
-  }
+  const fmtLocale = locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US";
 
-  if (!product) {
-    return (
-      <div style={{ textAlign: "center", padding: "4rem", color: "var(--text-2)" }}>
-        {t("product.notFound")}{" "}
-        <Link href="/dashboard" style={{ color: "var(--accent-2)" }}>{t("back")}</Link>
-      </div>
-    );
-  }
+  if (loading) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="spinner" /></div>;
+
+  if (!product) return (
+    <div style={{ textAlign: "center", padding: "4rem", color: "var(--text-2)" }}>
+      {t("product.notFound")}{" "}
+      <Link href="/dashboard" style={{ color: "var(--accent-2)" }}>{t("back")}</Link>
+    </div>
+  );
 
   const isLow = product.minStock > 0 && product.totalQuantity <= product.minStock;
 
   return (
-    <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.5rem", maxWidth: 720 }}>
+    <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.25rem", maxWidth: 720 }}>
 
       {/* Breadcrumb + actions */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <Link
-          href="/dashboard"
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            fontSize: "0.82rem", color: "var(--text-2)",
-            textDecoration: "none", transition: "color 0.15s",
-          }}
-        >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
+        <Link href="/dashboard/products" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.82rem", color: "var(--text-2)", textDecoration: "none" }}>
           <ArrowLeft size={14} /> {t("back")}
         </Link>
-        <div className="product-detail-actions" style={{ display: "flex", gap: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           <Link
             href={`/dashboard/products/${id}/edit`}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "0.45rem 0.875rem",
-              background: "var(--bg-3)",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
-              fontSize: "0.8rem", color: "var(--text-2)",
-              textDecoration: "none", transition: "all 0.15s",
-            }}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "0.45rem 0.875rem", background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 8, fontSize: "0.8rem", color: "var(--text-2)", textDecoration: "none", transition: "all 0.15s" }}
           >
             <Pencil size={13} /> {t("product.edit")}
           </Link>
           <button
             onClick={handleDelete}
             disabled={deleting}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "0.45rem 0.875rem",
-              background: "var(--red-dim)",
-              border: "1px solid rgba(239,68,68,0.2)",
-              borderRadius: 8,
-              fontSize: "0.8rem", color: "var(--red)",
-              cursor: "pointer", transition: "all 0.15s",
-            }}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "0.45rem 0.875rem", background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, fontSize: "0.8rem", color: "var(--red)", cursor: "pointer", transition: "all 0.15s" }}
           >
             <Trash2 size={13} /> {t("delete")}
           </button>
         </div>
       </div>
 
-      {/* Product hero */}
-      <div className="glass product-detail-hero" style={{ padding: "1.5rem", display: "flex", gap: "1.25rem", alignItems: "flex-start" }}>
-        {product.imageUrl ? (
-          <Image
-            src={product.imageUrl}
-            alt={product.name}
-            width={80}
-            height={80}
-            style={{ width: 80, height: 80, borderRadius: 14, objectFit: "cover", flexShrink: 0 }}
-          />
-        ) : (
-          <div
-            style={{
-              width: 80, height: 80,
-              background: "var(--bg-3)",
-              borderRadius: 14,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 32, flexShrink: 0,
-            }}
-          >
-            📦
-          </div>
-        )}
-        <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: "1.3rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{product.name}</h1>
-          {product.sku && <p style={{ fontSize: "0.8rem", color: "var(--text-3)", margin: "4px 0 0" }}>SKU: {product.sku}</p>}
-          {product.category && (
-            <span
-              className="badge"
-              style={{ marginTop: 8, background: "var(--accent-glow)", color: "var(--accent-2)", border: "1px solid rgba(99,102,241,0.2)" }}
-            >
-              {product.category}
-            </span>
+      {/* Hero */}
+      <div className="glass" style={{ padding: "1.25rem" }}>
+        <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start", flexWrap: "wrap" }}>
+          {product.imageUrl ? (
+            <Image src={product.imageUrl} alt={product.name} width={72} height={72} style={{ width: 72, height: 72, borderRadius: 12, objectFit: "cover", flexShrink: 0 }} />
+          ) : (
+            <div style={{ width: 72, height: 72, background: "var(--bg-3)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0 }}>📦</div>
           )}
-          <div style={{ display: "flex", gap: "1.5rem", marginTop: "1rem" }}>
-            <div>
-              <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("product.totalStock")}</p>
-              <p style={{ fontSize: "2rem", fontWeight: 700, margin: 0, color: isLow ? "var(--amber)" : "var(--text-1)", lineHeight: 1 }}>
-                {product.totalQuantity}
-              </p>
-            </div>
-            {product.minStock > 0 && (
-              <div>
-                <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("product.minStockLabel")}</p>
-                <p style={{ fontSize: "2rem", fontWeight: 700, margin: 0, color: "var(--text-3)", lineHeight: 1 }}>
-                  {product.minStock}
-                </p>
-              </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h1 style={{ fontSize: "1.25rem", fontWeight: 700, margin: 0, color: "var(--text-1)", wordBreak: "break-word" }}>{product.name}</h1>
+            {product.sku && <p style={{ fontSize: "0.78rem", color: "var(--text-3)", margin: "3px 0 0", fontFamily: "monospace" }}>SKU: {product.sku}</p>}
+            {product.category && (
+              <span className="badge" style={{ marginTop: 8, background: "var(--accent-glow)", color: "var(--accent-2)", border: "1px solid rgba(99,102,241,0.2)" }}>
+                {product.category}
+              </span>
             )}
           </div>
+        </div>
+
+        {/* Stock numbers */}
+        <div style={{ display: "flex", gap: "1.5rem", marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
+          <div>
+            <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>{t("product.totalStock")}</p>
+            <p style={{ fontSize: "2rem", fontWeight: 800, margin: "2px 0 0", color: isLow ? "var(--amber)" : "var(--text-1)", lineHeight: 1, letterSpacing: "-0.02em" }}>
+              {product.totalQuantity}
+            </p>
+          </div>
+          {product.minStock > 0 && (
+            <div>
+              <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>{t("product.minStockLabel")}</p>
+              <p style={{ fontSize: "2rem", fontWeight: 800, margin: "2px 0 0", color: "var(--text-3)", lineHeight: 1, letterSpacing: "-0.02em" }}>
+                {product.minStock}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -186,20 +157,21 @@ export default function ProductDetailPage() {
         </div>
       )}
 
+      {/* Pricing */}
       {(product.costPrice !== undefined || product.salePrice !== undefined || product.supplier?.name) && (
-        <section className="glass" style={{ padding: "1.25rem 1.5rem" }}>
-          <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 0.875rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        <section className="glass" style={{ padding: "1.1rem 1.25rem" }}>
+          <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-3)", margin: "0 0 0.75rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>
             {t("product.pricingSupplier")}
-          </h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "1rem" }}>
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "0.875rem" }}>
             {product.costPrice !== undefined && (
               <div>
-                <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("product.costPrice")}</p>
-                <p style={{ fontSize: "1.15rem", fontWeight: 700, margin: "3px 0 0", color: "var(--text-1)" }}>
-                  {product.costPrice.toLocaleString(locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0 }}>{t("product.costPrice")}</p>
+                <p style={{ fontSize: "1.1rem", fontWeight: 700, margin: "3px 0 0", color: "var(--text-1)" }}>
+                  {product.costPrice.toLocaleString(fmtLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                 </p>
                 {product.salePrice !== undefined && product.costPrice > 0 && (
-                  <p style={{ fontSize: "0.72rem", color: "var(--green)", margin: "2px 0 0" }}>
+                  <p style={{ fontSize: "0.7rem", color: "var(--green)", margin: "2px 0 0" }}>
                     {t("product.margin")}: {(((product.salePrice - product.costPrice) / product.costPrice) * 100).toFixed(0)}%
                   </p>
                 )}
@@ -207,45 +179,44 @@ export default function ProductDetailPage() {
             )}
             {product.salePrice !== undefined && (
               <div>
-                <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("product.salePrice")}</p>
-                <p style={{ fontSize: "1.15rem", fontWeight: 700, margin: "3px 0 0", color: "var(--text-1)" }}>
-                  {product.salePrice.toLocaleString(locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0 }}>{t("product.salePrice")}</p>
+                <p style={{ fontSize: "1.1rem", fontWeight: 700, margin: "3px 0 0", color: "var(--text-1)" }}>
+                  {product.salePrice.toLocaleString(fmtLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                 </p>
               </div>
             )}
             {product.costPrice !== undefined && (
               <div>
-                <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("product.stockValue")}</p>
-                <p style={{ fontSize: "1.15rem", fontWeight: 700, margin: "3px 0 0", color: "#a855f7" }}>
-                  {(product.costPrice * product.totalQuantity).toLocaleString(locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0 }}>{t("product.stockValue")}</p>
+                <p style={{ fontSize: "1.1rem", fontWeight: 700, margin: "3px 0 0", color: "#a855f7" }}>
+                  {(product.costPrice * product.totalQuantity).toLocaleString(fmtLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                 </p>
               </div>
             )}
             {product.supplier?.name && (
               <div>
-                <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("product.supplier")}</p>
+                <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0 }}>{t("product.supplier")}</p>
                 <p style={{ fontSize: "0.9rem", fontWeight: 600, margin: "3px 0 0", color: "var(--text-1)" }}>{product.supplier.name}</p>
-                {product.supplier.contact && (
-                  <p style={{ fontSize: "0.75rem", color: "var(--accent-2)", margin: "2px 0 0" }}>{product.supplier.contact}</p>
-                )}
+                {product.supplier.contact && <p style={{ fontSize: "0.75rem", color: "var(--accent-2)", margin: "2px 0 0" }}>{product.supplier.contact}</p>}
               </div>
             )}
           </div>
         </section>
       )}
 
+      {/* Custom fields */}
       {product.customFieldDefinitions?.length > 0 && (
-        <section className="glass" style={{ padding: "1.25rem 1.5rem" }}>
-          <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 0.875rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        <section className="glass" style={{ padding: "1.1rem 1.25rem" }}>
+          <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-3)", margin: "0 0 0.75rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>
             {t("product.customDetails")}
-          </h2>
-          <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "0.875rem", margin: 0 }}>
+          </p>
+          <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem", margin: 0 }}>
             {product.customFieldDefinitions.map((field) => {
               const value = product.customFieldValues?.[field.key];
               return (
                 <div key={field.key}>
-                  <dt style={{ fontSize: "0.72rem", color: "var(--text-3)" }}>{field.labels?.[locale] ?? field.label}</dt>
-                  <dd style={{ fontSize: "0.9rem", color: "var(--text-1)", margin: "3px 0 0", overflowWrap: "anywhere" }}>
+                  <dt style={{ fontSize: "0.7rem", color: "var(--text-3)" }}>{field.labels?.[locale] ?? field.label}</dt>
+                  <dd style={{ fontSize: "0.875rem", color: "var(--text-1)", margin: "3px 0 0", overflowWrap: "anywhere" }}>
                     {value === undefined || value === "" ? "—" : typeof value === "boolean" ? value ? t("yes") : t("no") : field.type === "select" ? getLocalizedOptionValue(field, String(value), locale) : String(value)}
                   </dd>
                 </div>
@@ -257,150 +228,102 @@ export default function ProductDetailPage() {
 
       {/* Variants */}
       <div>
-        <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 0.75rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-3)", margin: "0 0 0.625rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>
           {t("product.variants")}
-        </h2>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-          {variants.map((variant) => (
-            <div
-              key={variant.id}
-              className="glass product-variant-card"
-              style={{ padding: "1rem 1.25rem" }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: 120 }}>
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          {variantsPaging.visible.map((variant) => (
+            <div key={variant.id} className="glass" style={{ padding: "1rem 1.1rem" }}>
+              {/* Top: name + qty */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0 }}>
                   <p style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text-1)", margin: 0 }}>{variant.label}</p>
-                  {variant.sku && <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: "2px 0 0" }}>{variant.sku}</p>}
+                  {variant.sku && <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: "2px 0 0", fontFamily: "monospace" }}>{variant.sku}</p>}
                 </div>
-
-                {/* Quantity */}
-                <span style={{ fontSize: "1.75rem", fontWeight: 700, color: "var(--text-1)", minWidth: 48, textAlign: "right" }}>
+                <span style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--text-1)", lineHeight: 1, letterSpacing: "-0.02em", flexShrink: 0 }}>
                   {variant.quantity}
                 </span>
+              </div>
 
-                {/* Controls */}
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <button
-                    onClick={() => handleAdjust(variant.id, -1)}
-                    disabled={adjusting === variant.id || variant.quantity <= 0}
-                    style={{
-                      width: 32, height: 32,
-                      background: "var(--red-dim)",
-                      border: "1px solid rgba(239,68,68,0.15)",
-                      borderRadius: 8,
-                      color: "var(--red)",
-                      cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      transition: "all 0.15s",
-                      opacity: adjusting === variant.id || variant.quantity <= 0 ? 0.4 : 1,
-                    }}
-                  >
-                    <Minus size={14} />
-                  </button>
+              {/* Controls */}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                <button
+                  onClick={() => handleAdjust(variant.id, -1)}
+                  disabled={adjusting === variant.id || variant.quantity <= 0}
+                  aria-label="-1"
+                  style={{ width: 36, height: 36, background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 9, color: "var(--red)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: adjusting === variant.id || variant.quantity <= 0 ? 0.4 : 1 }}
+                >
+                  <Minus size={15} />
+                </button>
 
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="n"
-                    value={customDelta[variant.id] ?? ""}
-                    onChange={(e) => setCustomDelta((p) => ({ ...p, [variant.id]: e.target.value }))}
-                    style={{
-                      width: 56,
-                      background: "var(--bg-3)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 8,
-                      padding: "0.35rem 0.5rem",
-                      textAlign: "center",
-                      fontSize: "0.85rem",
-                      color: "var(--text-1)",
-                      outline: "none",
-                    }}
-                  />
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="n"
+                  value={customDelta[variant.id] ?? ""}
+                  onChange={(e) => setCustomDelta((p) => ({ ...p, [variant.id]: e.target.value }))}
+                  style={{ width: 60, background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 9, padding: "0.4rem 0.5rem", textAlign: "center", fontSize: "0.875rem", color: "var(--text-1)", outline: "none" }}
+                />
 
-                  <button
-                    onClick={() => handleAdjust(variant.id, 1)}
-                    disabled={adjusting === variant.id}
-                    style={{
-                      width: 32, height: 32,
-                      background: "var(--green-dim)",
-                      border: "1px solid rgba(34,197,94,0.15)",
-                      borderRadius: 8,
-                      color: "var(--green)",
-                      cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      transition: "all 0.15s",
-                      opacity: adjusting === variant.id ? 0.4 : 1,
-                    }}
-                  >
-                    <Plus size={14} />
-                  </button>
+                <button
+                  onClick={() => handleAdjust(variant.id, 1)}
+                  disabled={adjusting === variant.id}
+                  aria-label="+1"
+                  style={{ width: 36, height: 36, background: "var(--green-dim)", border: "1px solid rgba(34,197,94,0.15)", borderRadius: 9, color: "var(--green)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: adjusting === variant.id ? 0.4 : 1 }}
+                >
+                  <Plus size={15} />
+                </button>
 
-                  {customDelta[variant.id] && (
-                    <>
-                      <button
-                        onClick={() => handleCustomAdjust(variant.id, false)}
-                        disabled={adjusting === variant.id}
-                        style={{
-                          padding: "0.3rem 0.6rem",
-                          background: "var(--red-dim)",
-                          border: "1px solid rgba(239,68,68,0.2)",
-                          borderRadius: 7,
-                          fontSize: "0.78rem",
-                          color: "var(--red)",
-                          cursor: "pointer",
-                          display: "flex", alignItems: "center", gap: 3,
-                        }}
-                      >
-                        <TrendingDown size={12} /> −n
-                      </button>
-                      <button
-                        onClick={() => handleCustomAdjust(variant.id, true)}
-                        disabled={adjusting === variant.id}
-                        style={{
-                          padding: "0.3rem 0.6rem",
-                          background: "var(--green-dim)",
-                          border: "1px solid rgba(34,197,94,0.2)",
-                          borderRadius: 7,
-                          fontSize: "0.78rem",
-                          color: "var(--green)",
-                          cursor: "pointer",
-                          display: "flex", alignItems: "center", gap: 3,
-                        }}
-                      >
-                        <TrendingUp size={12} /> +n
-                      </button>
-                    </>
-                  )}
-                </div>
+                {customDelta[variant.id] && (
+                  <>
+                    <button
+                      onClick={() => handleCustomAdjust(variant.id, false)}
+                      disabled={adjusting === variant.id}
+                      style={{ height: 36, padding: "0 0.75rem", background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 9, fontSize: "0.8rem", color: "var(--red)", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}
+                    >
+                      <TrendingDown size={13} /> −n
+                    </button>
+                    <button
+                      onClick={() => handleCustomAdjust(variant.id, true)}
+                      disabled={adjusting === variant.id}
+                      style={{ height: 36, padding: "0 0.75rem", background: "var(--green-dim)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: 9, fontSize: "0.8rem", color: "var(--green)", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}
+                    >
+                      <TrendingUp size={13} /> +n
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}
         </div>
+        <ListPagination
+          page={variantsPaging.page}
+          totalPages={variantsPaging.totalPages}
+          totalItems={variantsPaging.totalItems}
+          shown={variantsPaging.visible.length}
+          hasMore={variantsPaging.hasMore}
+          onLoadMore={variantsPaging.loadMore}
+          onGoToPage={variantsPaging.goToPage}
+          labels={pagingLabels}
+        />
       </div>
 
       {/* History */}
       {events.length > 0 && (
         <div>
-          <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 0.75rem", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 6 }}>
-            <Clock size={14} /> {t("product.history")}
-          </h2>
+          <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-3)", margin: "0 0 0.625rem", textTransform: "uppercase", letterSpacing: "0.07em", display: "flex", alignItems: "center", gap: 6 }}>
+            <Clock size={13} /> {t("product.history")}
+          </p>
           <div className="glass" style={{ overflow: "hidden" }}>
-            {events.map((event, i) => (
+            {historyPaging.visible.map((event, i) => (
               <div
                 key={event.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "0.875rem 1.25rem",
-                  borderBottom: i < events.length - 1 ? "1px solid var(--border)" : "none",
-                }}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", padding: "0.75rem 1.1rem", borderBottom: i < historyPaging.visible.length - 1 ? "1px solid var(--border)" : "none" }}
               >
-                <div>
-                  <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-1)", margin: 0 }}>{event.variantLabel}</p>
-                  <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: "2px 0 0" }}>
-                    {event.actorName} · {event.createdAt ? event.createdAt.toLocaleString(locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US") : "—"}
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-1)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{event.variantLabel}</p>
+                  <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: "2px 0 0" }}>
+                    {event.actorName} · {event.createdAt ? event.createdAt.toLocaleString(fmtLocale) : "—"}
                   </p>
                 </div>
                 <span
@@ -409,9 +332,7 @@ export default function ProductDetailPage() {
                     background: event.delta > 0 ? "var(--green-dim)" : "var(--red-dim)",
                     color: event.delta > 0 ? "var(--green)" : "var(--red)",
                     border: `1px solid ${event.delta > 0 ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)"}`,
-                    fontSize: "0.82rem",
-                    fontWeight: 700,
-                    letterSpacing: 0,
+                    fontSize: "0.82rem", fontWeight: 700, letterSpacing: 0, flexShrink: 0,
                   }}
                 >
                   {event.delta > 0 ? "+" : ""}{event.delta}
@@ -419,6 +340,16 @@ export default function ProductDetailPage() {
               </div>
             ))}
           </div>
+          <ListPagination
+            page={historyPaging.page}
+            totalPages={historyPaging.totalPages}
+            totalItems={historyPaging.totalItems}
+            shown={historyPaging.visible.length}
+            hasMore={historyPaging.hasMore}
+            onLoadMore={historyPaging.loadMore}
+            onGoToPage={historyPaging.goToPage}
+            labels={pagingLabels}
+          />
         </div>
       )}
     </div>

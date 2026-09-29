@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useProducts, useAllStockEvents } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n-context";
+import { usePagination } from "@/lib/use-pagination";
+import ListPagination from "@/components/ListPagination";
 import { StockEvent } from "@/lib/types";
 import { Filter, TrendingUp, TrendingDown, User, Tag, ExternalLink } from "lucide-react";
 
@@ -55,6 +57,25 @@ export default function AuditPage() {
 
   const hasFilters = actorFilter !== "all" || reasonFilter !== "all" || productFilter !== "all" || Boolean(dateFrom || dateTo);
   const dateLocale = locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US";
+
+  const pagingLabels = {
+    loadMore: t("paging.loadMore"),
+    loading: t("paging.loading"),
+    showing: t("paging.showing"),
+    of: t("paging.of"),
+    page: t("paging.page"),
+    prev: t("paging.prev"),
+    next: t("paging.next"),
+  };
+
+  const paging = usePagination(filtered, [
+    actorFilter,
+    reasonFilter,
+    productFilter,
+    dateFrom,
+    dateTo,
+    events.length,
+  ]);
 
   return (
     <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.5rem", maxWidth: 900 }}>
@@ -166,10 +187,10 @@ export default function AuditPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((e, i) => {
+                {paging.visible.map((e, i) => {
                   const reason = REASONS.find((item) => item.key === (e.reason ?? "adjustment")) ?? REASONS[1];
                   return (
-                    <tr key={e.id} style={{ borderBottom: i < filtered.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.1s" }}
+                    <tr key={e.id} style={{ borderBottom: i < paging.visible.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.1s" }}
                       onMouseOver={(ev) => (ev.currentTarget as HTMLTableRowElement).style.background = "var(--bg-3)"}
                       onMouseOut={(ev) => (ev.currentTarget as HTMLTableRowElement).style.background = "transparent"}>
                       <td style={{ padding: "0.7rem 1rem", color: "var(--text-3)", whiteSpace: "nowrap" }}>
@@ -211,6 +232,19 @@ export default function AuditPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {filtered.length > 0 && (
+        <ListPagination
+          page={paging.page}
+          totalPages={paging.totalPages}
+          totalItems={paging.totalItems}
+          shown={paging.visible.length}
+          hasMore={paging.hasMore}
+          onLoadMore={paging.loadMore}
+          onGoToPage={paging.goToPage}
+          labels={pagingLabels}
+        />
       )}
     </div>
   );
