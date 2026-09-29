@@ -1,0 +1,17 @@
+{
+  "name": "Inventory CRM",
+  "short_name": "Inventory CRM",
+  "description": "Upravljanje zalihama u realnom vremenu",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f14",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}
