@@ -1,37 +1,64 @@
 import * as XLSX from "xlsx";
-import { Product, ProductVariant } from "./types";
+import { AppLocale, Product, ProductVariant } from "./types";
+import { getLocalizedOptionValue } from "./product-field-templates";
+
+const exportLabels: Record<AppLocale, Record<string, string>> = {
+  sr: { product: "Artikal", sku: "SKU", category: "Kategorija", variant: "Varijanta", variantSku: "SKU varijante", quantity: "Količina", min: "Min. stanje", status: "Status", low: "⚠ Nisko", ok: "U redu", none: "—", title: "Stanje artikala", date: "Datum", products: "Artikala", total: "Ukupno komada" },
+  en: { product: "Product", sku: "SKU", category: "Category", variant: "Variant", variantSku: "Variant SKU", quantity: "Quantity", min: "Min. stock", status: "Status", low: "⚠ Low", ok: "OK", none: "—", title: "Product stock", date: "Date", products: "Products", total: "Total units" },
+  ru: { product: "Товар", sku: "Артикул", category: "Категория", variant: "Вариант", variantSku: "Артикул варианта", quantity: "Количество", min: "Мин. остаток", status: "Статус", low: "⚠ Мало", ok: "В норме", none: "—", title: "Остатки товаров", date: "Дата", products: "Товаров", total: "Всего единиц" },
+};
+
+function localizedValue(product: Product, key: string, locale: AppLocale, fallback: string | number) {
+  const field = product.customFieldDefinitions?.find((definition) => definition.key === key);
+  const value = product.customFieldValues?.[key];
+  if (value === undefined || value === "") return fallback;
+  if (typeof value === "boolean") return value ? ({ sr: "Da", en: "Yes", ru: "Да" } as const)[locale] : ({ sr: "Ne", en: "No", ru: "Нет" } as const)[locale];
+  if (field?.type === "select") return getLocalizedOptionValue(field, String(value), locale);
+  return value;
+}
 
 export function exportToExcel(
   products: Product[],
   variantMap: Record<string, ProductVariant[]>,
-  shopName = "Radnja"
+  shopName = "Radnja",
+  locale: AppLocale = "sr"
 ) {
+  const labels = exportLabels[locale];
   const rows: Record<string, string | number>[] = [];
+
+  function customValues(product: Product) {
+    return Object.fromEntries((product.customFieldDefinitions ?? []).map((field) => {
+      const value = localizedValue(product, field.key, locale, "");
+      return [`${locale === "sr" ? "Dodatno" : locale === "en" ? "Extra" : "Дополнительно"}: ${field.labels?.[locale] ?? field.label}`, value];
+    }));
+  }
 
   for (const product of products) {
     const variants = variantMap[product.id] ?? [];
     if (variants.length === 0) {
       rows.push({
-        "Artikal": product.name,
-        "SKU": product.sku,
-        "Kategorija": product.category,
-        "Varijanta": "—",
-        "SKU varijante": "—",
-        "Količina": product.totalQuantity,
-        "Min. stanje": product.minStock,
-        "Status": product.minStock > 0 && product.totalQuantity <= product.minStock ? "⚠ Nisko" : "OK",
+        [labels.product]: product.name,
+        [labels.sku]: product.sku,
+        [labels.category]: product.category,
+        [labels.variant]: labels.none,
+        [labels.variantSku]: labels.none,
+        [labels.quantity]: product.totalQuantity,
+        [labels.min]: product.minStock,
+        [labels.status]: product.minStock > 0 && product.totalQuantity <= product.minStock ? labels.low : labels.ok,
+        ...customValues(product),
       });
     } else {
       for (const v of variants) {
         rows.push({
-          "Artikal": product.name,
-          "SKU": product.sku,
-          "Kategorija": product.category,
-          "Varijanta": v.label,
-          "SKU varijante": v.sku,
-          "Količina": v.quantity,
-          "Min. stanje": product.minStock,
-          "Status": product.minStock > 0 && product.totalQuantity <= product.minStock ? "⚠ Nisko" : "OK",
+          [labels.product]: product.name,
+          [labels.sku]: product.sku,
+          [labels.category]: product.category,
+          [labels.variant]: v.label,
+          [labels.variantSku]: v.sku,
+          [labels.quantity]: v.quantity,
+          [labels.min]: product.minStock,
+          [labels.status]: product.minStock > 0 && product.totalQuantity <= product.minStock ? labels.low : labels.ok,
+          ...customValues(product),
         });
       }
     }
@@ -56,26 +83,37 @@ export function exportToExcel(
 export function exportToPrint(
   products: Product[],
   variantMap: Record<string, ProductVariant[]>,
-  shopName = "Radnja"
+  shopName = "Radnja",
+  locale: AppLocale = "sr"
 ) {
+  const labels = exportLabels[locale];
   const date = new Date().toLocaleDateString("sr-RS");
+  const customDefinitions = Array.from(new Map(products.flatMap((product) =>
+    (product.customFieldDefinitions ?? []).map((field) => [`${field.labels?.[locale] ?? field.label}`.toLocaleLowerCase(), field] as const)
+  )).values());
+  const escapeHtml = (value: unknown) => String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 
   const rows = products
     .flatMap((p) => {
       const variants = variantMap[p.id] ?? [];
       if (variants.length === 0) {
-        return [{ name: p.name, sku: p.sku, category: p.category, variant: "—", quantity: p.totalQuantity, minStock: p.minStock }];
+        return [{ name: p.name, sku: p.sku, category: p.category, variant: labels.none, quantity: p.totalQuantity, minStock: p.minStock, product: p, custom: p.customFieldValues ?? {} }];
       }
       return variants.map((v) => ({
         name: p.name, sku: p.sku, category: p.category,
-        variant: v.label, quantity: v.quantity, minStock: p.minStock,
+        variant: v.label, quantity: v.quantity, minStock: p.minStock, product: p, custom: p.customFieldValues ?? {},
       }));
     });
 
   const html = `
     <!DOCTYPE html><html><head>
     <meta charset="UTF-8">
-    <title>Stanje artikala - ${shopName}</title>
+    <title>${escapeHtml(labels.title)} - ${escapeHtml(shopName)}</title>
     <style>
       body { font-family: Arial, sans-serif; font-size: 12px; color: #111; margin: 2cm; }
       h1 { font-size: 18px; margin-bottom: 4px; }
@@ -88,22 +126,27 @@ export function exportToPrint(
       @media print { body { margin: 1cm; } }
     </style>
     </head><body>
-    <h1>📦 ${shopName} — Stanje artikala</h1>
-    <div class="meta">Datum: ${date} · Ukupno artikala: ${products.length} · Ukupno komada: ${products.reduce((s, p) => s + p.totalQuantity, 0)}</div>
+    <h1>📦 ${escapeHtml(shopName)} — ${escapeHtml(labels.title)}</h1>
+    <div class="meta">${escapeHtml(labels.date)}: ${date} · ${escapeHtml(labels.products)}: ${products.length} · ${escapeHtml(labels.total)}: ${products.reduce((s, p) => s + p.totalQuantity, 0)}</div>
     <table>
       <thead><tr>
-        <th>Artikal</th><th>SKU</th><th>Kategorija</th>
-        <th>Varijanta</th><th>Količina</th><th>Min.</th>
+        <th>${escapeHtml(labels.product)}</th><th>${escapeHtml(labels.sku)}</th><th>${escapeHtml(labels.category)}</th>
+        <th>${escapeHtml(labels.variant)}</th><th>${escapeHtml(labels.quantity)}</th><th>${escapeHtml(labels.min)}</th>
+        ${customDefinitions.map((field) => `<th>${escapeHtml(field.labels?.[locale] ?? field.label)}</th>`).join("")}
       </tr></thead>
       <tbody>
         ${rows.map((r) => `
           <tr>
-            <td>${r.name}</td>
-            <td style="color:#888">${r.sku || "—"}</td>
-            <td>${r.category || "—"}</td>
-            <td>${r.variant}</td>
+            <td>${escapeHtml(r.name)}</td>
+            <td style="color:#888">${escapeHtml(r.sku || "—")}</td>
+            <td>${escapeHtml(r.category || "—")}</td>
+            <td>${escapeHtml(r.variant)}</td>
             <td class="${r.minStock > 0 && r.quantity <= r.minStock ? "low" : ""}">${r.quantity}</td>
             <td style="color:#aaa">${r.minStock || "—"}</td>
+            ${customDefinitions.map((field) => {
+              const value = localizedValue(r.product, field.key, locale, labels.none);
+              return `<td>${escapeHtml(value)}</td>`;
+            }).join("")}
           </tr>
         `).join("")}
       </tbody>

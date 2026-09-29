@@ -16,7 +16,7 @@ import {
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
-import { ProductVariant } from "@/lib/types";
+import { ProductCustomField, ProductVariant } from "@/lib/types";
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
@@ -86,7 +86,9 @@ export async function saveProduct(
   minStock: number,
   imageFile: File | null,
   existingImageUrl: string,
-  variants: ProductVariant[]
+  variants: ProductVariant[],
+  customFieldDefinitions: ProductCustomField[] = [],
+  customFieldValues: Record<string, string | number | boolean> = {}
 ): Promise<string> {
   if (variants.length === 0) throw new Error("Dodaj bar jednu varijantu");
 
@@ -109,6 +111,8 @@ export async function saveProduct(
     minStock: Math.max(0, minStock),
     imageUrl,
     totalQuantity: total,
+    customFieldDefinitions,
+    customFieldValues,
     updatedAt: serverTimestamp(),
   });
 

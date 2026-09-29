@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useI18n } from "@/lib/i18n-context";
 import { useProducts } from "@/lib/hooks";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -11,6 +12,7 @@ import { FileSpreadsheet, Printer, Download } from "lucide-react";
 
 export default function ExportPage() {
   const { profile } = useAuth();
+  const { locale, t } = useI18n();
   const { products, loading } = useProducts(profile?.shopId);
   const [exporting, setExporting] = useState(false);
 
@@ -33,7 +35,7 @@ export default function ExportPage() {
     setExporting(true);
     try {
       const variants = await loadVariants();
-      exportToExcel(products, variants, "Radnja");
+      exportToExcel(products, variants, "Radnja", locale);
     } finally {
       setExporting(false);
     }
@@ -43,7 +45,7 @@ export default function ExportPage() {
     setExporting(true);
     try {
       const variants = await loadVariants();
-      exportToPrint(products, variants, "Radnja");
+      exportToPrint(products, variants, "Radnja", locale);
     } finally {
       setExporting(false);
     }
@@ -52,28 +54,28 @@ export default function ExportPage() {
   return (
     <div className="fade-up" style={{ maxWidth: 560 }}>
       <div style={{ marginBottom: "1.75rem" }}>
-        <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>Izvoz podataka</h1>
+        <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{t("export.title")}</h1>
         <p style={{ fontSize: "0.82rem", color: "var(--text-2)", marginTop: 4 }}>
-          Preuzmi trenutno stanje artikala
+          {t("export.subtitle")}
         </p>
       </div>
 
       {/* Summary */}
       <div className="glass" style={{ padding: "1.25rem 1.5rem", marginBottom: "1.5rem", display: "flex", gap: "2rem" }}>
         <div>
-          <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>Artikala</p>
+          <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("export.articles")}</p>
           <p style={{ fontSize: "1.75rem", fontWeight: 700, color: "var(--text-1)", margin: 0, lineHeight: 1 }}>{products.length}</p>
         </div>
         <div>
-          <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>Ukupno komada</p>
+          <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("export.totalItems")}</p>
           <p style={{ fontSize: "1.75rem", fontWeight: 700, color: "var(--text-1)", margin: 0, lineHeight: 1 }}>
             {products.reduce((s, p) => s + p.totalQuantity, 0)}
           </p>
         </div>
         <div>
-          <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>Datum</p>
+          <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("export.date")}</p>
           <p style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
-            {new Date().toLocaleDateString("sr-RS")}
+            {new Date().toLocaleDateString(locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US")}
           </p>
         </div>
       </div>
@@ -101,9 +103,9 @@ export default function ExportPage() {
             <FileSpreadsheet size={22} color="var(--green)" />
           </div>
           <div style={{ flex: 1 }}>
-            <p style={{ fontWeight: 600, color: "var(--text-1)", margin: 0, fontSize: "0.95rem" }}>Izvezi u Excel (.xlsx)</p>
+            <p style={{ fontWeight: 600, color: "var(--text-1)", margin: 0, fontSize: "0.95rem" }}>{t("export.excel")}</p>
             <p style={{ fontSize: "0.78rem", color: "var(--text-2)", margin: "2px 0 0" }}>
-              Kompletna tabela sa svim artiklima i varijantama
+              {t("export.excelNote")}
             </p>
           </div>
           <Download size={18} color="var(--green)" />
@@ -130,9 +132,9 @@ export default function ExportPage() {
             <Printer size={22} color="var(--accent-2)" />
           </div>
           <div style={{ flex: 1 }}>
-            <p style={{ fontWeight: 600, color: "var(--text-1)", margin: 0, fontSize: "0.95rem" }}>Štampaj / Sačuvaj PDF</p>
+            <p style={{ fontWeight: 600, color: "var(--text-1)", margin: 0, fontSize: "0.95rem" }}>{t("export.print")}</p>
             <p style={{ fontSize: "0.78rem", color: "var(--text-2)", margin: "2px 0 0" }}>
-              Otvara print dijalog — možeš sačuvati kao PDF
+              {t("export.printNote")}
             </p>
           </div>
           <Printer size={18} color="var(--accent-2)" />
@@ -141,7 +143,7 @@ export default function ExportPage() {
 
       {exporting && (
         <p style={{ textAlign: "center", color: "var(--text-2)", fontSize: "0.82rem", marginTop: "1rem" }}>
-          Učitavam varijante...
+          {t("export.loading")}
         </p>
       )}
     </div>

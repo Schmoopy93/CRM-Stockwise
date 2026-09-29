@@ -13,6 +13,22 @@ export interface Product {
   imageUrl: string;
   minStock: number;
   totalQuantity: number;
+  customFieldDefinitions: ProductCustomField[];
+  customFieldValues: Record<string, string | number | boolean>;
+}
+
+export type ProductCustomFieldType = "text" | "number" | "date" | "boolean" | "select";
+export type AppLocale = "sr" | "en" | "ru";
+
+export interface ProductCustomField {
+  key: string;
+  label: string;
+  labels?: Partial<Record<AppLocale, string>>;
+  type: ProductCustomFieldType;
+  required: boolean;
+  options?: string[];
+  optionValues?: string[];
+  optionsByLocale?: Partial<Record<AppLocale, string[]>>;
 }
 
 export interface ProductVariant {

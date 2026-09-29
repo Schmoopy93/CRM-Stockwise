@@ -33,6 +33,8 @@ export function useProducts(shopId: string | undefined) {
           imageUrl: d.data().imageUrl ?? "",
           minStock: d.data().minStock ?? 0,
           totalQuantity: d.data().totalQuantity ?? 0,
+          customFieldDefinitions: d.data().customFieldDefinitions ?? [],
+          customFieldValues: d.data().customFieldValues ?? {},
         }))
       );
       setLoading(false);
@@ -61,6 +63,8 @@ export function useProduct(shopId: string | undefined, productId: string | undef
             imageUrl: snap.data().imageUrl ?? "",
             minStock: snap.data().minStock ?? 0,
             totalQuantity: snap.data().totalQuantity ?? 0,
+            customFieldDefinitions: snap.data().customFieldDefinitions ?? [],
+            customFieldValues: snap.data().customFieldValues ?? {},
           });
         } else {
           setProduct(null);

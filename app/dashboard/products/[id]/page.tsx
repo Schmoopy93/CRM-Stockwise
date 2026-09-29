@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
+import { useI18n } from "@/lib/i18n-context";
+import { getLocalizedOptionValue } from "@/lib/product-field-templates";
 import { useProduct, useVariants, useStockEvents } from "@/lib/hooks";
 import { adjustStock, deleteProduct } from "@/lib/actions";
 import { ArrowLeft, Pencil, Trash2, Minus, Plus, Clock, TrendingUp, TrendingDown } from "lucide-react";
@@ -13,6 +15,7 @@ export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { profile } = useAuth();
+  const { locale, t } = useI18n();
   const { product, loading } = useProduct(profile?.shopId, id);
   const variants = useVariants(profile?.shopId, id);
   const events = useStockEvents(profile?.shopId, id);
@@ -181,6 +184,27 @@ export default function ProductDetailPage() {
         <div style={{ background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, padding: "0.75rem 1rem", fontSize: "0.82rem", color: "var(--red)" }}>
           {error}
         </div>
+      )}
+
+      {product.customFieldDefinitions?.length > 0 && (
+        <section className="glass" style={{ padding: "1.25rem 1.5rem" }}>
+          <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 0.875rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            {t("product.customDetails")}
+          </h2>
+          <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "0.875rem", margin: 0 }}>
+            {product.customFieldDefinitions.map((field) => {
+              const value = product.customFieldValues?.[field.key];
+              return (
+                <div key={field.key}>
+                  <dt style={{ fontSize: "0.72rem", color: "var(--text-3)" }}>{field.labels?.[locale] ?? field.label}</dt>
+                  <dd style={{ fontSize: "0.9rem", color: "var(--text-1)", margin: "3px 0 0", overflowWrap: "anywhere" }}>
+                    {value === undefined || value === "" ? "—" : typeof value === "boolean" ? value ? t("yes") : t("no") : field.type === "select" ? getLocalizedOptionValue(field, String(value), locale) : String(value)}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+        </section>
       )}
 
       {/* Variants */}
