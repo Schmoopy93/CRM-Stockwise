@@ -1,6 +1,6 @@
 import type { AppLocale, ProductCustomField, ProductCustomFieldType } from "@/lib/types";
-
-const rateLimits = new Map<string, { count: number; resetAt: number }>();
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { bearerToken, verifyFirebaseToken } from "@/lib/firebase-token";
 const locales: AppLocale[] = ["sr", "en", "ru", "de", "es", "it"];
 const allowedTypes = new Set<ProductCustomFieldType>(["text", "number", "date", "boolean", "select"]);
 
@@ -142,27 +142,6 @@ function cleanAiFields(value: unknown, locale: AppLocale): ProductCustomField[] 
   return fields;
 }
 
-async function verifyFirebaseToken(token: string) {
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-  if (!apiKey) return null;
-  const response = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken: token }),
-      cache: "no-store",
-    }
-  );
-  if (!response.ok) return null;
-  const result: unknown = await response.json();
-  if (!result || typeof result !== "object" || !("users" in result) || !Array.isArray(result.users)) return null;
-  const firstUser = result.users[0];
-  return firstUser && typeof firstUser === "object" && "localId" in firstUser && typeof firstUser.localId === "string"
-    ? firstUser.localId
-    : null;
-}
-
 function resolveAiProvider(): { apiKey: string; baseURL: string; model: string } {
   if (process.env.GROQ_API_KEY) {
     return {
@@ -225,8 +204,7 @@ async function suggestWithAi(category: string, name: string, existingCategories:
 
 export async function POST(request: Request) {
   const headerLocale = parseLocale(request.headers.get("x-app-locale"));
-  const authorization = request.headers.get("authorization");
-  const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
+  const token = bearerToken(request);
   if (!token) return Response.json({ error: localizedMessage(headerLocale, "login") }, { status: 401 });
 
   let uid: string | null;
@@ -257,14 +235,9 @@ export async function POST(request: Request) {
     : [];
   if (!category && !name) return Response.json({ error: localizedMessage(locale, "missing") }, { status: 400 });
 
-  const now = Date.now();
-  const limit = rateLimits.get(uid);
-  if (limit && limit.resetAt > now && limit.count >= 10) {
+  if (!(await consumeRateLimit(`product-fields:${uid}`, 10))) {
     return Response.json({ error: localizedMessage(locale, "limit") }, { status: 429 });
   }
-  rateLimits.set(uid, limit && limit.resetAt > now
-    ? { count: limit.count + 1, resetAt: limit.resetAt }
-    : { count: 1, resetAt: now + 60_000 });
 
   try {
     const { category: suggestedCategory, fields } = await suggestWithAi(category, name, existingCategories, locale);

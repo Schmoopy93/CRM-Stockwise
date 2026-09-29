@@ -52,8 +52,20 @@ export function channelUrl(channel: CatalogChannel, value: string, message = "")
   return channel === "telegram" ? `https://t.me/${id}` : `https://ig.me/m/${id}`;
 }
 
+/** Prices are plain amounts. The shop keeps its books in one currency, so the
+ * symbol is fixed here rather than chosen per shop — a shop that trades in
+ * another currency simply reads the number the way it always has. */
 export function formatCatalogPrice(value: number, intlLocale: string) {
-  return `${value.toLocaleString(intlLocale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
+  try {
+    return new Intl.NumberFormat(intlLocale, {
+      style: "currency",
+      currency: "EUR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${value.toLocaleString(intlLocale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
+  }
 }
 
 export interface OrderLine {

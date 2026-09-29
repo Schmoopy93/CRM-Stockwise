@@ -84,9 +84,36 @@ export interface ShopCatalogSettings {
   coverUrl: string;
 }
 
-export type CatalogStatEvent = "views" | "whatsapp" | "telegram" | "instagram" | "share";
+export type CatalogStatEvent = "views" | "whatsapp" | "telegram" | "instagram" | "share" | "orders";
 
 export type CatalogStatsDay = { day: string } & Record<CatalogStatEvent, number>;
+
+/** Lifecycle of a catalog order. `new` means the customer asked and nobody has
+ * looked at it yet; the shop confirms, fulfils, or cancels. Recording an order
+ * never touches stock — the shop still records the sale explicitly, which keeps
+ * the immutable stock ledger the only way stock can move. */
+export type OrderStatus = "new" | "confirmed" | "fulfilled" | "cancelled";
+
+export interface OrderLine {
+  productId: string;
+  productName: string;
+  variantLabel: string;
+  quantity: number;
+  unitPrice?: number;
+}
+
+export interface CatalogOrder {
+  id: string;
+  code: string;
+  lines: OrderLine[];
+  total: number;
+  customerName: string;
+  customerContact: string;
+  note: string;
+  channel: string;
+  status: OrderStatus;
+  createdAt: Date | null;
+}
 
 export interface SaleLine {
   productId: string;

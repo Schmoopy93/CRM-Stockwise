@@ -11,6 +11,7 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
   writeBatch,
 } from "firebase/firestore";
@@ -206,10 +207,56 @@ test("anonymous visitors can only bump one catalog counter by one while the cata
   await assertSucceeds(setDoc(statsRef, { whatsapp: increment(1) }, { merge: true }));
   await assertFails(setDoc(statsRef, { views: increment(5) }, { merge: true }));
   await assertFails(setDoc(statsRef, { views: increment(1), share: increment(1) }, { merge: true }));
-  await assertFails(setDoc(statsRef, { orders: increment(1) }, { merge: true }));
+  await assertSucceeds(setDoc(statsRef, { orders: increment(1) }, { merge: true }));
+  await assertFails(setDoc(statsRef, { sales: increment(1) }, { merge: true }));
   await assertFails(setDoc(doc(signedOutDb, "shops", shopId, "catalogStats", "not-a-day"), { views: increment(1) }, { merge: true }));
   await assertFails(getDoc(statsRef));
   await assertSucceeds(getDoc(doc(firestoreFor("staff-a"), "shops", shopId, "catalogStats", "2026-09-29")));
+});
+
+test("customers can place catalog orders but members own the lifecycle", async () => {
+  const visitorDb = firestoreFor();
+  const staffDb = firestoreFor("staff-a");
+  const order = { code: "K7M2QP", total: 25, customerName: "Ana", customerContact: "@ana", note: "", channel: "instagram", createdAt: serverTimestamp() };
+  const line = { productId: "p", productName: "X", variantLabel: "", quantity: 1 };
+
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o1"), { ...order, lines: [], status: "new" }));
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o2"), { ...order, lines: [line], status: "confirmed" }));
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o3"), { ...order, lines: [line], status: "new", costPrice: 3 }));
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o4"), { ...order, code: "bad-code", lines: [line], status: "new" }));
+
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), "shops", shopId), { catalogEnabled: true });
+  });
+  await assertSucceeds(setDoc(doc(visitorDb, "shops", shopId, "orders", "o5"), { ...order, lines: [line], status: "new" }));
+  // The field was dropped from the order shape, so a visitor may not smuggle it
+  // back in — the rule pins the key set exactly.
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o6"), { ...order, lines: [line], status: "new", currency: "RSD" }));
+
+  await assertFails(getDoc(doc(visitorDb, "shops", shopId, "orders", "o5")));
+  await assertSucceeds(getDoc(doc(staffDb, "shops", shopId, "orders", "o5")));
+
+  // Members may move the lifecycle and attach contact details, nothing else.
+  await assertSucceeds(updateDoc(doc(staffDb, "shops", shopId, "orders", "o5"), { status: "confirmed" }));
+  await assertFails(updateDoc(doc(staffDb, "shops", shopId, "orders", "o5"), { status: "shipped" }));
+  await assertFails(updateDoc(doc(staffDb, "shops", shopId, "orders", "o5"), { total: 0 }));
+  await assertFails(deleteDoc(doc(staffDb, "shops", shopId, "orders", "o5")));
+});
+
+test("rate limit buckets advance by one and can never be read or reset", async () => {
+  const db = firestoreFor();
+  const bucket = doc(db, "rateLimits", "assistant-hash");
+
+  await assertFails(getDoc(bucket));
+  await assertSucceeds(setDoc(bucket, { windowStart: Timestamp.fromMillis(Date.now() - 1_000), count: 1 }));
+  await assertFails(setDoc(bucket, { windowStart: Timestamp.now(), count: 999 }));
+  await assertFails(updateDoc(bucket, { count: 500 }));
+  await assertFails(updateDoc(bucket, { count: 1, windowStart: Timestamp.fromMillis(Date.now() + 600_000) }));
+  await assertFails(updateDoc(bucket, { count: 1, owner: "attacker" }));
+  await assertFails(deleteDoc(bucket));
+
+  await assertSucceeds(updateDoc(bucket, { count: 2 }));
+  await assertFails(updateDoc(bucket, { count: 1 }));
 });
 
 test("only shop owners can change shop configuration", async () => {

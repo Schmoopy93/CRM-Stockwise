@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Product, ProductVariant, Sale, ShopCatalogSettings, StockEvent } from "@/lib/types";
-import { CatalogItem, CatalogStatsDay } from "@/lib/types";
+import { CatalogItem, CatalogOrder, CatalogStatsDay } from "@/lib/types";
 import { channelsFromShop, EMPTY_CHANNELS } from "@/lib/catalog-channels";
 
 export function useShop(shopId: string | undefined): ShopCatalogSettings & { loading: boolean } {
@@ -223,6 +223,7 @@ export function useCatalogStats(shopId: string | undefined, days = 30) {
           telegram: d.data().telegram ?? 0,
           instagram: d.data().instagram ?? 0,
           share: d.data().share ?? 0,
+          orders: d.data().orders ?? 0,
         }))
       );
     }, () => setStats([]));
@@ -264,6 +265,40 @@ export function useSales(shopId: string | undefined, count = 20) {
   }, [shopId, count]);
 
   return { sales, loading };
+}
+
+export function useOrders(shopId: string | undefined, count = 100) {
+  const [orders, setOrders] = useState<CatalogOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!shopId) return;
+    const q = query(
+      collection(db, "shops", shopId, "orders"),
+      orderBy("createdAt", "desc"),
+      limit(count)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setOrders(
+        snap.docs.map((d) => ({
+          id: d.id,
+          code: d.data().code ?? "",
+          lines: Array.isArray(d.data().lines) ? d.data().lines : [],
+          total: d.data().total ?? 0,
+          customerName: d.data().customerName ?? "",
+          customerContact: d.data().customerContact ?? "",
+          note: d.data().note ?? "",
+          channel: d.data().channel ?? "other",
+          status: d.data().status ?? "new",
+          createdAt: d.data().createdAt?.toDate() ?? null,
+        }))
+      );
+      setLoading(false);
+    }, () => setLoading(false));
+    return unsub;
+  }, [shopId, count]);
+
+  return { orders, loading };
 }
 
 export function useStockEvents(shopId: string | undefined, productId: string | undefined) {

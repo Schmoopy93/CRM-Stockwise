@@ -100,12 +100,19 @@ function CatalogSettingsCard({ shopId }: { shopId: string }) {
           </button>
         </div>
       )}
-      {catalogEnabled && (
-        <button onClick={() => save(true)} disabled={saving || draft === null || !channelsValid}
-          style={{ alignSelf: "flex-start", fontSize: "0.75rem", color: "var(--accent-2)", background: "none", border: "none", cursor: draft === null || !channelsValid ? "default" : "pointer", opacity: draft === null || !channelsValid ? 0.5 : 1, padding: 0 }}>
-          {t("catalog.saveContact")}
-        </button>
-      )}
+      {(() => {
+        // While the catalog is off, a contact is optional. Once it is on, a
+        // publishable channel is required or customers would have no way to
+        // order, so the save stays disabled until one is valid.
+        const needsChannel = catalogEnabled && !channelsValid;
+        const disabled = saving || draft === null || needsChannel;
+        return (
+          <button onClick={() => save(catalogEnabled)} disabled={disabled}
+            style={{ alignSelf: "flex-start", fontSize: "0.75rem", color: "var(--accent-2)", background: "none", border: "none", cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.5 : 1, padding: 0 }}>
+            {t("catalog.saveContact")}
+          </button>
+        );
+      })()}
       {error && <p style={{ fontSize: "0.78rem", color: "var(--red)", margin: 0 }}>{error}</p>}
     </div>
   );

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { createPortal } from "react-dom";
-import { Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
+import { Check, Loader2, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
 import { INTL_LOCALES, Locale, useI18n } from "@/lib/i18n-context";
 import { buildOrderMessage, CatalogChannels, formatCatalogPrice } from "@/lib/catalog-channels";
 import { CatalogItem, CatalogStatEvent } from "@/lib/types";
+import { placeCatalogOrder } from "@/lib/actions";
 import { catalogLink, MAX_QUANTITY } from "./catalog-store";
 import { itemImages } from "./catalog-card";
 import OrderChannels, { availableChannels } from "./order-channels";
@@ -30,15 +31,40 @@ export default function CatalogCart({ lines, locale, shopId, channels, onQuantit
 }) {
   const { t } = useI18n();
   const intl = INTL_LOCALES[locale];
+  const [name, setName] = useState("");
+  const [contact, setContact] = useState("");
+  const [placing, setPlacing] = useState(false);
+  const [placedCode, setPlacedCode] = useState("");
+  const [placeError, setPlaceError] = useState(false);
   const channelList = availableChannels(channels);
   const priced = lines.every((line) => line.item.salePrice !== undefined);
   const total = lines.reduce((sum, line) => sum + (line.item.salePrice ?? 0) * line.quantity, 0);
-  const message = buildOrderMessage(
-    lines.map((line) => ({ name: line.item.name, variant: line.variant, quantity: line.quantity, unitPrice: line.item.salePrice })),
-    catalogLink(shopId, locale),
-    intl,
-    t
-  );
+  const orderLines = lines.map((line) => ({ name: line.item.name, variant: line.variant, quantity: line.quantity, unitPrice: line.item.salePrice }));
+  const baseMessage = buildOrderMessage(orderLines, catalogLink(shopId, locale), intl, t);
+  const message = placedCode ? `${baseMessage}\n${t("catalog.orderCodeLabel")}: ${placedCode}` : baseMessage;
+
+  async function place() {
+    setPlacing(true); setPlaceError(false);
+    try {
+      const code = await placeCatalogOrder(shopId, {
+        lines: lines.map((line) => ({
+          productId: line.item.id,
+          productName: line.item.name,
+          variantLabel: line.variant,
+          quantity: line.quantity,
+          unitPrice: line.item.salePrice,
+        })),
+        customerName: name,
+        customerContact: contact,
+        note: "",
+        channel: channelList[0] ?? "other",
+      });
+      setPlacedCode(code);
+      onNotify(t("catalog.orderSaved", { code }));
+    } catch {
+      setPlaceError(true);
+    } finally { setPlacing(false); }
+  }
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -108,6 +134,38 @@ export default function CatalogCart({ lines, locale, shopId, channels, onQuantit
                   <strong>{formatCatalogPrice(total, intl)}</strong>
                 </p>
               )}
+
+              {!placedCode && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  <p className="cat-modal-section" style={{ margin: 0 }}>{t("catalog.orderSection")}</p>
+                  <input
+                    className="input" type="text" autoComplete="name"
+                    aria-label={t("catalog.orderName")} placeholder={t("catalog.orderName")}
+                    value={name} onChange={(e) => setName(e.target.value)} maxLength={100}
+                  />
+                  <input
+                    className="input" type="text" autoComplete="tel"
+                    aria-label={t("catalog.orderContact")} placeholder={t("catalog.orderContact")}
+                    value={contact} onChange={(e) => setContact(e.target.value)} maxLength={100}
+                  />
+                  <button
+                    type="button" className="btn-primary" onClick={place} disabled={placing}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                  >
+                    {placing ? <Loader2 size={15} className="cat-spin" /> : <Check size={15} />}
+                    {placing ? t("catalog.orderPlacing") : t("catalog.orderPlace")}
+                  </button>
+                  <p className="cat-hint" style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-3)" }}>{t("catalog.orderHint")}</p>
+                  {placeError && <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--red)" }}>{t("catalog.orderFailed")}</p>}
+                </div>
+              )}
+
+              {placedCode && (
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--green)" }}>
+                  {t("catalog.orderSaved", { code: placedCode })}
+                </p>
+              )}
+
               {channelList.length > 0 && (
                 <>
                   <p className="cat-modal-section">{t("catalog.cartSend")}</p>

@@ -61,13 +61,36 @@ service cloud.firestore {
     }
 
     function validStatWrite(after, before) {
-      return after.keys().hasOnly(['views', 'whatsapp', 'telegram', 'instagram', 'share'])
+      return after.keys().hasOnly(['views', 'whatsapp', 'telegram', 'instagram', 'share', 'orders'])
         && after.diff(before).affectedKeys().size() == 1
         && validStatStep(after, before, 'views')
         && validStatStep(after, before, 'whatsapp')
         && validStatStep(after, before, 'telegram')
         && validStatStep(after, before, 'instagram')
-        && validStatStep(after, before, 'share');
+        && validStatStep(after, before, 'share')
+        && validStatStep(after, before, 'orders');
+    }
+
+    /** Shared AI rate-limit buckets. Callers are anonymous (public chat) or a
+     * verified user, so writes are open but pinned to a counter that may only
+     * move by one, and a window start that may only move forward. The window
+     * start is bounded near server time so a caller cannot hold its bucket open
+     * by claiming a far-future window; the tolerance absorbs clock skew between
+     * the calling function and Firestore. Starting a new window is allowed but
+     * resets the count to one, so it buys at most one extra call per minute. */
+    function validRateLimitWrite(after, before) {
+      let first = before.keys().hasOnly([]);
+      return after.keys().hasOnly(['count', 'windowStart'])
+        && after.count is int
+        && after.count >= 0
+        && after.windowStart is timestamp
+        && after.windowStart <= request.time + duration.value(60, 's')
+        && (first
+          ? after.count == 1
+          : ((after.windowStart == before.windowStart
+              && after.count == before.count + 1)
+            || (after.windowStart > before.windowStart
+              && after.count == 1)));
     }
 
     function validStockEventLink(shopId, productId, variantId, eventId, delta) {
@@ -227,6 +250,61 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /orders/{orderId} {
+        // Customers are anonymous here, so creates are pinned to a fixed shape
+        // and only while the public catalog is actually on. The shop never
+        // trusts these values for stock — stock moves only through the ledger.
+        allow read: if isMember(shopId);
+        allow create: if get(shopPath(shopId)).data.catalogEnabled == true
+          && request.resource.data.keys().hasOnly([
+            'code', 'lines', 'total', 'customerName', 'customerContact', 'note', 'channel', 'status', 'createdAt'
+          ])
+          && request.resource.data.code is string
+          && request.resource.data.code.matches('^[A-Z0-9]{4,12}$')
+          && request.resource.data.lines is list
+          && request.resource.data.lines.size() > 0
+          && request.resource.data.lines.size() <= 50
+          && request.resource.data.lines[0].keys().hasOnly([
+            'productId', 'productName', 'variantLabel', 'quantity', 'unitPrice'
+          ])
+          && request.resource.data.lines[0].productId is string
+          && request.resource.data.lines[0].productName is string
+          && request.resource.data.lines[0].productName.size() <= 100
+          && request.resource.data.lines[0].variantLabel is string
+          && request.resource.data.lines[0].variantLabel.size() <= 100
+          && request.resource.data.lines[0].quantity is int
+          && request.resource.data.lines[0].quantity > 0
+          && request.resource.data.lines[0].quantity <= 999
+          && request.resource.data.total is number
+          && request.resource.data.total >= 0
+          && request.resource.data.total <= 100000000
+          && request.resource.data.customerName is string
+          && request.resource.data.customerName.size() <= 100
+          && request.resource.data.customerContact is string
+          && request.resource.data.customerContact.size() <= 100
+          && request.resource.data.note is string
+          && request.resource.data.note.size() <= 500
+          && request.resource.data.channel in ['whatsapp', 'telegram', 'instagram', 'other']
+          && request.resource.data.status == 'new'
+          && request.resource.data.createdAt == request.time;
+        // Members move an order through its lifecycle and attach the customer
+        // contact, but they may not rewrite what was ordered or when.
+        // `currency` is still tolerated here only so orders written before the
+        // field was dropped can still have their status changed; it is never
+        // written, and the diff check below stops it from being changed.
+        allow update: if isMember(shopId)
+          && request.resource.data.keys().hasOnly([
+            'code', 'lines', 'total', 'currency', 'customerName', 'customerContact', 'note', 'channel', 'status', 'createdAt'
+          ])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'customerName', 'customerContact'])
+          && request.resource.data.status in ['new', 'confirmed', 'fulfilled', 'cancelled']
+          && request.resource.data.customerName is string
+          && request.resource.data.customerName.size() <= 100
+          && request.resource.data.customerContact is string
+          && request.resource.data.customerContact.size() <= 100;
+        allow delete: if false;
+      }
+
       match /sales/{saleId} {
         allow read: if isMember(shopId);
         allow create: if isMember(shopId)
@@ -277,6 +355,13 @@ service cloud.firestore {
           );
         allow update, delete: if false;
       }
+    }
+
+    // AI rate-limit buckets shared by the serverless route handlers, so the
+    // budget holds across every instance instead of one warm function.
+    match /rateLimits/{bucketId} {
+      allow read, delete: if false;
+      allow create, update: if validRateLimitWrite(request.resource.data, resource == null ? {} : resource.data);
     }
   }
 }

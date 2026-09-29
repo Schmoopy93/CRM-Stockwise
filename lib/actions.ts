@@ -27,11 +27,13 @@ import {
 import { auth, db } from "@/lib/firebase";
 import { uploadProductImage, uploadShopImage } from "@/lib/cloudinary";
 import { applyStockDelta } from "@/lib/stock-invariants";
+import { normalizeOrderInput, newOrderCode, orderTotal, ORDER_STATUSES, type OrderInput } from "@/lib/orders";
 import { getLocalizedOptionValue } from "@/lib/product-field-options";
 import { CatalogChannels } from "@/lib/catalog-channels";
-import { AppLocale, CatalogStatEvent, Product, ProductCustomField, ProductVariant, SaleChannel, SaleLine } from "@/lib/types";
+import { AppLocale, CatalogStatEvent, OrderStatus, Product, ProductCustomField, ProductVariant, SaleChannel, SaleLine } from "@/lib/types";
 
 const BATCH_LIMIT = 450;
+const READ_CONCURRENCY = 24;
 const CATALOG_LOCALES: AppLocale[] = ["sr", "en", "ru", "de", "es", "it"];
 
 type BatchOperation = (batch: WriteBatch) => void;
@@ -42,6 +44,21 @@ async function commitInChunks(operations: BatchOperation[]) {
     for (const operation of operations.slice(start, start + BATCH_LIMIT)) operation(batch);
     await batch.commit();
   }
+}
+
+/** Runs `worker` over every item with a bounded number of in-flight reads so a
+ * wide fan-out does not become N sequential round-trips. Results keep input order. */
+async function mapWithConcurrency<T, R>(items: T[], worker: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(READ_CONCURRENCY, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await worker(items[index]);
+    }
+  });
+  await Promise.all(runners);
+  return results;
 }
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
@@ -177,12 +194,15 @@ export async function updateCatalogSettings(shopId: string, settings: CatalogSet
 
   const operations: BatchOperation[] = [];
   const productsSnap = await getDocs(collection(db, "shops", shopId, "products"));
-  for (const productDoc of productsSnap.docs) {
+  const variantLabelsByProduct = await mapWithConcurrency(productsSnap.docs, (productDoc) =>
+    getDocs(collection(productDoc.ref, "variants")).then((variantsSnap) =>
+      variantsSnap.docs
+        .map((variantDoc) => (variantDoc.data().label ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+  productsSnap.docs.forEach((productDoc, index) => {
     const data = productDoc.data();
-    const variantsSnap = await getDocs(collection(productDoc.ref, "variants"));
-    const variantLabels = variantsSnap.docs
-      .map((variantDoc) => (variantDoc.data().label ?? "").trim())
-      .filter(Boolean);
     const catalogDoc = buildCatalogDoc(
       data.name ?? "",
       data.category ?? "",
@@ -190,14 +210,14 @@ export async function updateCatalogSettings(shopId: string, settings: CatalogSet
       Array.isArray(data.images) ? data.images : [],
       typeof data.salePrice === "number" ? data.salePrice : undefined,
       typeof data.compareAtPrice === "number" ? data.compareAtPrice : undefined,
-      variantLabels,
+      variantLabelsByProduct[index],
       data.customFieldDefinitions ?? [],
       data.customFieldValues ?? {},
       data.catalogHidden === true,
       data.createdAt instanceof Timestamp ? data.createdAt : undefined
     );
     operations.push((batch) => batch.set(doc(db, "shops", shopId, "catalog", productDoc.id), catalogDoc, { merge: true }));
-  }
+  });
   operations.push((batch) => batch.update(shopRef, { catalogEnabled: true, ...contactFields }));
   await commitInChunks(operations);
 }
@@ -213,6 +233,47 @@ export async function setCatalogImage(shopId: string, kind: "logo" | "cover", fi
 export function trackCatalogEvent(shopId: string, event: CatalogStatEvent) {
   const day = new Date().toISOString().slice(0, 10);
   setDoc(doc(db, "shops", shopId, "catalogStats", day), { [event]: increment(1) }, { merge: true }).catch(() => undefined);
+}
+
+/** Records a catalog order so the shop can see what was asked for. Anonymous by
+ * design — customers have no account — so this never touches stock: the shop
+ * still records the sale explicitly, which keeps the ledger the only way stock
+ * moves. Returns the human-quotable order code. */
+export async function placeCatalogOrder(shopId: string, input: OrderInput) {
+  if (!await isCatalogEnabled(shopId)) throw new Error("CATALOG_DISABLED");
+  const order = normalizeOrderInput(input);
+  if (order.lines.length === 0) throw new Error("ORDER_EMPTY");
+
+  const total = orderTotal(order.lines);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = newOrderCode();
+    const ref = doc(collection(db, "shops", shopId, "orders"));
+    try {
+      await setDoc(ref, {
+        code,
+        lines: order.lines,
+        total,
+        customerName: order.customerName,
+        customerContact: order.customerContact,
+        note: order.note,
+        channel: order.channel,
+        status: "new",
+        createdAt: serverTimestamp(),
+      });
+      trackCatalogEvent(shopId, "orders");
+      return code;
+    } catch (cause) {
+      if (attempt === 4) throw cause;
+    }
+  }
+  throw new Error("ORDER_FAILED");
+}
+
+/** Moves an order through its lifecycle. Stock is deliberately untouched here —
+ * fulfilling an order and recording the sale are separate, deliberate steps. */
+export async function updateOrderStatus(shopId: string, orderId: string, status: OrderStatus) {
+  if (!ORDER_STATUSES.includes(status)) throw new Error("ORDER_STATUS_INVALID");
+  await updateDoc(doc(db, "shops", shopId, "orders", orderId), { status });
 }
 
 // ─── Products ────────────────────────────────────────────────────────────────

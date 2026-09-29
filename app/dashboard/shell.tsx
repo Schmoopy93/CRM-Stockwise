@@ -13,7 +13,7 @@ import { signOut } from "@/lib/actions";
 import { useI18n } from "@/lib/i18n-context";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
-import { LayoutGrid, Package, PackagePlus, BarChart2, Download, LogOut, ChevronRight, Upload, ClipboardList, Menu, X, ShoppingBag, AlertTriangle } from "lucide-react";
+import { LayoutGrid, Package, PackagePlus, BarChart2, Download, LogOut, ChevronRight, Upload, ClipboardList, Menu, X, ShoppingBag, AlertTriangle, Receipt } from "lucide-react";
 
 function NotificationWidget({ shopId }: { shopId: string | undefined }) {
   const { products } = useProducts(shopId);
@@ -87,6 +87,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     { href: "/dashboard/analytics", icon: BarChart2, label: t("nav.analytics"), exact: false },
     { href: "/dashboard/receive", icon: PackagePlus, label: t("nav.receive"), exact: false },
     { href: "/dashboard/sales", icon: ShoppingBag, label: t("nav.sales"), exact: false },
+    { href: "/dashboard/orders", icon: Receipt, label: t("nav.orders"), exact: false },
     { href: "/dashboard/import", icon: Upload, label: t("nav.import"), exact: false },
     { href: "/dashboard/audit", icon: ClipboardList, label: t("nav.audit"), exact: false },
     { href: "/dashboard/export", icon: Download, label: t("nav.export"), exact: false },

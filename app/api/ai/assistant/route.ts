@@ -1,6 +1,5 @@
 import type { AppLocale } from "@/lib/types";
-
-const rateLimits = new Map<string, { count: number; resetAt: number }>();
+import { consumeRateLimit } from "@/lib/rate-limit";
 
 const APP_DESCRIPTION = `Stockwise is a free web app for small shops and Instagram sellers. It runs in the browser on phone and computer, with no installation. Features:
 - Product management with variants (size/color), SKUs, photos, categories and custom fields (AI can suggest a category and useful fields)
@@ -169,15 +168,9 @@ export async function POST(request: Request) {
     return Response.json({ error: localizedMessage(locale, "missing") }, { status: 400 });
   }
 
-  const ip = clientIp(request);
-  const now = Date.now();
-  const limit = rateLimits.get(ip);
-  if (limit && limit.resetAt > now && limit.count >= 10) {
+  if (!(await consumeRateLimit(`assistant:${clientIp(request)}`, 10))) {
     return Response.json({ error: localizedMessage(locale, "limit") }, { status: 429 });
   }
-  rateLimits.set(ip, limit && limit.resetAt > now
-    ? { count: limit.count + 1, resetAt: limit.resetAt }
-    : { count: 1, resetAt: now + 60_000 });
 
   try {
     const answer = await answerWithAi(history, locale);

@@ -7,7 +7,7 @@ import { INTL_LOCALES, Locale, useI18n } from "@/lib/i18n-context";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell,
 } from "recharts";
-import { TrendingDown, TrendingUp, Activity, Package, Eye, MessageCircle, Send, AtSign, Share2, Percent } from "lucide-react";
+import { TrendingDown, TrendingUp, Activity, Package, Eye, MessageCircle, Send, AtSign, Share2, Percent, ShoppingBag } from "lucide-react";
 
 function formatDay(date: Date, locale: Locale) {
   return date.toLocaleDateString(INTL_LOCALES[locale], { day: "2-digit", month: "2-digit" });
@@ -26,8 +26,9 @@ function CatalogStatsSection({ shopId, locale }: { shopId: string | undefined; l
       telegram: sum.telegram + day.telegram,
       instagram: sum.instagram + day.instagram,
       share: sum.share + day.share,
+      orders: sum.orders + day.orders,
     }),
-    { views: 0, whatsapp: 0, telegram: 0, instagram: 0, share: 0 }
+    { views: 0, whatsapp: 0, telegram: 0, instagram: 0, share: 0, orders: 0 }
   ), [stats]);
 
   const chartData = useMemo(() => {
@@ -52,13 +53,14 @@ function CatalogStatsSection({ shopId, locale }: { shopId: string | undefined; l
         <p style={{ fontSize: "0.75rem", color: "var(--text-3)", margin: "4px 0 0" }}>{t("analytics.catalogSubtitle")}</p>
       </div>
 
-      <div className="analytics-stats" style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "0.75rem" }}>
+      <div className="analytics-stats" style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "0.75rem" }}>
         {[
           { icon: <Eye size={15} />, label: t("analytics.catalogViews"), value: totals.views, color: "#6366f1" },
           { icon: <MessageCircle size={15} />, label: "WhatsApp", value: totals.whatsapp, color: CHANNEL_COLORS.whatsapp },
           { icon: <Send size={15} />, label: "Telegram", value: totals.telegram, color: CHANNEL_COLORS.telegram },
           { icon: <AtSign size={15} />, label: "Instagram", value: totals.instagram, color: CHANNEL_COLORS.instagram },
           { icon: <Share2 size={15} />, label: t("analytics.catalogShares"), value: totals.share, color: "#22d3ee" },
+          { icon: <ShoppingBag size={15} />, label: t("orders.title"), value: totals.orders, color: "#a855f7" },
           { icon: <Percent size={15} />, label: t("analytics.catalogConversion"), value: `${conversion}%`, color: "var(--green)" },
         ].map(({ icon, label, value, color }) => (
           <div key={label} style={{ padding: "0.85rem 1rem", borderRadius: 12, background: "var(--bg-3)", display: "flex", flexDirection: "column", gap: 6 }}>
