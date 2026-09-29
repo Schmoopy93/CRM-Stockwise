@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 
 const BASE_URL = "https://inventory-crm.vercel.app";
 
@@ -71,11 +70,9 @@ const jsonLd = {
 export default function LoginLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <Script
-        id="json-ld"
+      <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        strategy="beforeInteractive"
       />
       {children}
     </>

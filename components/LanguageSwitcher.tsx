@@ -24,19 +24,20 @@ function Flag({ country, label }: { country: string; label: string }) {
   );
 }
 
-export function LanguageSwitcher() {
+export function LanguageSwitcher({ variant }: { variant?: "buttons" | "dropdown" }) {
   const { locale, setLocale } = useI18n();
   const [open, setOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (variant) return;
     const mq = window.matchMedia("(max-width: 480px)");
     setIsMobile(mq.matches);
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
-  }, []);
+  }, [variant]);
 
   useEffect(() => {
     if (!open) return;
@@ -48,8 +49,9 @@ export function LanguageSwitcher() {
   }, [open]);
 
   const current = LOCALES.find((l) => l.code === locale)!;
+  const showDropdown = variant === "dropdown" || (variant === undefined && isMobile);
 
-  if (!isMobile) {
+  if (!showDropdown) {
     return (
       <div style={{ display: "flex", gap: 4 }}>
         {LOCALES.map(({ code, country, label }) => (
@@ -99,7 +101,10 @@ export function LanguageSwitcher() {
         <div
           role="listbox"
           style={{
-            position: "absolute", top: "calc(100% + 6px)", right: 0,
+            position: "absolute",
+            ...(variant === "dropdown"
+              ? { bottom: "calc(100% + 6px)", left: 0 }
+              : { top: "calc(100% + 6px)", right: 0 }),
             background: "var(--bg-2)", border: "1px solid var(--border)",
             borderRadius: 12, overflow: "hidden",
             boxShadow: "0 8px 32px rgba(0,0,0,0.35)",

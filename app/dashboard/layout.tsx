@@ -124,7 +124,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )}
 
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: "0.4rem" }}>
-            <LanguageSwitcher />
+            <LanguageSwitcher variant="dropdown" />
             <ThemeSwitcher />
           </div>
 
