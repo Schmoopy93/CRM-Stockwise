@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader, NotFoundException } from "@zxing/library";
 import { X, Camera } from "lucide-react";
+import { useI18n } from "@/lib/i18n-context";
 
 interface BarcodeScannerProps {
   onScan: (code: string) => void;
@@ -13,6 +14,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState("");
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const { t } = useI18n();
 
   useEffect(() => {
     const reader = new BrowserMultiFormatReader();
@@ -25,10 +27,10 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           reader.reset();
         }
         if (err && !(err instanceof NotFoundException)) {
-          setError("Greška kamere: " + err.message);
+          setError(t("scan.cameraErrorDetail", { msg: err.message }));
         }
       })
-      .catch((e) => setError("Kamera nije dostupna: " + e.message));
+      .catch((e: Error) => setError(t("scan.cameraUnavailableDetail", { msg: e.message })));
 
     return () => {
       reader.reset();
@@ -58,7 +60,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 1.25rem", borderBottom: "1px solid var(--border)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Camera size={16} color="var(--accent-2)" />
-            <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text-1)" }}>Skeniraj barkod</span>
+            <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text-1)" }}>{t("scan.title")}</span>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-2)", display: "flex" }}>
             <X size={18} />
@@ -88,7 +90,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             <p style={{ fontSize: "0.82rem", color: "var(--red)" }}>{error}</p>
           ) : (
             <p style={{ fontSize: "0.82rem", color: "var(--text-2)" }}>
-              Usmjeri kameru prema barkodu artikla
+              {t("scan.hint")}
             </p>
           )}
         </div>

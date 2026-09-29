@@ -18,6 +18,10 @@ export default function DashboardPage() {
   const categories = ["all", ...Array.from(new Set(products.map((p) => p.category).filter(Boolean)))];
   const lowStock = products.filter((p) => p.minStock > 0 && p.totalQuantity <= p.minStock);
   const totalItems = products.reduce((s, p) => s + p.totalQuantity, 0);
+  const inventoryValue = products
+    .filter((p) => p.costPrice && p.costPrice > 0)
+    .reduce((s, p) => s + (p.costPrice ?? 0) * p.totalQuantity, 0);
+  const hasValue = inventoryValue > 0;
 
   const filtered = products.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase());
@@ -40,11 +44,12 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem" }}>
+      <div className="dashboard-stats" style={{ display: "grid", gridTemplateColumns: `repeat(${hasValue ? 4 : 3}, 1fr)`, gap: "1rem" }}>
         {[
           { icon: <Package size={18} />, label: t("dashboard.totalProducts"), value: products.length, color: "var(--accent)", bg: "rgba(99,102,241,0.08)" },
           { icon: <Layers size={18} />, label: t("dashboard.totalItems"), value: totalItems, color: "#22d3ee", bg: "rgba(34,211,238,0.06)" },
           { icon: <TrendingDown size={18} />, label: t("dashboard.lowStock"), value: lowStock.length, color: lowStock.length > 0 ? "var(--amber)" : "var(--green)", bg: lowStock.length > 0 ? "var(--amber-dim)" : "var(--green-dim)" },
+          ...(hasValue ? [{ icon: <span style={{ fontSize: 16 }}>💰</span>, label: t("dashboard.inventoryValue"), value: inventoryValue.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + " €", color: "#a855f7", bg: "rgba(168,85,247,0.08)" }] : []),
         ].map(({ icon, label, value, color, bg }) => (
           <div key={label} className="glass" style={{ padding: "1.25rem 1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}>
             <div style={{ width: 42, height: 42, background: bg, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0 }}>{icon}</div>

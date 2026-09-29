@@ -5,6 +5,12 @@ export interface UserProfile {
   role: "owner" | "staff";
 }
 
+export interface Supplier {
+  name: string;
+  contact?: string;   // phone or email
+  notes?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -13,6 +19,9 @@ export interface Product {
   imageUrl: string;
   minStock: number;
   totalQuantity: number;
+  costPrice?: number;   // purchase price per unit
+  salePrice?: number;   // selling price per unit
+  supplier?: Supplier;
   customFieldDefinitions: ProductCustomField[];
   customFieldValues: Record<string, string | number | boolean>;
 }
@@ -44,6 +53,7 @@ export interface StockEvent {
   variantId: string;
   variantLabel: string;
   delta: number;
+  reason?: "adjustment" | "receipt" | "sale" | "return" | "correction";
   actorUid: string;
   actorName: string;
   createdAt: Date | null;

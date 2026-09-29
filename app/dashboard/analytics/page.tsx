@@ -9,13 +9,13 @@ import {
 } from "recharts";
 import { TrendingDown, TrendingUp, Activity, Package } from "lucide-react";
 
-function formatDay(date: Date) {
-  return date.toLocaleDateString("sr-RS", { day: "2-digit", month: "2-digit" });
+function formatDay(date: Date, locale: string) {
+  return date.toLocaleDateString(locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US", { day: "2-digit", month: "2-digit" });
 }
 
 export default function AnalyticsPage() {
   const { profile } = useAuth();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const { products } = useProducts(profile?.shopId);
   const events = useAllStockEvents(profile?.shopId, 30);
 
@@ -26,18 +26,18 @@ export default function AnalyticsPage() {
     for (let i = 13; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      const key = formatDay(d);
+      const key = formatDay(d, locale);
       days[key] = { date: key, dodano: 0, skinuto: 0 };
     }
     for (const ev of events) {
       if (!ev.createdAt) continue;
-      const key = formatDay(ev.createdAt);
+      const key = formatDay(ev.createdAt, locale);
       if (!days[key]) continue;
       if (ev.delta > 0) days[key].dodano += ev.delta;
       else days[key].skinuto += Math.abs(ev.delta);
     }
     return Object.values(days);
-  }, [events]);
+  }, [events, locale]);
 
   // Top 10 products by movement
   const topMovers = useMemo(() => {
@@ -73,7 +73,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Stats row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem" }}>
+      <div className="analytics-stats" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem" }}>
         {[
           { icon: <Package size={16} />, label: t("analytics.products"), value: products.length, color: "#6366f1", bg: "rgba(99,102,241,0.1)" },
           { icon: <Activity size={16} />, label: t("analytics.changes"), value: events.length, color: "#22d3ee", bg: "rgba(34,211,238,0.1)" },
@@ -115,21 +115,21 @@ export default function AnalyticsPage() {
               contentStyle={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
               labelStyle={{ color: "var(--text-2)" }}
             />
-            <Area type="monotone" dataKey="dodano" name="Primljeno" stroke="#22c55e" strokeWidth={2} fill="url(#gIn)" />
-            <Area type="monotone" dataKey="skinuto" name="Izdato" stroke="#6366f1" strokeWidth={2} fill="url(#gOut)" />
+            <Area type="monotone" dataKey="dodano" name={t("analytics.chartIn")} stroke="#22c55e" strokeWidth={2} fill="url(#gIn)" />
+            <Area type="monotone" dataKey="skinuto" name={t("analytics.chartOut")} stroke="#6366f1" strokeWidth={2} fill="url(#gOut)" />
           </AreaChart>
         </ResponsiveContainer>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+      <div className="analytics-panels" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
 
         {/* Top movers */}
         <div className="glass" style={{ padding: "1.5rem" }}>
           <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 1.25rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            Najaktivniji artikli
+            {t("analytics.topMovers")}
           </h2>
           {topMovers.length === 0 ? (
-            <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "2rem 0" }}>Nema podataka</p>
+            <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "2rem 0" }}>{t("analytics.noData")}</p>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={topMovers} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
@@ -138,7 +138,7 @@ export default function AnalyticsPage() {
                 <Tooltip
                   contentStyle={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
                 />
-                <Bar dataKey="total" name="Promjena" radius={[0, 4, 4, 0]}>
+                <Bar dataKey="total" name={t("analytics.topMoversChange")} radius={[0, 4, 4, 0]}>
                   {topMovers.map((_, i) => <Cell key={i} fill={ACCENT_COLORS[i % ACCENT_COLORS.length]} />)}
                 </Bar>
               </BarChart>
@@ -149,11 +149,11 @@ export default function AnalyticsPage() {
         {/* Low stock list */}
         <div className="glass" style={{ padding: "1.5rem" }}>
           <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 1.25rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            Nisko stanje ({lowStock.length})
+            {t("analytics.lowStockCount", { n: lowStock.length })}
           </h2>
           {lowStock.length === 0 ? (
             <div style={{ textAlign: "center", padding: "2rem 0", color: "var(--green)", fontSize: "0.875rem" }}>
-              ✓ Svi artikli imaju dovoljno stanja
+              {t("analytics.allGood")}
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: 220, overflow: "auto" }}>
@@ -161,7 +161,7 @@ export default function AnalyticsPage() {
                 <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid var(--border)" }}>
                   <div>
                     <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-1)", margin: 0 }}>{p.name}</p>
-                    <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: "1px 0 0" }}>Min: {p.minStock}</p>
+                    <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: "1px 0 0" }}>{t("analytics.minStock")} {p.minStock}</p>
                   </div>
                   <span style={{ fontWeight: 700, color: "var(--amber)", fontSize: "1.1rem" }}>{p.totalQuantity}</span>
                 </div>

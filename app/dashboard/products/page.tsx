@@ -4,11 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
+import { useI18n } from "@/lib/i18n-context";
 import { useProducts } from "@/lib/hooks";
 import { Plus, Search, AlertTriangle, ArrowRight } from "lucide-react";
 
 export default function ProductsListPage() {
   const { profile } = useAuth();
+  const { t } = useI18n();
   const { products, loading } = useProducts(profile?.shopId);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("sve");
@@ -30,11 +32,11 @@ export default function ProductsListPage() {
     <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
         <div>
-          <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>Svi artikli</h1>
-          <p style={{ fontSize: "0.82rem", color: "var(--text-2)", marginTop: 4 }}>{products.length} artikala</p>
+          <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{t("products.title")}</h1>
+          <p style={{ fontSize: "0.82rem", color: "var(--text-2)", marginTop: 4 }}>{t("products.count", { n: products.length })}</p>
         </div>
         <Link href="/dashboard/products/new" className="btn-primary" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
-          <Plus size={15} /> Novi artikal
+          <Plus size={15} /> {t("products.new")}
         </Link>
       </div>
 
@@ -42,15 +44,15 @@ export default function ProductsListPage() {
       <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
           <Search size={14} style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)" }} />
-          <input className="input" placeholder="Pretraži..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ paddingLeft: "2.3rem" }} />
+          <input className="input" placeholder={t("search")} value={search} onChange={(e) => setSearch(e.target.value)} style={{ paddingLeft: "2.3rem" }} />
         </div>
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value as "name" | "qty")}
           style={{ background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 10, padding: "0.6rem 1rem", fontSize: "0.85rem", color: "var(--text-1)", outline: "none", cursor: "pointer" }}
         >
-          <option value="name">Sortiraj: Naziv</option>
-          <option value="qty">Sortiraj: Količina ↑</option>
+          <option value="name">{t("products.sortName")}</option>
+          <option value="qty">{t("products.sortQuantity")}</option>
         </select>
       </div>
 
@@ -68,7 +70,7 @@ export default function ProductsListPage() {
                 borderColor: category === cat ? "var(--accent)" : "var(--border)",
               }}
             >
-              {cat === "sve" ? "Sve" : cat}
+              {cat === "sve" ? t("products.allCategories") : cat}
             </button>
           ))}
         </div>
@@ -77,19 +79,20 @@ export default function ProductsListPage() {
       {/* Table-style list */}
       {filtered.length === 0 ? (
         <div style={{ height: 180, display: "flex", alignItems: "center", justifyContent: "center", border: "1px dashed var(--border)", borderRadius: 16, color: "var(--text-3)", fontSize: "0.875rem" }}>
-          Nema artikala
+          {t("products.empty")}
         </div>
       ) : (
-        <div className="glass" style={{ overflow: "hidden" }}>
+        <div className="glass product-list-scroll" style={{ overflow: "hidden" }}>
           {/* Header */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 100px 80px 40px", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)", fontSize: "0.72rem", color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
-            <span>Artikal</span><span>Kategorija</span><span>SKU</span><span style={{ textAlign: "right" }}>Stanje</span><span />
+          <div className="product-list-header" style={{ display: "grid", gridTemplateColumns: "1fr 120px 100px 80px 40px", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)", fontSize: "0.72rem", color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
+            <span>{t("products.columnProduct")}</span><span>{t("products.columnCategory")}</span><span>{t("products.columnSku")}</span><span style={{ textAlign: "right" }}>{t("products.columnStock")}</span><span />
           </div>
           {filtered.map((p, i) => {
             const isLow = p.minStock > 0 && p.totalQuantity <= p.minStock;
             return (
               <Link
                 key={p.id}
+                className="product-list-row"
                 href={`/dashboard/products/${p.id}`}
                 style={{
                   display: "grid", gridTemplateColumns: "1fr 120px 100px 80px 40px",

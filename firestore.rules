@@ -1,0 +1,197 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function shopPath(shopId) {
+      return /databases/$(database)/documents/shops/$(shopId);
+    }
+
+    function productPath(shopId, productId) {
+      return /databases/$(database)/documents/shops/$(shopId)/products/$(productId);
+    }
+
+    function variantPath(shopId, productId, variantId) {
+      return /databases/$(database)/documents/shops/$(shopId)/products/$(productId)/variants/$(variantId);
+    }
+
+    function stockEventPath(shopId, eventId) {
+      return /databases/$(database)/documents/shops/$(shopId)/stockEvents/$(eventId);
+    }
+
+    function isMember(shopId) {
+      return signedIn()
+        && exists(userPath(request.auth.uid))
+        && get(userPath(request.auth.uid)).data.shopId == shopId;
+    }
+
+    function isShopOwner(shopId) {
+      return isMember(shopId)
+        && get(userPath(request.auth.uid)).data.role == 'owner';
+    }
+
+    function validProductPricing(data) {
+      return (!('costPrice' in data) || (data.costPrice is number && data.costPrice >= 0))
+        && (!('salePrice' in data) || (data.salePrice is number && data.salePrice >= 0))
+        && (!('supplier' in data)
+          || (data.supplier is map
+            && data.supplier.keys().hasOnly(['name', 'contact', 'notes'])
+            && data.supplier.name is string
+            && (!('contact' in data.supplier) || data.supplier.contact is string)
+            && (!('notes' in data.supplier) || data.supplier.notes is string)));
+    }
+
+    function validStockEventLink(shopId, productId, variantId, eventId, delta) {
+      let event = getAfter(stockEventPath(shopId, eventId)).data;
+      let oldVariant = get(variantPath(shopId, productId, variantId)).data;
+      let newVariant = getAfter(variantPath(shopId, productId, variantId)).data;
+      let oldProduct = get(productPath(shopId, productId)).data;
+      let newProduct = getAfter(productPath(shopId, productId)).data;
+      return isMember(shopId)
+        && event.productId == productId
+        && event.variantId == variantId
+        && event.actorUid == request.auth.uid
+        && event.delta == delta
+        && event.createdAt == request.time
+        && newVariant.quantity == oldVariant.quantity + delta
+        && newVariant.lastStockEventId == eventId
+        && newProduct.totalQuantity == oldProduct.totalQuantity + delta
+        && newProduct.lastStockEventId == eventId;
+    }
+
+    match /users/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list: if false;
+
+      // A user may only create their own profile. New-shop creation is atomic:
+      // the paired shop document must be created in the same batch.
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['shopId', 'displayName', 'role'])
+        && request.resource.data.shopId is string
+        && request.resource.data.displayName is string
+        && request.resource.data.role in ['owner', 'staff']
+        && ((request.resource.data.role == 'owner'
+            && getAfter(shopPath(request.resource.data.shopId)).data.createdBy == uid)
+          || (request.resource.data.role == 'staff'
+            && exists(shopPath(request.resource.data.shopId))));
+
+      // Shop membership and role changes must go through a trusted admin flow.
+      allow update, delete: if false;
+    }
+
+    match /shops/{shopId} {
+      // Authenticated users can read a known shop ID to join it. Listing shops
+      // is private to existing members.
+      allow get: if signedIn();
+      allow list: if isMember(shopId);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['name', 'createdBy'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
+        && request.resource.data.createdBy == request.auth.uid
+        && getAfter(userPath(request.auth.uid)).data.shopId == shopId
+        && getAfter(userPath(request.auth.uid)).data.role == 'owner';
+      allow update, delete: if isShopOwner(shopId);
+
+      match /products/{productId} {
+        allow read: if isMember(shopId);
+        allow create: if isMember(shopId)
+          && request.resource.data.keys().hasOnly([
+            'name', 'sku', 'category', 'minStock', 'imageUrl', 'totalQuantity',
+            'customFieldDefinitions', 'customFieldValues', 'updatedAt',
+            'costPrice', 'salePrice', 'supplier'
+          ])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.sku is string
+          && request.resource.data.category is string
+          && request.resource.data.minStock is int
+          && request.resource.data.minStock >= 0
+          && request.resource.data.totalQuantity is int
+          && request.resource.data.totalQuantity >= 0
+          && request.resource.data.imageUrl is string
+          && validProductPricing(request.resource.data);
+        allow delete: if isMember(shopId)
+          && resource.data.totalQuantity == 0;
+        allow update: if isMember(shopId)
+          && (request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['name', 'sku', 'category', 'minStock', 'imageUrl', 'customFieldDefinitions', 'customFieldValues', 'updatedAt', 'costPrice', 'salePrice', 'supplier'])
+                && request.resource.data.minStock is int
+                && request.resource.data.minStock >= 0
+                && validProductPricing(request.resource.data)
+              || (request.resource.data.diff(resource.data).affectedKeys()
+                    .hasOnly(['totalQuantity', 'updatedAt', 'lastStockEventId'])
+                  && request.resource.data.lastStockEventId is string
+                  && validStockEventLink(
+                    shopId,
+                    productId,
+                    getAfter(stockEventPath(shopId, request.resource.data.lastStockEventId)).data.variantId,
+                    request.resource.data.lastStockEventId,
+                    getAfter(stockEventPath(shopId, request.resource.data.lastStockEventId)).data.delta
+                  )));
+
+        match /variants/{variantId} {
+          allow read: if isMember(shopId);
+          allow create: if isMember(shopId)
+            && request.resource.data.keys().hasOnly(['label', 'sku', 'quantity'])
+            && request.resource.data.label is string
+            && request.resource.data.sku is string
+            && request.resource.data.quantity is int
+            && request.resource.data.quantity >= 0
+            && (!exists(productPath(shopId, productId)) || request.resource.data.quantity == 0);
+          allow delete: if isMember(shopId) && resource.data.quantity == 0;
+          allow update: if isMember(shopId)
+            && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['label', 'sku'])
+                && request.resource.data.label is string
+                && request.resource.data.sku is string
+                || (request.resource.data.diff(resource.data).affectedKeys()
+                      .hasOnly(['quantity', 'lastStockEventId'])
+                    && request.resource.data.quantity is int
+                    && request.resource.data.quantity >= 0
+                    && request.resource.data.lastStockEventId is string
+                    && validStockEventLink(
+                      shopId,
+                      productId,
+                      variantId,
+                      request.resource.data.lastStockEventId,
+                      request.resource.data.quantity - resource.data.quantity
+                    )));
+        }
+      }
+
+      match /stockEvents/{eventId} {
+        allow read: if isMember(shopId);
+        allow create: if isMember(shopId)
+          && request.resource.data.keys().hasOnly([
+            'productId', 'variantId', 'variantLabel', 'delta', 'reason', 'actorUid', 'actorName', 'createdAt'
+          ])
+          && request.resource.data.productId is string
+          && request.resource.data.variantId is string
+          && request.resource.data.variantLabel is string
+          && request.resource.data.delta is int
+          && request.resource.data.delta != 0
+          && request.resource.data.reason in ['adjustment', 'receipt', 'sale', 'return', 'correction']
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.actorName is string
+          && request.resource.data.createdAt == request.time
+          && validStockEventLink(
+            shopId,
+            request.resource.data.productId,
+            request.resource.data.variantId,
+            eventId,
+            request.resource.data.delta
+          );
+        allow update, delete: if false;
+      }
+    }
+  }
+}

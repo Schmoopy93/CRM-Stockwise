@@ -29,13 +29,13 @@ export default function ProductDetailPage() {
     if (!profile) return;
     const variant = variants.find((v) => v.id === variantId);
     if (!variant) return;
-    if (Math.abs(delta) >= 10 && !confirm(`Promjena od ${delta > 0 ? "+" : ""}${delta} komada. Nastavi?`)) return;
+    if (Math.abs(delta) >= 10 && !confirm(t("product.confirmLarge", { delta: `${delta > 0 ? "+" : ""}${delta}` }))) return;
     setAdjusting(variantId);
     setError("");
     try {
       await adjustStock(profile.shopId, id, variant, delta, profile.uid, profile.displayName);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Greška");
+      setError(e instanceof Error ? e.message : t("stock.insufficient"));
     } finally {
       setAdjusting(null);
     }
@@ -49,13 +49,13 @@ export default function ProductDetailPage() {
   }
 
   async function handleDelete() {
-    if (!profile || !confirm("Obriši artikal? Ova akcija je nepovratna.")) return;
+    if (!profile || !confirm(t("product.deleteConfirm"))) return;
     setDeleting(true);
     try {
       await deleteProduct(profile.shopId, id);
       router.replace("/dashboard");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Greška pri brisanju");
+      setError(e instanceof Error ? e.message : t("product.deleteError"));
       setDeleting(false);
     }
   }
@@ -71,8 +71,8 @@ export default function ProductDetailPage() {
   if (!product) {
     return (
       <div style={{ textAlign: "center", padding: "4rem", color: "var(--text-2)" }}>
-        Artikal nije pronađen.{" "}
-        <Link href="/dashboard" style={{ color: "var(--accent-2)" }}>Nazad</Link>
+        {t("product.notFound")}{" "}
+        <Link href="/dashboard" style={{ color: "var(--accent-2)" }}>{t("back")}</Link>
       </div>
     );
   }
@@ -92,9 +92,9 @@ export default function ProductDetailPage() {
             textDecoration: "none", transition: "color 0.15s",
           }}
         >
-          <ArrowLeft size={14} /> Nazad
+          <ArrowLeft size={14} /> {t("back")}
         </Link>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <div className="product-detail-actions" style={{ display: "flex", gap: "0.5rem" }}>
           <Link
             href={`/dashboard/products/${id}/edit`}
             style={{
@@ -107,7 +107,7 @@ export default function ProductDetailPage() {
               textDecoration: "none", transition: "all 0.15s",
             }}
           >
-            <Pencil size={13} /> Uredi
+            <Pencil size={13} /> {t("product.edit")}
           </Link>
           <button
             onClick={handleDelete}
@@ -122,13 +122,13 @@ export default function ProductDetailPage() {
               cursor: "pointer", transition: "all 0.15s",
             }}
           >
-            <Trash2 size={13} /> Obriši
+            <Trash2 size={13} /> {t("delete")}
           </button>
         </div>
       </div>
 
       {/* Product hero */}
-      <div className="glass" style={{ padding: "1.5rem", display: "flex", gap: "1.25rem", alignItems: "flex-start" }}>
+      <div className="glass product-detail-hero" style={{ padding: "1.5rem", display: "flex", gap: "1.25rem", alignItems: "flex-start" }}>
         {product.imageUrl ? (
           <Image
             src={product.imageUrl}
@@ -163,14 +163,14 @@ export default function ProductDetailPage() {
           )}
           <div style={{ display: "flex", gap: "1.5rem", marginTop: "1rem" }}>
             <div>
-              <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>Ukupno stanje</p>
+              <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("product.totalStock")}</p>
               <p style={{ fontSize: "2rem", fontWeight: 700, margin: 0, color: isLow ? "var(--amber)" : "var(--text-1)", lineHeight: 1 }}>
                 {product.totalQuantity}
               </p>
             </div>
             {product.minStock > 0 && (
               <div>
-                <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>Min. stanje</p>
+                <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("product.minStockLabel")}</p>
                 <p style={{ fontSize: "2rem", fontWeight: 700, margin: 0, color: "var(--text-3)", lineHeight: 1 }}>
                   {product.minStock}
                 </p>
@@ -184,6 +184,54 @@ export default function ProductDetailPage() {
         <div style={{ background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, padding: "0.75rem 1rem", fontSize: "0.82rem", color: "var(--red)" }}>
           {error}
         </div>
+      )}
+
+      {(product.costPrice !== undefined || product.salePrice !== undefined || product.supplier?.name) && (
+        <section className="glass" style={{ padding: "1.25rem 1.5rem" }}>
+          <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 0.875rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            {t("product.pricingSupplier")}
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "1rem" }}>
+            {product.costPrice !== undefined && (
+              <div>
+                <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("product.costPrice")}</p>
+                <p style={{ fontSize: "1.15rem", fontWeight: 700, margin: "3px 0 0", color: "var(--text-1)" }}>
+                  {product.costPrice.toLocaleString(locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                </p>
+                {product.salePrice !== undefined && product.costPrice > 0 && (
+                  <p style={{ fontSize: "0.72rem", color: "var(--green)", margin: "2px 0 0" }}>
+                    {t("product.margin")}: {(((product.salePrice - product.costPrice) / product.costPrice) * 100).toFixed(0)}%
+                  </p>
+                )}
+              </div>
+            )}
+            {product.salePrice !== undefined && (
+              <div>
+                <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("product.salePrice")}</p>
+                <p style={{ fontSize: "1.15rem", fontWeight: 700, margin: "3px 0 0", color: "var(--text-1)" }}>
+                  {product.salePrice.toLocaleString(locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                </p>
+              </div>
+            )}
+            {product.costPrice !== undefined && (
+              <div>
+                <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("product.stockValue")}</p>
+                <p style={{ fontSize: "1.15rem", fontWeight: 700, margin: "3px 0 0", color: "#a855f7" }}>
+                  {(product.costPrice * product.totalQuantity).toLocaleString(locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                </p>
+              </div>
+            )}
+            {product.supplier?.name && (
+              <div>
+                <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("product.supplier")}</p>
+                <p style={{ fontSize: "0.9rem", fontWeight: 600, margin: "3px 0 0", color: "var(--text-1)" }}>{product.supplier.name}</p>
+                {product.supplier.contact && (
+                  <p style={{ fontSize: "0.75rem", color: "var(--accent-2)", margin: "2px 0 0" }}>{product.supplier.contact}</p>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
       )}
 
       {product.customFieldDefinitions?.length > 0 && (
@@ -210,13 +258,13 @@ export default function ProductDetailPage() {
       {/* Variants */}
       <div>
         <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 0.75rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-          Varijante
+          {t("product.variants")}
         </h2>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
           {variants.map((variant) => (
             <div
               key={variant.id}
-              className="glass"
+              className="glass product-variant-card"
               style={{ padding: "1rem 1.25rem" }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
@@ -335,7 +383,7 @@ export default function ProductDetailPage() {
       {events.length > 0 && (
         <div>
           <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 0.75rem", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 6 }}>
-            <Clock size={14} /> Historija promjena
+            <Clock size={14} /> {t("product.history")}
           </h2>
           <div className="glass" style={{ overflow: "hidden" }}>
             {events.map((event, i) => (
@@ -352,7 +400,7 @@ export default function ProductDetailPage() {
                 <div>
                   <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-1)", margin: 0 }}>{event.variantLabel}</p>
                   <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: "2px 0 0" }}>
-                    {event.actorName} · {event.createdAt ? event.createdAt.toLocaleString("sr-RS") : "—"}
+                    {event.actorName} · {event.createdAt ? event.createdAt.toLocaleString(locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US") : "—"}
                   </p>
                 </div>
                 <span

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
@@ -9,7 +9,7 @@ import { useLowStockNotifications } from "@/lib/notifications";
 import { signOut } from "@/lib/actions";
 import { useI18n } from "@/lib/i18n-context";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { LayoutGrid, Package, PackagePlus, BarChart2, Download, LogOut, ChevronRight } from "lucide-react";
+import { LayoutGrid, Package, PackagePlus, BarChart2, Download, LogOut, ChevronRight, Upload, ClipboardList, Menu, X } from "lucide-react";
 
 function NotificationWidget({ shopId }: { shopId: string | undefined }) {
   const { products } = useProducts(shopId);
@@ -29,10 +29,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { t } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [user, loading, router]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [mobileNavOpen]);
 
   if (loading) return <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="spinner" /></div>;
   if (!user) return null;
@@ -41,13 +56,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: "/dashboard", icon: LayoutGrid, label: t("nav.overview"), exact: true },
     { href: "/dashboard/analytics", icon: BarChart2, label: t("nav.analytics"), exact: false },
     { href: "/dashboard/receive", icon: PackagePlus, label: t("nav.receive"), exact: false },
+    { href: "/dashboard/import", icon: Upload, label: t("nav.import"), exact: false },
+    { href: "/dashboard/audit", icon: ClipboardList, label: t("nav.audit"), exact: false },
     { href: "/dashboard/export", icon: Download, label: t("nav.export"), exact: false },
     { href: "/dashboard/products", icon: Package, label: t("nav.products"), exact: false },
   ];
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
-      <aside style={{ width: 220, background: "var(--bg-2)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", padding: "1.25rem 0.75rem", flexShrink: 0 }}>
+    <div className="app-shell" style={{ display: "flex", minHeight: "100vh" }}>
+      <header className="mobile-header">
+        <button className="mobile-menu-button" type="button" aria-label={mobileNavOpen ? t("nav.closeMenu") : t("nav.openMenu")} aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((open) => !open)}>
+          {mobileNavOpen ? <X size={21} /> : <Menu size={21} />}
+        </button>
+        <span className="mobile-brand"><span aria-hidden="true">📦</span> Inventory</span>
+        <span className="mobile-user-name">{profile?.displayName ?? "—"}</span>
+      </header>
+
+      {mobileNavOpen && <button type="button" className="mobile-nav-backdrop" aria-label={t("nav.closeMenu")} onClick={() => setMobileNavOpen(false)} />}
+
+      <aside className={`app-sidebar${mobileNavOpen ? " app-sidebar-open" : ""}`}>
         {/* Brand */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 0.5rem", marginBottom: "1.75rem" }}>
           <div style={{ width: 32, height: 32, background: "linear-gradient(135deg, var(--accent), var(--accent-2))", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, boxShadow: "0 4px 12px var(--accent-glow)" }}>
@@ -63,7 +90,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {NAV.map(({ href, icon: Icon, label, exact }) => {
             const active = exact ? pathname === href : pathname.startsWith(href);
             return (
-              <Link key={href} href={href} style={{ display: "flex", alignItems: "center", gap: 10, padding: "0.55rem 0.75rem", borderRadius: 10, fontSize: "0.875rem", fontWeight: 500, textDecoration: "none", transition: "all 0.15s", background: active ? "var(--accent-glow)" : "transparent", color: active ? "var(--accent-2)" : "var(--text-2)", border: active ? "1px solid rgba(99,102,241,0.2)" : "1px solid transparent" }}>
+              <Link key={href} href={href} onClick={() => setMobileNavOpen(false)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "0.55rem 0.75rem", borderRadius: 10, fontSize: "0.875rem", fontWeight: 500, textDecoration: "none", transition: "all 0.15s", background: active ? "var(--accent-glow)" : "transparent", color: active ? "var(--accent-2)" : "var(--text-2)", border: active ? "1px solid rgba(99,102,241,0.2)" : "1px solid transparent" }}>
                 <Icon size={16} />
                 {label}
                 {active && <ChevronRight size={14} style={{ marginLeft: "auto", opacity: 0.5 }} />}
@@ -109,7 +136,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      <main style={{ flex: 1, overflow: "auto", padding: "2rem" }}>
+      <main className="app-main">
         {children}
       </main>
     </div>

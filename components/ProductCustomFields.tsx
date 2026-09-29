@@ -193,7 +193,7 @@ export default function ProductCustomFields({
 
       {definitions.map((field) => (
         <div key={field.key} style={{ background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 10, padding: "0.875rem", display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(120px, 1fr) minmax(100px, 0.8fr) auto", gap: "0.5rem", alignItems: "center" }}>
+          <div className="product-custom-field-row" style={{ display: "grid", gridTemplateColumns: "minmax(120px, 1fr) minmax(100px, 0.8fr) auto", gap: "0.5rem", alignItems: "center" }}>
             <input aria-label={t("product.customFieldName")} className="input" value={field.labels?.[locale] ?? field.label} maxLength={50} onChange={(event) => updateDefinition(field.key, { label: event.target.value })} />
             <select aria-label={t("product.customFieldType")} className="input" value={field.type} onChange={(event) => {
               const type = event.target.value as ProductCustomFieldType;

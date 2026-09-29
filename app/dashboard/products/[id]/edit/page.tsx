@@ -160,7 +160,7 @@ export default function ProductEditPage() {
                     </button>
                   )}
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                <div className="product-variant-fields" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
                   <input
                     type="text" placeholder={t("product.variantName")} value={variant.label} required
                     onChange={(e) => updateVariant(i, "label", e.target.value)}

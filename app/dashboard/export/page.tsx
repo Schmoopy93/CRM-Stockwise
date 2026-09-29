@@ -61,7 +61,7 @@ export default function ExportPage() {
       </div>
 
       {/* Summary */}
-      <div className="glass" style={{ padding: "1.25rem 1.5rem", marginBottom: "1.5rem", display: "flex", gap: "2rem" }}>
+      <div className="glass export-summary" style={{ padding: "1.25rem 1.5rem", marginBottom: "1.5rem", display: "flex", gap: "2rem" }}>
         <div>
           <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("export.articles")}</p>
           <p style={{ fontSize: "1.75rem", fontWeight: 700, color: "var(--text-1)", margin: 0, lineHeight: 1 }}>{products.length}</p>
