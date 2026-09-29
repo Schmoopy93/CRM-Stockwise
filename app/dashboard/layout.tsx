@@ -9,6 +9,7 @@ import { useLowStockNotifications } from "@/lib/notifications";
 import { signOut } from "@/lib/actions";
 import { useI18n } from "@/lib/i18n-context";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { LayoutGrid, Package, PackagePlus, BarChart2, Download, LogOut, ChevronRight, Upload, ClipboardList, Menu, X } from "lucide-react";
 
 function NotificationWidget({ shopId }: { shopId: string | undefined }) {
@@ -122,7 +123,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           )}
 
-          <LanguageSwitcher />
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: "0.4rem" }}>
+            <LanguageSwitcher />
+            <ThemeSwitcher />
+          </div>
 
           <button
             onClick={async () => { await signOut(); router.replace("/login"); }}

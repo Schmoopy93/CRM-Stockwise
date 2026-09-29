@@ -45,6 +45,7 @@
   "user.logout": "Sign out",
 
   "dashboard.greeting": "Hello 👋",
+  "dashboard.greetingName": "Hello, {name} 👋",
   "dashboard.subtitle": "Store stock overview",
   "dashboard.totalProducts": "Total products",
   "dashboard.totalItems": "Total units",

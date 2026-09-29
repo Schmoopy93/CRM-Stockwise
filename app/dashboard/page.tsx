@@ -35,7 +35,9 @@ export default function DashboardPage() {
     <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
         <div>
-          <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{t("dashboard.greeting")}</h1>
+          <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>
+            {profile?.displayName ? t("dashboard.greetingName", { name: profile.displayName.split(" ")[0] }) : t("dashboard.greeting")}
+          </h1>
           <p style={{ fontSize: "0.85rem", color: "var(--text-2)", marginTop: 4 }}>{t("dashboard.subtitle")}</p>
         </div>
         <Link href="/dashboard/products/new" className="btn-primary" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>

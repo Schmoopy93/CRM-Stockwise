@@ -45,6 +45,7 @@
   "user.logout": "Odjavi se",
 
   "dashboard.greeting": "Zdravo 👋",
+  "dashboard.greetingName": "Zdravo, {name} 👋",
   "dashboard.subtitle": "Pregled stanja u radnji",
   "dashboard.totalProducts": "Ukupno artikala",
   "dashboard.totalItems": "Ukupno komada",

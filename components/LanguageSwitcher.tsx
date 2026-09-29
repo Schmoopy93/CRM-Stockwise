@@ -1,79 +1,51 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useI18n, LOCALE_LABELS, Locale } from "@/lib/i18n-context";
-import { Globe } from "lucide-react";
+import Image from "next/image";
+import { useI18n, Locale } from "@/lib/i18n-context";
+
+const LOCALES: { code: Locale; country: string; label: string }[] = [
+  { code: "sr", country: "rs", label: "Srpski" },
+  { code: "en", country: "gb", label: "English" },
+  { code: "ru", country: "ru", label: "Русский" },
+];
 
 export function LanguageSwitcher() {
   const { locale, setLocale } = useI18n();
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  const flag = LOCALE_LABELS[locale].split(" ")[1];
-  const code = { sr: "SR", en: "EN", ru: "RU" }[locale];
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        style={{
-          display: "flex", alignItems: "center", gap: 6,
-          padding: "0.45rem 0.75rem",
-          background: open ? "var(--bg-3)" : "transparent",
-          border: "1px solid var(--border)",
-          borderRadius: 9,
-          fontSize: "0.78rem", fontWeight: 600,
-          color: "var(--text-2)",
-          cursor: "pointer",
-          transition: "all 0.15s",
-        }}
-      >
-        <Globe size={13} />
-        {flag} {code}
-      </button>
-
-      {open && (
-        <div
+    <div style={{ display: "flex", gap: 4 }}>
+      {LOCALES.map(({ code, country, label }) => (
+        <button
+          key={code}
+          onClick={() => setLocale(code)}
+          title={label}
+          aria-label={label}
+          aria-pressed={locale === code}
           style={{
-            position: "absolute", bottom: "calc(100% + 6px)", left: 0,
-            background: "var(--bg-2)",
-            border: "1px solid var(--border)",
-            borderRadius: 12,
-            overflow: "hidden",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-            minWidth: 160,
-            zIndex: 200,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 34, height: 34,
+            fontSize: "1.4rem",
+            lineHeight: 1,
+            background: locale === code ? "var(--accent-glow)" : "var(--bg-3)",
+            border: `1px solid ${locale === code ? "rgba(99,102,241,0.35)" : "var(--border)"}`,
+            borderRadius: 9,
+            cursor: "pointer",
+            transition: "all 0.15s",
+            opacity: locale === code ? 1 : 0.55,
           }}
+          onMouseOver={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
+          onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = locale === code ? "1" : "0.55"; }}
         >
-          {(Object.entries(LOCALE_LABELS) as [Locale, string][]).map(([loc, label], i, arr) => (
-            <button
-              key={loc}
-              onClick={() => { setLocale(loc); setOpen(false); }}
-              style={{
-                width: "100%", textAlign: "left",
-                padding: "0.65rem 1rem",
-                background: loc === locale ? "var(--accent-glow)" : "none",
-                border: "none",
-                borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
-                fontSize: "0.82rem",
-                fontWeight: loc === locale ? 700 : 400,
-                color: loc === locale ? "var(--accent-2)" : "var(--text-1)",
-                cursor: "pointer",
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+          <Image
+            src={`https://flagcdn.com/w40/${country}.png`}
+            alt={label}
+            width={24}
+            height={16}
+            style={{ borderRadius: 2, display: "block" }}
+            unoptimized
+          />
+        </button>
+      ))}
     </div>
   );
 }

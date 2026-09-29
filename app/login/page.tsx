@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signInWithGoogle } from "@/lib/actions";
-import { useI18n, LOCALE_LABELS, Locale } from "@/lib/i18n-context";
-import { Globe, Package, TrendingUp, BarChart2, ShieldCheck } from "lucide-react";
+import { useI18n } from "@/lib/i18n-context";
+import { Package, TrendingUp, BarChart2, ShieldCheck } from "lucide-react";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 type Mode = "login" | "newShop" | "joinShop";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { t, locale, setLocale } = useI18n();
+  const { t } = useI18n();
   const [mode, setMode] = useState<Mode>("login");
   const [shopName, setShopName] = useState("");
   const [shopId, setShopId] = useState("");
@@ -208,21 +210,9 @@ export default function LoginPage() {
               <h2 style={{ fontSize: "1.3rem", fontWeight: 700, color: "var(--text-1)", margin: 0, letterSpacing: "-0.02em" }}>
                 {mode === "login" ? t("auth.login") : mode === "newShop" ? t("auth.newShop") : t("auth.joinShop")}
               </h2>
-              {/* Language switcher */}
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <Globe size={12} color="var(--text-3)" />
-                {(Object.entries(LOCALE_LABELS) as [Locale, string][]).map(([loc, label]) => (
-                  <button key={loc} onClick={() => setLocale(loc)} style={{
-                    background: "none", border: "none", cursor: "pointer",
-                    fontSize: "0.72rem", fontWeight: loc === locale ? 700 : 400,
-                    color: loc === locale ? "var(--accent-2)" : "var(--text-3)",
-                    padding: "2px 4px",
-                    borderRadius: 4,
-                    transition: "color 0.15s",
-                  }}>
-                    {label.split(" ")[1]}
-                  </button>
-                ))}
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <LanguageSwitcher />
+                <ThemeSwitcher />
               </div>
             </div>
             <p style={{ fontSize: "0.82rem", color: "var(--text-3)", margin: 0 }}>

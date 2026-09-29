@@ -45,6 +45,7 @@
   "user.logout": "Выйти",
 
   "dashboard.greeting": "Привет 👋",
+  "dashboard.greetingName": "Привет, {name} 👋",
   "dashboard.subtitle": "Обзор остатков в магазине",
   "dashboard.totalProducts": "Всего товаров",
   "dashboard.totalItems": "Всего единиц",
