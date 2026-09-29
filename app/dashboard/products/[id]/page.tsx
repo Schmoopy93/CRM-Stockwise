@@ -7,7 +7,7 @@ import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { getLocalizedOptionValue } from "@/lib/product-field-options";
-import { useProduct, useVariants, useStockEvents } from "@/lib/hooks";
+import { useProduct, useVariants, useStockEvents, useShopMoney } from "@/lib/hooks";
 import { usePagination } from "@/lib/use-pagination";
 import ListPagination from "@/components/ListPagination";
 import { adjustStock, deleteProduct } from "@/lib/actions";
@@ -21,6 +21,7 @@ export default function ProductDetailPage() {
   const { product, loading } = useProduct(profile?.shopId, id);
   const variants = useVariants(profile?.shopId, id);
   const events = useStockEvents(profile?.shopId, id);
+  const { money } = useShopMoney(profile?.shopId, INTL_LOCALES[locale]);
 
   const [adjusting, setAdjusting] = useState<string | null>(null);
   const [customDelta, setCustomDelta] = useState<Record<string, string>>({});
@@ -168,7 +169,7 @@ export default function ProductDetailPage() {
               <div>
                 <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0 }}>{t("product.costPrice")}</p>
                 <p style={{ fontSize: "1.1rem", fontWeight: 700, margin: "3px 0 0", color: "var(--text-1)" }}>
-                  {product.costPrice.toLocaleString(fmtLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                  {money(product.costPrice)}
                 </p>
                 {product.salePrice !== undefined && product.costPrice > 0 && (
                   <p style={{ fontSize: "0.7rem", color: "var(--green)", margin: "2px 0 0" }}>
@@ -181,7 +182,7 @@ export default function ProductDetailPage() {
               <div>
                 <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0 }}>{t("product.salePrice")}</p>
                 <p style={{ fontSize: "1.1rem", fontWeight: 700, margin: "3px 0 0", color: "var(--text-1)" }}>
-                  {product.salePrice.toLocaleString(fmtLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                  {money(product.salePrice)}
                 </p>
               </div>
             )}
@@ -189,7 +190,7 @@ export default function ProductDetailPage() {
               <div>
                 <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0 }}>{t("product.stockValue")}</p>
                 <p style={{ fontSize: "1.1rem", fontWeight: 700, margin: "3px 0 0", color: "#a855f7" }}>
-                  {(product.costPrice * product.totalQuantity).toLocaleString(fmtLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                  {money(product.costPrice * product.totalQuantity)}
                 </p>
               </div>
             )}

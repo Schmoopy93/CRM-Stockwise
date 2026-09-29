@@ -4,20 +4,31 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
-import { useI18n } from "@/lib/i18n-context";
-import { useProducts } from "@/lib/hooks";
+import { INTL_LOCALES, useI18n } from "@/lib/i18n-context";
+import { useProducts, useShopMoney } from "@/lib/hooks";
 import { usePagination } from "@/lib/use-pagination";
 import ListPagination from "@/components/ListPagination";
 import CategoriesManager from "@/components/CategoriesManager";
 import { Plus, Search, AlertTriangle, ArrowRight, Package, X, Tags } from "lucide-react";
 
+type SortKey = "name" | "qty" | "priceAsc" | "priceDesc";
+
+/** Products without a price sort after priced ones rather than being treated as
+ * zero, so a half-filled catalogue still orders by price. */
+function comparePrice(a: number | undefined, b: number | undefined, direction: 1 | -1) {
+  if (a === undefined) return b === undefined ? 0 : 1;
+  if (b === undefined) return -1;
+  return (a - b) * direction;
+}
+
 export default function ProductsListPage() {
   const { profile } = useAuth();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const { products, loading } = useProducts(profile?.shopId);
+  const { money } = useShopMoney(profile?.shopId, INTL_LOCALES[locale]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
-  const [sort, setSort] = useState<"name" | "qty">("name");
+  const [sort, setSort] = useState<SortKey>("name");
   const [manageOpen, setManageOpen] = useState(false);
 
   const categories = useMemo(
@@ -28,14 +39,14 @@ export default function ProductsListPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return products
-      .filter((p) => {
-        const matchSearch = !q || p.name.toLowerCase().includes(q) || (p.sku || "").toLowerCase().includes(q);
-        const matchCat = category === "all" || p.category === category;
-        return matchSearch && matchCat;
-      })
-      .slice()
-      .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name) : a.totalQuantity - b.totalQuantity));
+    const matched = products.filter((p) => {
+      const matchSearch = !q || p.name.toLowerCase().includes(q) || (p.sku || "").toLowerCase().includes(q);
+      const matchCat = category === "all" || p.category === category;
+      return matchSearch && matchCat;
+    });
+    if (sort === "priceAsc") return matched.slice().sort((a, b) => comparePrice(a.salePrice, b.salePrice, 1));
+    if (sort === "priceDesc") return matched.slice().sort((a, b) => comparePrice(a.salePrice, b.salePrice, -1));
+    return matched.slice().sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name) : a.totalQuantity - b.totalQuantity));
   }, [products, search, category, sort]);
 
   const pagingLabels = {
@@ -102,12 +113,14 @@ export default function ProductsListPage() {
         </div>
         <select
           value={sort}
-          onChange={(e) => setSort(e.target.value as "name" | "qty")}
+          onChange={(e) => setSort(e.target.value as SortKey)}
           className="input products-sort"
-          aria-label={t("products.sortName")}
+          aria-label={t("products.sortLabel")}
         >
           <option value="name">{t("products.sortName")}</option>
           <option value="qty">{t("products.sortQuantity")}</option>
+          <option value="priceAsc">{t("products.sortPriceAsc")}</option>
+          <option value="priceDesc">{t("products.sortPriceDesc")}</option>
         </select>
 
         {categoryNames.length > 0 && (
@@ -142,6 +155,7 @@ export default function ProductsListPage() {
             <span>{t("products.columnProduct")}</span>
             <span>{t("products.columnCategory")}</span>
             <span>{t("products.columnSku")}</span>
+            <span>{t("products.columnPrice")}</span>
             <span className="products-cell-qty">{t("products.columnStock")}</span>
             <span />
           </div>
@@ -171,6 +185,12 @@ export default function ProductsListPage() {
 
                 <div className="products-cell-sku">
                   {p.sku ? <span className="products-sku">{p.sku}</span> : <span className="products-dash">—</span>}
+                </div>
+
+                <div className="products-cell-price">
+                  {p.salePrice !== undefined ? (
+                    <span className="products-price">{money(p.salePrice)}</span>
+                  ) : <span className="products-dash">—</span>}
                 </div>
 
                 <div className="products-cell-qty" data-low={isLow || undefined}>

@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import { Images, Plus } from "lucide-react";
-import { INTL_LOCALES, Locale, useI18n } from "@/lib/i18n-context";
-import { formatCatalogPrice } from "@/lib/catalog-channels";
+import { Locale, useI18n } from "@/lib/i18n-context";
+import type { PriceTools } from "@/lib/currency";
 import { CatalogField, CatalogItem } from "@/lib/types";
 
 export function itemImages(item: CatalogItem) {
@@ -21,9 +21,10 @@ export function fieldText(field: CatalogField, locale: Locale, t: (key: string) 
   return { label, value };
 }
 
-export default function CatalogCard({ item, locale, index, onOpen, onQuickAdd }: {
+export default function CatalogCard({ item, locale, prices, index, onOpen, onQuickAdd }: {
   item: CatalogItem;
   locale: Locale;
+  prices: PriceTools;
   index: number;
   onOpen: () => void;
   onQuickAdd: () => void;
@@ -81,9 +82,9 @@ export default function CatalogCard({ item, locale, index, onOpen, onQuickAdd }:
         <div className="cat-card-foot">
           {item.salePrice !== undefined ? (
             <span className="cat-card-prices">
-              <span className="cat-card-price" data-sale={discount > 0 || undefined}>{formatCatalogPrice(item.salePrice, INTL_LOCALES[locale])}</span>
+              <span className="cat-card-price" data-sale={discount > 0 || undefined}>{prices.money(item.salePrice)}</span>
               {discount > 0 && item.compareAtPrice !== undefined && (
-                <s className="cat-card-old">{formatCatalogPrice(item.compareAtPrice, INTL_LOCALES[locale])}</s>
+                <s className="cat-card-old">{prices.money(item.compareAtPrice)}</s>
               )}
             </span>
           ) : <span />}

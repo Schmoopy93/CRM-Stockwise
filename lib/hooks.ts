@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   collection,
   doc,
@@ -15,20 +15,90 @@ import { db } from "@/lib/firebase";
 import { Product, ProductVariant, Sale, ShopCatalogSettings, StockEvent } from "@/lib/types";
 import { CatalogItem, CatalogOrder, CatalogStatsDay } from "@/lib/types";
 import { channelsFromShop, EMPTY_CHANNELS } from "@/lib/catalog-channels";
+import {
+  BASE_CURRENCY,
+  convert,
+  EMPTY_RATES,
+  formatMoney,
+  isSupportedCurrency,
+  type ExchangeRates,
+  type MoneyFormatOptions,
+  type PriceTools,
+} from "@/lib/currency";
+
+/** One shared request for the whole tab. The route handler already caches, so
+ * this only avoids duplicate round-trips when several components mount at once. */
+let ratesRequest: Promise<ExchangeRates> | null = null;
+
+function fetchExchangeRates(): Promise<ExchangeRates> {
+  ratesRequest ??= fetch("/api/rates")
+    .then((response) => (response.ok ? response.json() : EMPTY_RATES))
+    .catch(() => EMPTY_RATES) as Promise<ExchangeRates>;
+  return ratesRequest;
+}
+
+/** Starts at the base currency on both server and client so the first render
+ * matches, then settles once the day's rates arrive. */
+export function useExchangeRates() {
+  const [rates, setRates] = useState<ExchangeRates>(EMPTY_RATES);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchExchangeRates().then((result) => { if (!cancelled) setRates(result); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return rates;
+}
+
+/** The shop's chosen display currency plus formatters for it.
+ *
+ * `money` converts a stored base-currency amount and formats it, so a call site
+ * reads one value from the database and prints it in whatever the shop trades
+ * in. `toCurrency` does the conversion alone, for places that need the number
+ * rather than a string — writing it onto a catalog order, for instance. */
+export function useShopMoney(shopId: string | undefined, intlLocale: string): PriceTools {
+  const [currency, setCurrency] = useState(BASE_CURRENCY);
+  const rates = useExchangeRates();
+
+  useEffect(() => {
+    if (!shopId) return;
+    const unsub = onSnapshot(
+      doc(db, "shops", shopId),
+      (snap) => {
+        const value = snap.data()?.currency;
+        setCurrency(isSupportedCurrency(value) ? value : BASE_CURRENCY);
+      },
+      () => setCurrency(BASE_CURRENCY)
+    );
+    return unsub;
+  }, [shopId]);
+
+  const toCurrency = useCallback((amount: number) => convert(amount, currency, rates), [currency, rates]);
+  const money = useCallback(
+    (amount: number, options?: MoneyFormatOptions) => formatMoney(toCurrency(amount), intlLocale, currency, options),
+    [intlLocale, currency, toCurrency]
+  );
+
+  return { currency, money, toCurrency };
+}
 
 export function useShop(shopId: string | undefined): ShopCatalogSettings & { loading: boolean } {
-  const [shop, setShop] = useState<ShopCatalogSettings>({ name: "", catalogEnabled: false, channels: EMPTY_CHANNELS, logoUrl: "", coverUrl: "" });
+  const [shop, setShop] = useState<ShopCatalogSettings>({ name: "", catalogEnabled: false, channels: EMPTY_CHANNELS, logoUrl: "", coverUrl: "", currency: BASE_CURRENCY });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!shopId) return;
     const unsub = onSnapshot(doc(db, "shops", shopId), (snap) => {
+      const data = snap.data();
+      const currency = data?.currency;
       setShop({
-        name: snap.data()?.name ?? "",
-        catalogEnabled: snap.data()?.catalogEnabled === true,
-        channels: channelsFromShop(snap.data()),
-        logoUrl: snap.data()?.catalogLogoUrl ?? "",
-        coverUrl: snap.data()?.catalogCoverUrl ?? "",
+        name: data?.name ?? "",
+        catalogEnabled: data?.catalogEnabled === true,
+        channels: channelsFromShop(data),
+        logoUrl: data?.catalogLogoUrl ?? "",
+        coverUrl: data?.catalogCoverUrl ?? "",
+        currency: isSupportedCurrency(currency) ? currency : BASE_CURRENCY,
       });
       setLoading(false);
     }, () => setLoading(false));
@@ -285,6 +355,7 @@ export function useOrders(shopId: string | undefined, count = 100) {
           code: d.data().code ?? "",
           lines: Array.isArray(d.data().lines) ? d.data().lines : [],
           total: d.data().total ?? 0,
+          currency: isSupportedCurrency(d.data().currency) ? d.data().currency : undefined,
           customerName: d.data().customerName ?? "",
           customerContact: d.data().customerContact ?? "",
           note: d.data().note ?? "",

@@ -82,6 +82,9 @@ export interface ShopCatalogSettings {
   channels: CatalogChannels;
   logoUrl: string;
   coverUrl: string;
+  /** Currency the shop trades in. Prices are stored in the base currency and
+   * converted for display; absent on shops created before this existed. */
+  currency: string;
 }
 
 export type CatalogStatEvent = "views" | "whatsapp" | "telegram" | "instagram" | "share" | "orders";
@@ -107,6 +110,9 @@ export interface CatalogOrder {
   code: string;
   lines: OrderLine[];
   total: number;
+  /** Currency the customer was quoted in. Stored per order so a later change of
+   * the shop currency cannot restate what was agreed. */
+  currency?: string;
   customerName: string;
   customerContact: string;
   note: string;

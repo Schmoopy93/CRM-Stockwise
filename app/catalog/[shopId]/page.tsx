@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { buildMetadata, LOCALE_TAGS, localeFromHeaders, seoCopy, seoTitle } from "@/lib/seo";
 import type { Locale } from "@/lib/i18n-context";
-import { formatCatalogPrice } from "@/lib/catalog-channels";
+import { BASE_CURRENCY, convert, formatMoney, isSupportedCurrency } from "@/lib/currency";
+import { fetchExchangeRates } from "@/lib/rates";
 import sr from "@/lib/i18n/sr.json";
 import en from "@/lib/i18n/en.json";
 import ru from "@/lib/i18n/ru.json";
@@ -86,11 +87,16 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
     const price = numeric(product.salePrice);
     const oldPrice = numeric(product.compareAtPrice);
     const intl = LOCALE_TAGS[locale].hreflang;
+    // Quoted in the shop's own currency, so the price in search results matches
+    // the price on the page rather than leaking the base amount.
+    const shopCurrency = isSupportedCurrency(shop.fields.currency) ? shop.fields.currency : BASE_CURRENCY;
+    const rates = await fetchExchangeRates();
+    const quote = (value: number) => formatMoney(convert(value, shopCurrency, rates), intl, shopCurrency);
     const priceText = price === undefined
       ? ""
       : oldPrice !== undefined && oldPrice > price
-        ? `${formatCatalogPrice(price, intl)} (${formatCatalogPrice(oldPrice, intl)})`
-        : formatCatalogPrice(price, intl);
+        ? `${quote(price)} (${quote(oldPrice)})`
+        : quote(price);
     title = `${text(product.name)} · ${shopName}`;
     description = priceText
       ? fill(dictionary["catalog.metaProductDescription"], { price: priceText, shop: shopName })

@@ -2,6 +2,7 @@
 
 import { Product } from "@/lib/types";
 import { useI18n } from "@/lib/i18n-context";
+import { BASE_CURRENCY } from "@/lib/currency";
 
 export interface ProductPricingValues {
   costPrice: string;
@@ -49,15 +50,15 @@ export default function ProductPricingFields({ values, onChange }: ProductPricin
       </h2>
       <div className="product-variant-fields" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
         <div>
-          <label style={labelStyle}>{t("product.costPrice")} (€)</label>
+          <label style={labelStyle}>{t("product.costPrice")} ({BASE_CURRENCY})</label>
           <input className="input" type="text" inputMode="decimal" placeholder={t("product.optional")} value={values.costPrice} onChange={(e) => update("costPrice", e.target.value)} />
         </div>
         <div>
-          <label style={labelStyle}>{t("product.salePrice")} (€)</label>
+          <label style={labelStyle}>{t("product.salePrice")} ({BASE_CURRENCY})</label>
           <input className="input" type="text" inputMode="decimal" placeholder={t("product.optional")} value={values.salePrice} onChange={(e) => update("salePrice", e.target.value)} />
         </div>
         <div style={{ gridColumn: "1 / -1" }}>
-          <label style={labelStyle}>{t("product.compareAtPrice")} (€)</label>
+          <label style={labelStyle}>{t("product.compareAtPrice")} ({BASE_CURRENCY})</label>
           <input className="input" type="text" inputMode="decimal" placeholder={t("product.optional")} value={values.compareAtPrice} onChange={(e) => update("compareAtPrice", e.target.value)} />
           <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: "5px 0 0" }}>{t("product.compareAtPriceHint")}</p>
         </div>

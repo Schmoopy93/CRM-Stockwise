@@ -30,6 +30,7 @@ import { applyStockDelta } from "@/lib/stock-invariants";
 import { normalizeOrderInput, newOrderCode, orderTotal, ORDER_STATUSES, type OrderInput } from "@/lib/orders";
 import { getLocalizedOptionValue } from "@/lib/product-field-options";
 import { CatalogChannels } from "@/lib/catalog-channels";
+import { BASE_CURRENCY, isSupportedCurrency, roundForCurrency } from "@/lib/currency";
 import { AppLocale, CatalogStatEvent, OrderStatus, Product, ProductCustomField, ProductVariant, SaleChannel, SaleLine } from "@/lib/types";
 
 const BATCH_LIMIT = 450;
@@ -229,6 +230,14 @@ export async function setCatalogImage(shopId: string, kind: "logo" | "cover", fi
   await updateDoc(doc(db, "shops", shopId), { [field]: url ?? deleteField() });
 }
 
+/** Sets the currency the shop trades in. This only changes how prices are read
+ * — stored prices stay in the base currency, so switching back and forth never
+ * loses precision and never restates what a product costs. */
+export async function updateShopCurrency(shopId: string, currency: string) {
+  if (!isSupportedCurrency(currency)) throw new Error("CURRENCY_INVALID");
+  await updateDoc(doc(db, "shops", shopId), { currency });
+}
+
 /** Best-effort, anonymous daily counter for the public catalog. */
 export function trackCatalogEvent(shopId: string, event: CatalogStatEvent) {
   const day = new Date().toISOString().slice(0, 10);
@@ -238,13 +247,20 @@ export function trackCatalogEvent(shopId: string, event: CatalogStatEvent) {
 /** Records a catalog order so the shop can see what was asked for. Anonymous by
  * design — customers have no account — so this never touches stock: the shop
  * still records the sale explicitly, which keeps the ledger the only way stock
- * moves. Returns the human-quotable order code. */
-export async function placeCatalogOrder(shopId: string, input: OrderInput) {
+ * moves. Returns the human-quotable order code.
+ *
+ * `input` carries the prices the customer actually saw, already converted into
+ * the shop's chosen currency, so the order is stored in the currency it was
+ * quoted in. Recording it that way means a later change of the shop currency
+ * cannot restate what was agreed, and the unit prices still add up to the total
+ * the shop reads back. */
+export async function placeCatalogOrder(shopId: string, input: OrderInput, currency: string = BASE_CURRENCY) {
   if (!await isCatalogEnabled(shopId)) throw new Error("CATALOG_DISABLED");
   const order = normalizeOrderInput(input);
   if (order.lines.length === 0) throw new Error("ORDER_EMPTY");
+  const quotedIn = isSupportedCurrency(currency) ? currency : BASE_CURRENCY;
 
-  const total = orderTotal(order.lines);
+  const total = roundForCurrency(orderTotal(order.lines), quotedIn);
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const code = newOrderCode();
     const ref = doc(collection(db, "shops", shopId, "orders"));
@@ -253,6 +269,7 @@ export async function placeCatalogOrder(shopId: string, input: OrderInput) {
         code,
         lines: order.lines,
         total,
+        currency: quotedIn,
         customerName: order.customerName,
         customerContact: order.customerContact,
         note: order.note,

@@ -5,15 +5,17 @@ import Image from "next/image";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Minus, Plus, Share2, ShoppingBag, X } from "lucide-react";
 import { INTL_LOCALES, Locale, useI18n } from "@/lib/i18n-context";
-import { buildOrderMessage, CatalogChannels, formatCatalogPrice } from "@/lib/catalog-channels";
+import { buildOrderMessage, CatalogChannels } from "@/lib/catalog-channels";
+import type { PriceTools } from "@/lib/currency";
 import { CatalogItem, CatalogStatEvent } from "@/lib/types";
 import { catalogLink, MAX_QUANTITY } from "./catalog-store";
 import { fieldText, itemImages, saleDiscount } from "./catalog-card";
 import OrderChannels, { availableChannels } from "./order-channels";
 
-export default function CatalogDetail({ item, locale, shopId, channels, onClose, onAdd, onNotify, onTrack }: {
+export default function CatalogDetail({ item, locale, prices, shopId, channels, onClose, onAdd, onNotify, onTrack }: {
   item: CatalogItem;
   locale: Locale;
+  prices: PriceTools;
   shopId: string;
   channels: CatalogChannels;
   onClose: () => void;
@@ -32,7 +34,15 @@ export default function CatalogDetail({ item, locale, shopId, channels, onClose,
   const needsVariant = item.variants.length > 0 && !variant;
   const channelList = availableChannels(channels);
   const copiesMessage = channelList.some((channel) => channel !== "whatsapp");
-  const message = buildOrderMessage([{ name: item.name, variant, quantity, unitPrice: item.salePrice }], catalogLink(shopId, locale, item.id), intl, t);
+  // The message quotes what the customer sees, so the price goes through the
+  // same conversion as the card rather than the stored base amount.
+  const message = buildOrderMessage(
+    [{ name: item.name, variant, quantity, unitPrice: item.salePrice === undefined ? undefined : prices.toCurrency(item.salePrice) }],
+    catalogLink(shopId, locale, item.id),
+    intl,
+    t,
+    prices.currency
+  );
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -129,10 +139,10 @@ export default function CatalogDetail({ item, locale, shopId, channels, onClose,
           <h2 className="cat-modal-title">{item.name}</h2>
           {item.salePrice !== undefined && (
             <p className="cat-modal-price">
-              {formatCatalogPrice(item.salePrice, intl)}
+              {prices.money(item.salePrice)}
               {discount > 0 && item.compareAtPrice !== undefined && (
                 <>
-                  <s className="cat-modal-old">{formatCatalogPrice(item.compareAtPrice, intl)}</s>
+                  <s className="cat-modal-old">{prices.money(item.compareAtPrice)}</s>
                   <span className="cat-badge" data-kind="sale">-{discount}%</span>
                 </>
               )}

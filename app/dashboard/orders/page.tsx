@@ -6,6 +6,7 @@ import { useOrders } from "@/lib/hooks";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { updateOrderStatus } from "@/lib/actions";
 import { formatCatalogPrice } from "@/lib/catalog-channels";
+import { BASE_CURRENCY } from "@/lib/currency";
 import { OrderStatus } from "@/lib/types";
 import { CheckCircle2, ClipboardList, PackageCheck, ShoppingBag, XCircle } from "lucide-react";
 
@@ -113,7 +114,10 @@ export default function OrdersPage() {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>
                   <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-1)" }}>
-                    {formatCatalogPrice(order.total, intl)}
+                    {/* The total was stored already converted, in the currency the
+                        customer was quoted in, so it is formatted but never
+                        converted again here. */}
+                    {formatCatalogPrice(order.total, intl, order.currency ?? BASE_CURRENCY)}
                   </span>
                   <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
                     {next && (

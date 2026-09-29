@@ -4,13 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
-import { useProducts, useShop } from "@/lib/hooks";
+import { useProducts, useShop, useShopMoney } from "@/lib/hooks";
 import { updateCatalogSettings } from "@/lib/actions";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { CATALOG_CHANNELS, CatalogChannels, hasAnyChannel, isValidChannel } from "@/lib/catalog-channels";
 import { usePagination } from "@/lib/use-pagination";
 import ListPagination from "@/components/ListPagination";
 import CatalogBrandingFields from "@/components/CatalogBrandingFields";
+import CurrencySettingsCard from "@/components/CurrencySettingsCard";
 import { Plus, Search, AlertTriangle, Package, TrendingDown, Layers, ArrowRight, DollarSign, Store, Copy, Check, ExternalLink } from "lucide-react";
 
 function CatalogSettingsCard({ shopId }: { shopId: string }) {
@@ -122,6 +123,7 @@ export default function DashboardPage() {
   const { profile } = useAuth();
   const { locale, t } = useI18n();
   const { products, loading } = useProducts(profile?.shopId);
+  const { money } = useShopMoney(profile?.shopId, INTL_LOCALES[locale]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
 
@@ -157,7 +159,7 @@ export default function DashboardPage() {
     { icon: Package, label: t("dashboard.totalProducts"), value: products.length, color: "#6366f1", bg: "rgba(99,102,241,0.1)" },
     { icon: Layers, label: t("dashboard.totalItems"), value: totalItems, color: "#22d3ee", bg: "rgba(34,211,238,0.08)" },
     { icon: TrendingDown, label: t("dashboard.lowStock"), value: lowStock.length, color: lowStock.length > 0 ? "var(--amber)" : "var(--green)", bg: lowStock.length > 0 ? "var(--amber-dim)" : "var(--green-dim)" },
-    ...(hasValue ? [{ icon: DollarSign, label: t("dashboard.inventoryValue"), value: inventoryValue.toLocaleString(INTL_LOCALES[locale], { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + " €", color: "#a855f7", bg: "rgba(168,85,247,0.1)" }] : []),
+    ...(hasValue ? [{ icon: DollarSign, label: t("dashboard.inventoryValue"), value: money(inventoryValue, { maximumFractionDigits: 0 }), color: "#a855f7", bg: "rgba(168,85,247,0.1)" }] : []),
   ];
 
   return (
@@ -194,8 +196,13 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Catalog settings (owner only) */}
-      {profile?.role === "owner" && profile.shopId && <CatalogSettingsCard shopId={profile.shopId} />}
+      {/* Shop settings (owner only) */}
+      {profile?.role === "owner" && profile.shopId && (
+        <>
+          <CurrencySettingsCard shopId={profile.shopId} />
+          <CatalogSettingsCard shopId={profile.shopId} />
+        </>
+      )}
 
       {/* Low stock alert */}
       {lowStock.length > 0 && (

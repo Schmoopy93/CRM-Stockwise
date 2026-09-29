@@ -452,7 +452,7 @@ select.input { cursor: pointer; }
 .products-list-head,
 .products-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 130px) minmax(0, 110px) minmax(64px, 80px) 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 130px) minmax(0, 110px) minmax(84px, 104px) minmax(64px, 80px) 20px;
   gap: 0.75rem;
   align-items: center;
   padding: 0.75rem 1.25rem;
@@ -528,7 +528,9 @@ select.input { cursor: pointer; }
 .products-qty { font-weight: 700; font-size: 0.95rem; color: var(--text-1); font-variant-numeric: tabular-nums; }
 .products-cell-qty[data-low] .products-qty { color: var(--amber); }
 .products-arrow { color: var(--text-3); flex: 0 0 auto; }
-.products-cell-cat, .products-cell-sku { min-width: 0; }
+.products-cell-cat, .products-cell-sku, .products-cell-price { min-width: 0; }
+.products-cell-price { text-align: right; }
+.products-price { font-weight: 700; font-size: 0.82rem; color: var(--text-1); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .products-empty {
   display: flex;
@@ -564,7 +566,7 @@ select.input { cursor: pointer; }
   .products-list-head { display: none; }
   .products-row {
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "main qty" "cat sku" "arrow arrow";
+    grid-template-areas: "main qty" "cat price" "sku arrow";
     gap: 0.5rem 0.75rem;
     padding: 0.85rem 0.95rem;
     border: 1px solid var(--border);
@@ -576,6 +578,7 @@ select.input { cursor: pointer; }
   .products-cell-qty { grid-area: qty; align-self: start; }
   .products-cell-cat { grid-area: cat; }
   .products-cell-sku { grid-area: sku; text-align: right; }
+  .products-cell-price { grid-area: price; }
   .products-arrow { grid-area: arrow; display: none; }
   .products-name { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .products-qty { font-size: 1.15rem; font-weight: 800; }

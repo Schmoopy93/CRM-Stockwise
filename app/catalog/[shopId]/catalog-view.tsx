@@ -5,9 +5,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { useCatalog } from "@/lib/hooks";
+import { useCatalog, useShopMoney } from "@/lib/hooks";
 import { INTL_LOCALES, useI18n } from "@/lib/i18n-context";
-import { channelsFromShop, EMPTY_CHANNELS, formatCatalogPrice } from "@/lib/catalog-channels";
+import { channelsFromShop, EMPTY_CHANNELS } from "@/lib/catalog-channels";
+import { BASE_CURRENCY, isSupportedCurrency } from "@/lib/currency";
 import { trackCatalogEvent } from "@/lib/actions";
 import { CatalogItem, CatalogStatEvent, ShopCatalogSettings } from "@/lib/types";
 import { ArrowUpDown, Package, Search, ShoppingBag, Sparkles, X } from "lucide-react";
@@ -31,6 +32,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
   const [shop, setShop] = useState<ShopCatalogSettings | null>(null);
   const [shopLoading, setShopLoading] = useState(true);
   const { items, loading } = useCatalog(shopId);
+  const prices = useShopMoney(shopId, intl);
   const cart = useCart(shopId);
   const productId = useProductParam();
   const [search, setSearch] = useState("");
@@ -44,13 +46,21 @@ export default function CatalogView({ shopId }: { shopId: string }) {
     let cancelled = false;
     getDoc(doc(db, "shops", shopId))
       .then((snap) => {
-        if (!cancelled) setShop(snap.exists() ? {
-          name: snap.data().name ?? "",
-          catalogEnabled: snap.data().catalogEnabled === true,
-          channels: channelsFromShop(snap.data()),
-          logoUrl: snap.data().catalogLogoUrl ?? "",
-          coverUrl: snap.data().catalogCoverUrl ?? "",
-        } : null);
+        if (cancelled) return;
+        const data = snap.data();
+        if (!data) {
+          setShop(null);
+          return;
+        }
+        const currency = data.currency;
+        setShop({
+          name: data.name ?? "",
+          catalogEnabled: data.catalogEnabled === true,
+          channels: channelsFromShop(data),
+          logoUrl: data.catalogLogoUrl ?? "",
+          coverUrl: data.catalogCoverUrl ?? "",
+          currency: isSupportedCurrency(currency) ? currency : BASE_CURRENCY,
+        });
       })
       .catch(() => { if (!cancelled) setShop(null); })
       .finally(() => { if (!cancelled) setShopLoading(false); });
@@ -220,7 +230,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
             ) : (
               <div className="cat-grid">
                 {filtered.map((item, index) => (
-                  <CatalogCard key={item.id} item={item} locale={locale} index={index}
+                  <CatalogCard key={item.id} item={item} locale={locale} prices={prices} index={index}
                     onOpen={() => setProductParam(item.id)} onQuickAdd={() => quickAdd(item)} />
                 ))}
               </div>
@@ -244,7 +254,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
             <span className="cat-cart-bar-badge">{cartCount}</span>
           </span>
           <span className="cat-cart-bar-label">{t("catalog.cart")}</span>
-          {cartPriced && <span className="cat-cart-bar-total">{formatCatalogPrice(cartTotal, intl)}</span>}
+          {cartPriced && <span className="cat-cart-bar-total">{prices.money(cartTotal)}</span>}
         </button>
       )}
 
@@ -253,6 +263,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           key={selected.id}
           item={selected}
           locale={locale}
+          prices={prices}
           shopId={shopId}
           channels={channels}
           onClose={closeDetail}
@@ -266,6 +277,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         <CatalogCart
           lines={cartLines}
           locale={locale}
+          prices={prices}
           shopId={shopId}
           channels={channels}
           onQuantity={cart.setQuantity}

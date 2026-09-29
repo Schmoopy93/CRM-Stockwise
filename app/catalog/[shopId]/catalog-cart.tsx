@@ -5,7 +5,8 @@ import Image from "next/image";
 import { createPortal } from "react-dom";
 import { Check, Loader2, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
 import { INTL_LOCALES, Locale, useI18n } from "@/lib/i18n-context";
-import { buildOrderMessage, CatalogChannels, formatCatalogPrice } from "@/lib/catalog-channels";
+import { buildOrderMessage, CatalogChannels } from "@/lib/catalog-channels";
+import type { PriceTools } from "@/lib/currency";
 import { CatalogItem, CatalogStatEvent } from "@/lib/types";
 import { placeCatalogOrder } from "@/lib/actions";
 import { catalogLink, MAX_QUANTITY } from "./catalog-store";
@@ -18,9 +19,10 @@ export interface ResolvedCartLine {
   quantity: number;
 }
 
-export default function CatalogCart({ lines, locale, shopId, channels, onQuantity, onClear, onClose, onNotify, onTrack }: {
+export default function CatalogCart({ lines, locale, prices, shopId, channels, onQuantity, onClear, onClose, onNotify, onTrack }: {
   lines: ResolvedCartLine[];
   locale: Locale;
+  prices: PriceTools;
   shopId: string;
   channels: CatalogChannels;
   onQuantity: (itemId: string, variant: string, quantity: number) => void;
@@ -39,26 +41,33 @@ export default function CatalogCart({ lines, locale, shopId, channels, onQuantit
   const channelList = availableChannels(channels);
   const priced = lines.every((line) => line.item.salePrice !== undefined);
   const total = lines.reduce((sum, line) => sum + (line.item.salePrice ?? 0) * line.quantity, 0);
-  const orderLines = lines.map((line) => ({ name: line.item.name, variant: line.variant, quantity: line.quantity, unitPrice: line.item.salePrice }));
-  const baseMessage = buildOrderMessage(orderLines, catalogLink(shopId, locale), intl, t);
+  const orderLines = lines.map((line) => ({
+    name: line.item.name,
+    variant: line.variant,
+    quantity: line.quantity,
+    unitPrice: line.item.salePrice === undefined ? undefined : prices.toCurrency(line.item.salePrice),
+  }));
+  const baseMessage = buildOrderMessage(orderLines, catalogLink(shopId, locale), intl, t, prices.currency);
   const message = placedCode ? `${baseMessage}\n${t("catalog.orderCodeLabel")}: ${placedCode}` : baseMessage;
 
   async function place() {
     setPlacing(true); setPlaceError(false);
     try {
+      // Sent in the currency the customer was quoted, and tagged with it, so the
+      // shop reads back the same figure the customer agreed to.
       const code = await placeCatalogOrder(shopId, {
         lines: lines.map((line) => ({
           productId: line.item.id,
           productName: line.item.name,
           variantLabel: line.variant,
           quantity: line.quantity,
-          unitPrice: line.item.salePrice,
+          unitPrice: line.item.salePrice === undefined ? undefined : prices.toCurrency(line.item.salePrice),
         })),
         customerName: name,
         customerContact: contact,
         note: "",
         channel: channelList[0] ?? "other",
-      });
+      }, prices.currency);
       setPlacedCode(code);
       onNotify(t("catalog.orderSaved", { code }));
     } catch {
@@ -116,7 +125,7 @@ export default function CatalogCart({ lines, locale, shopId, channels, onQuantit
                           <span>{quantity}</span>
                           <button type="button" onClick={() => onQuantity(item.id, variant, quantity + 1)} disabled={quantity >= MAX_QUANTITY} aria-label={t("catalog.increase")}><Plus size={13} /></button>
                         </div>
-                        {item.salePrice !== undefined && <span className="cat-line-price">{formatCatalogPrice(item.salePrice * quantity, intl)}</span>}
+                        {item.salePrice !== undefined && <span className="cat-line-price">{prices.money(item.salePrice * quantity)}</span>}
                       </div>
                     </div>
                     <button type="button" className="cat-line-remove" onClick={() => onQuantity(item.id, variant, 0)} aria-label={`${t("catalog.remove")} — ${item.name}`}>
@@ -131,7 +140,7 @@ export default function CatalogCart({ lines, locale, shopId, channels, onQuantit
               {priced && (
                 <p className="cat-drawer-total">
                   <span>{t("catalog.total")}</span>
-                  <strong>{formatCatalogPrice(total, intl)}</strong>
+                  <strong>{prices.money(total)}</strong>
                 </p>
               )}
 

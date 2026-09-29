@@ -2,12 +2,13 @@
 
 import { useState, lazy, Suspense } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useProducts, useSales } from "@/lib/hooks";
+import { useProducts, useSales, useShopMoney } from "@/lib/hooks";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { findProductByCode, PartialReceiptError, recordSale } from "@/lib/actions";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { Product, ProductVariant, SaleChannel } from "@/lib/types";
+import { BASE_CURRENCY } from "@/lib/currency";
 import { Plus, Minus, ShoppingBag, CheckCircle, Barcode, Search, Trash2, AtSign, History } from "lucide-react";
 
 const BarcodeScanner = lazy(() =>
@@ -24,6 +25,9 @@ export default function SalesPage() {
   const intlLocale = INTL_LOCALES[locale];
   const { products } = useProducts(profile?.shopId);
   const { sales } = useSales(profile?.shopId);
+  // Sales are recorded in the base currency — what was actually charged — and
+  // only the display converts, so a rate change never rewrites past revenue.
+  const { money, currency } = useShopMoney(profile?.shopId, intlLocale);
   const [lines, setLines] = useState<SaleEntry[]>([]);
   const [search, setSearch] = useState("");
   const [showScanner, setShowScanner] = useState(false);
@@ -215,8 +219,8 @@ export default function SalesPage() {
                     type="number"
                     min="0"
                     step="0.01"
-                    aria-label={t("sales.unitPrice")}
-                    placeholder={t("sales.unitPrice")}
+                    aria-label={`${t("sales.unitPrice")} (${BASE_CURRENCY})`}
+                    placeholder={`${t("sales.unitPrice")} (${BASE_CURRENCY})`}
                     value={line.unitPrice}
                     onChange={(event) => setLines((current) => current.map((item, i) => i === idx ? { ...item, unitPrice: event.target.value } : item))}
                     style={{ width: 100, padding: "0.4rem 0.6rem", fontSize: "0.78rem" }}
@@ -255,9 +259,11 @@ export default function SalesPage() {
             <div>
               <p style={{ margin: 0, fontWeight: 600, color: "var(--text-1)" }}>
                 {t("sales.summary", { n: lines.length, qty: lines.reduce((s, l) => s + l.quantity, 0) })}
-                {total > 0 && <span style={{ color: "var(--accent-2)" }}> · €{total.toLocaleString(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                {total > 0 && <span style={{ color: "var(--accent-2)" }}> · {money(total, { minimumFractionDigits: 2 })}</span>}
               </p>
-              <p style={{ margin: "2px 0 0", fontSize: "0.78rem", color: "var(--text-2)" }}>{t("sales.summaryNote")}</p>
+              <p style={{ margin: "2px 0 0", fontSize: "0.78rem", color: "var(--text-2)" }}>
+                {currency === BASE_CURRENCY ? t("sales.summaryNote") : t("sales.unitPriceBaseNote", { base: BASE_CURRENCY, currency })}
+              </p>
             </div>
             <button className="btn-primary" onClick={handleConfirm} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <CheckCircle size={15} />{saving ? t("sales.confirming") : t("sales.confirm")}
@@ -286,7 +292,7 @@ export default function SalesPage() {
                     {sale.createdAt && <span>· {sale.createdAt.toLocaleString(intlLocale)}</span>}
                   </p>
                 </div>
-                <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--green)" }}>€{sale.total.toLocaleString(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--green)" }}>{money(sale.total, { minimumFractionDigits: 2 })}</span>
               </div>
             ))}
           </div>

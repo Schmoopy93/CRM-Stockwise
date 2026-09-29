@@ -257,7 +257,7 @@ service cloud.firestore {
         allow read: if isMember(shopId);
         allow create: if get(shopPath(shopId)).data.catalogEnabled == true
           && request.resource.data.keys().hasOnly([
-            'code', 'lines', 'total', 'customerName', 'customerContact', 'note', 'channel', 'status', 'createdAt'
+            'code', 'lines', 'total', 'currency', 'customerName', 'customerContact', 'note', 'channel', 'status', 'createdAt'
           ])
           && request.resource.data.code is string
           && request.resource.data.code.matches('^[A-Z0-9]{4,12}$')
@@ -278,6 +278,8 @@ service cloud.firestore {
           && request.resource.data.total is number
           && request.resource.data.total >= 0
           && request.resource.data.total <= 100000000
+          && request.resource.data.currency is string
+          && request.resource.data.currency.matches('^[A-Z]{3}$')
           && request.resource.data.customerName is string
           && request.resource.data.customerName.size() <= 100
           && request.resource.data.customerContact is string
@@ -288,10 +290,9 @@ service cloud.firestore {
           && request.resource.data.status == 'new'
           && request.resource.data.createdAt == request.time;
         // Members move an order through its lifecycle and attach the customer
-        // contact, but they may not rewrite what was ordered or when.
-        // `currency` is still tolerated here only so orders written before the
-        // field was dropped can still have their status changed; it is never
-        // written, and the diff check below stops it from being changed.
+        // contact, but they may not rewrite what was ordered, in what currency,
+        // or when. `total` and `currency` stay fixed from the moment the customer
+        // placed it, so the quote the shop approved is still the quote on file.
         allow update: if isMember(shopId)
           && request.resource.data.keys().hasOnly([
             'code', 'lines', 'total', 'currency', 'customerName', 'customerContact', 'note', 'channel', 'status', 'createdAt'

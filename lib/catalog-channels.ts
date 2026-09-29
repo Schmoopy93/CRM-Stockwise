@@ -1,3 +1,5 @@
+import { BASE_CURRENCY, formatMoney } from "@/lib/currency";
+
 export type CatalogChannel = "whatsapp" | "telegram" | "instagram";
 
 export type CatalogChannels = Record<CatalogChannel, string>;
@@ -52,20 +54,11 @@ export function channelUrl(channel: CatalogChannel, value: string, message = "")
   return channel === "telegram" ? `https://t.me/${id}` : `https://ig.me/m/${id}`;
 }
 
-/** Prices are plain amounts. The shop keeps its books in one currency, so the
- * symbol is fixed here rather than chosen per shop — a shop that trades in
- * another currency simply reads the number the way it always has. */
-export function formatCatalogPrice(value: number, intlLocale: string) {
-  try {
-    return new Intl.NumberFormat(intlLocale, {
-      style: "currency",
-      currency: "EUR",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(value);
-  } catch {
-    return `${value.toLocaleString(intlLocale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
-  }
+/** Prices are plain amounts in the base currency; the shop's chosen currency is
+ * applied before this is called. The default keeps existing call sites correct
+ * while a shop still trades in euros. */
+export function formatCatalogPrice(value: number, intlLocale: string, currency: string = BASE_CURRENCY) {
+  return formatMoney(value, intlLocale, currency);
 }
 
 export interface OrderLine {
@@ -79,11 +72,12 @@ export function buildOrderMessage(
   lines: OrderLine[],
   link: string,
   intlLocale: string,
-  t: (key: string, vars?: Record<string, string | number>) => string
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  currency: string = BASE_CURRENCY
 ) {
   const rows = lines.map((line) => {
     const label = line.variant ? `${line.name} — ${line.variant}` : line.name;
-    const price = line.unitPrice !== undefined ? ` = ${formatCatalogPrice(line.unitPrice * line.quantity, intlLocale)}` : "";
+    const price = line.unitPrice !== undefined ? ` = ${formatCatalogPrice(line.unitPrice * line.quantity, intlLocale, currency)}` : "";
     return `• ${label} × ${line.quantity}${price}`;
   });
   const priced = lines.every((line) => line.unitPrice !== undefined);
@@ -91,7 +85,7 @@ export function buildOrderMessage(
   return [
     t("catalog.orderGreeting"),
     ...rows,
-    ...(priced && lines.length > 1 ? [t("catalog.orderTotal", { total: formatCatalogPrice(total, intlLocale) })] : []),
+    ...(priced && lines.length > 1 ? [t("catalog.orderTotal", { total: formatCatalogPrice(total, intlLocale, currency) })] : []),
     link,
   ].join("\n");
 }

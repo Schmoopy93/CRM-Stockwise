@@ -217,7 +217,9 @@ test("anonymous visitors can only bump one catalog counter by one while the cata
 test("customers can place catalog orders but members own the lifecycle", async () => {
   const visitorDb = firestoreFor();
   const staffDb = firestoreFor("staff-a");
-  const order = { code: "K7M2QP", total: 25, customerName: "Ana", customerContact: "@ana", note: "", channel: "instagram", createdAt: serverTimestamp() };
+  // `currency` is part of the order shape: an order keeps the currency it was
+  // quoted in, so it is in the fixture rather than added per assertion.
+  const order = { code: "K7M2QP", total: 25, currency: "EUR", customerName: "Ana", customerContact: "@ana", note: "", channel: "instagram", createdAt: serverTimestamp() };
   const line = { productId: "p", productName: "X", variantLabel: "", quantity: 1 };
 
   await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o1"), { ...order, lines: [], status: "new" }));
@@ -229,9 +231,18 @@ test("customers can place catalog orders but members own the lifecycle", async (
     await updateDoc(doc(context.firestore(), "shops", shopId), { catalogEnabled: true });
   });
   await assertSucceeds(setDoc(doc(visitorDb, "shops", shopId, "orders", "o5"), { ...order, lines: [line], status: "new" }));
-  // The field was dropped from the order shape, so a visitor may not smuggle it
-  // back in — the rule pins the key set exactly.
-  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o6"), { ...order, lines: [line], status: "new", currency: "RSD" }));
+
+  // The currency must be a real three-letter code. The rule pins the *shape*,
+  // which is all it can check — whether a code is one the shop can pick lives in
+  // the picker, not here. It is required so every order says what it was quoted in.
+  await assertSucceeds(setDoc(doc(visitorDb, "shops", shopId, "orders", "o6"), { ...order, currency: "RSD", lines: [line], status: "new" }));
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o7"), { ...order, currency: "rsd", lines: [line], status: "new" }));
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o8"), { ...order, currency: "RS", lines: [line], status: "new" }));
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o9"), { ...order, currency: 117, lines: [line], status: "new" }));
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o11"), { ...order, currency: "DINARS", lines: [line], status: "new" }));
+  const withoutCurrency: Record<string, unknown> = { ...order };
+  delete withoutCurrency.currency;
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o10"), { ...withoutCurrency, lines: [line], status: "new" }));
 
   await assertFails(getDoc(doc(visitorDb, "shops", shopId, "orders", "o5")));
   await assertSucceeds(getDoc(doc(staffDb, "shops", shopId, "orders", "o5")));
@@ -240,6 +251,8 @@ test("customers can place catalog orders but members own the lifecycle", async (
   await assertSucceeds(updateDoc(doc(staffDb, "shops", shopId, "orders", "o5"), { status: "confirmed" }));
   await assertFails(updateDoc(doc(staffDb, "shops", shopId, "orders", "o5"), { status: "shipped" }));
   await assertFails(updateDoc(doc(staffDb, "shops", shopId, "orders", "o5"), { total: 0 }));
+  // Restating what the customer agreed to, or in what currency, is not allowed.
+  await assertFails(updateDoc(doc(staffDb, "shops", shopId, "orders", "o5"), { currency: "RSD" }));
   await assertFails(deleteDoc(doc(staffDb, "shops", shopId, "orders", "o5")));
 });
 
@@ -264,6 +277,9 @@ test("only shop owners can change shop configuration", async () => {
   const staffDb = firestoreFor("staff-a");
   await assertSucceeds(updateDoc(doc(ownerDb, "shops", shopId), { name: "Renamed shop" }));
   await assertFails(updateDoc(doc(staffDb, "shops", shopId), { name: "Unauthorized rename" }));
+  // The display currency is shop configuration, so it follows the same gate.
+  await assertSucceeds(updateDoc(doc(ownerDb, "shops", shopId), { currency: "RSD" }));
+  await assertFails(updateDoc(doc(staffDb, "shops", shopId), { currency: "USD" }));
 });
 
 test("products with positive stock cannot be deleted", async () => {
