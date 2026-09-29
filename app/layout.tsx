@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { I18nProvider } from "@/lib/i18n-context";
 import { ThemeProvider } from "@/lib/theme-context";
+import { BASE_URL, localeFromHeaders } from "@/lib/seo";
 
 const inter = Inter({
   subsets: ["latin", "cyrillic"],
@@ -11,16 +12,14 @@ const inter = Inter({
   preload: true,
 });
 
-const BASE_URL = "https://inventory-crm.vercel.app";
-
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
   title: {
-    default: "Inventory CRM — Upravljanje zalihama u realnom vremenu",
-    template: "%s — Inventory CRM",
+    default: "Stockwise — Upravljanje zalihama u realnom vremenu",
+    template: "%s — Stockwise",
   },
   description: "Pratite stanje artikala, primajte robu, analizirajte kretanje zaliha i izvozite izveštaje za vašu radnju.",
-  applicationName: "Inventory CRM",
+  applicationName: "Stockwise",
   referrer: "origin-when-cross-origin",
   robots: {
     index: true,
@@ -45,9 +44,13 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // middleware.ts resolves the language from ?lang= or Accept-Language, so the
+  // document language is correct on the server — not just after hydration.
+  const locale = await localeFromHeaders();
+
   return (
-    <html lang="sr" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider>
           <I18nProvider>

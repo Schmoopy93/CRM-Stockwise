@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useSyncExternalStore, useRef, useState } from "react";
 import Image from "next/image";
 import { useI18n, Locale } from "@/lib/i18n-context";
 import { ChevronDown } from "lucide-react";
@@ -30,17 +30,17 @@ function Flag({ country, label }: { country: string; label: string }) {
 export function LanguageSwitcher({ variant }: { variant?: "buttons" | "dropdown" }) {
   const { locale, setLocale } = useI18n();
   const [open, setOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (variant) return;
-    const mq = window.matchMedia("(max-width: 480px)");
-    setIsMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, [variant]);
+  const isMobile = useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia("(max-width: 480px)");
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia("(max-width: 480px)").matches,
+    () => false,
+  );
 
   useEffect(() => {
     if (!open) return;

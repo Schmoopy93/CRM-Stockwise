@@ -1,6 +1,6 @@
 {
-  "name": "Inventory CRM",
-  "short_name": "Inventory CRM",
+  "name": "Stockwise",
+  "short_name": "Stockwise",
   "description": "Upravljanje zalihama u realnom vremenu",
   "start_url": "/",
   "display": "standalone",

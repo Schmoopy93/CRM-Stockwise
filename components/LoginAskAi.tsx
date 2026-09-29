@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useI18n } from "@/lib/i18n-context";
 import { MessageCircleQuestion, Send, Sparkles, X } from "lucide-react";
 
@@ -14,6 +14,22 @@ export default function LoginAskAi() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  /** Grows the textarea with its content up to the CSS max-height, then scrolls. */
+  function autoGrow(e: ChangeEvent<HTMLTextAreaElement>) {
+    const el = e.target;
+    setInput(el.value);
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input]);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
@@ -107,19 +123,28 @@ export default function LoginAskAi() {
           {/* Input */}
           <form
             onSubmit={(e) => { e.preventDefault(); send(); }}
-            style={{ display: "flex", gap: 7, padding: "0.75rem", borderTop: "1px solid var(--border)", background: "var(--bg-2)", flexShrink: 0 }}
+            style={{ display: "flex", gap: 7, alignItems: "flex-end", padding: "0.75rem", borderTop: "1px solid var(--border)", background: "var(--bg-2)", flexShrink: 0 }}
           >
-            <input
-              className="input"
-              type="text"
-              value={input}
-              maxLength={400}
-              placeholder={t("login.ask.placeholder")}
-              onChange={(e) => setInput(e.target.value)}
-              aria-label={t("login.ask.placeholder")}
-              autoFocus
-              style={{ flex: 1, fontSize: "0.82rem" }}
-            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {input.length === 0 && (
+                <p style={{ margin: "0 0 6px", fontSize: "0.68rem", lineHeight: 1.35, color: "var(--text-3)" }}>{t("login.ask.hint")}</p>
+              )}
+              <textarea
+                ref={inputRef}
+                className="input"
+                rows={1}
+                value={input}
+                maxLength={400}
+                placeholder={t("login.ask.placeholder")}
+                onChange={autoGrow}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+                }}
+                aria-label={t("login.ask.placeholder")}
+                autoFocus
+                style={{ flex: 1, fontSize: "0.82rem", resize: "none", overflowY: "hidden", minHeight: 40, maxHeight: 120 }}
+              />
+            </div>
             <button
               type="submit"
               disabled={loading || !input.trim()}

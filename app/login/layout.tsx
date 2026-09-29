@@ -1,82 +1,50 @@
 import type { Metadata } from "next";
+import { BASE_URL, LOCALES, buildMetadata, localeFromHeaders, seoCopy, seoTitle } from "@/lib/seo";
+import type { Locale } from "@/lib/i18n-context";
 
-const BASE_URL = "https://inventory-crm.vercel.app";
-
-export const metadata: Metadata = {
-  title: "Inventory CRM — Upravljanje zalihama u realnom vremenu",
-  description: "Pratite stanje artikala, primajte robu, analizirajte kretanje zaliha i izvozite izveštaje. Jednostavno upravljanje radnjom za vas i vaš tim.",
-  keywords: ["inventory management", "upravljanje zalihama", "zalihe", "CRM", "radnja", "stanje robe", "prijem robe", "analitika zaliha", "uvoz artikala"],
-  authors: [{ name: "Inventory CRM", url: BASE_URL }],
-  creator: "Inventory CRM",
-  publisher: "Inventory CRM",
-  category: "Business Software",
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: { index: true, follow: true, "max-snippet": -1, "max-image-preview": "large", "max-video-preview": -1 },
-  },
-  alternates: {
-    canonical: BASE_URL,
-    languages: {
-      "sr-RS": BASE_URL,
-      "en-US": `${BASE_URL}?lang=en`,
-      "ru-RU": `${BASE_URL}?lang=ru`,
-      "de-DE": `${BASE_URL}?lang=de`,
-      "es-ES": `${BASE_URL}?lang=es`,
-      "it-IT": `${BASE_URL}?lang=it`,
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await localeFromHeaders();
+  return {
+    // The root layout already appends "— Stockwise" via the title template.
+    ...buildMetadata({ locale, path: "/login", title: seoTitle(locale), description: seoCopy(locale).description }),
+    authors: [{ name: "Stockwise", url: BASE_URL }],
+    creator: "Stockwise",
+    publisher: "Stockwise",
+    category: "Business Software",
+    verification: {
+      // google: "your-google-site-verification-token",
     },
-  },
-  openGraph: {
-    type: "website",
+  };
+}
+
+const FEATURES: Record<Locale, string[]> = {
+  sr: ["Upravljanje artiklima sa varijantama", "Prijem robe i skeniranje barkoda", "Analitika i grafikon aktivnosti", "Audit dnevnik promena stanja", "Uvoz iz CSV, XLS i XLSX", "Izvoz u Excel i PDF", "Javni katalog za Instagram", "Timski rad sa ulogama"],
+  en: ["Product management with variants", "Stock receiving and barcode scanning", "Analytics and activity charts", "Audit log of stock changes", "Import from CSV, XLS and XLSX", "Export to Excel and PDF", "Public catalog for Instagram", "Team work with roles"],
+  ru: ["Управление товарами с вариантами", "Приёмка товара и сканирование штрихкодов", "Аналитика и графики активности", "Журнал аудита изменений остатков", "Импорт из CSV, XLS и XLSX", "Экспорт в Excel и PDF", "Публичный каталог для Instagram", "Командная работа с ролями"],
+  de: ["Produktverwaltung mit Varianten", "Wareneingang und Barcode-Scannen", "Analysen und Aktivitätsdiagramme", "Audit-Protokoll der Bestandsänderungen", "Import aus CSV, XLS und XLSX", "Export nach Excel und PDF", "Öffentlicher Katalog für Instagram", "Teamarbeit mit Rollen"],
+  es: ["Gestión de productos con variantes", "Recepción de mercancía y escaneo de códigos de barras", "Analítica y gráficos de actividad", "Registro de auditoría de cambios de stock", "Importación desde CSV, XLS y XLSX", "Exportación a Excel y PDF", "Catálogo público para Instagram", "Trabajo en equipo con roles"],
+  it: ["Gestione prodotti con varianti", "Ricevimento merci e scansione dei codici a barre", "Analisi e grafici di attività", "Registro di audit delle variazioni di magazzino", "Importazione da CSV, XLS e XLSX", "Esportazione in Excel e PDF", "Catalogo pubblico per Instagram", "Lavoro di squadra con ruoli"],
+};
+
+export default async function LoginLayout({ children }: { children: React.ReactNode }) {
+  const locale = await localeFromHeaders();
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "Stockwise",
     url: BASE_URL,
-    title: "Inventory CRM — Upravljanje zalihama u realnom vremenu",
-    description: "Pratite stanje artikala, primajte robu, analizirajte kretanje zaliha i izvozite izveštaje za vašu radnju.",
-    siteName: "Inventory CRM",
-    locale: "sr_RS",
-    alternateLocale: ["en_US", "ru_RU", "de_DE", "es_ES", "it_IT"],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Inventory CRM — Upravljanje zalihama u realnom vremenu",
-    description: "Pratite stanje artikala, primajte robu, analizirajte kretanje zaliha i izvozite izveštaje za vašu radnju.",
-  },
-  verification: {
-    // google: "your-google-site-verification-token",
-  },
-};
+    description: seoCopy(locale).description,
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "Web",
+    inLanguage: LOCALES,
+    offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
+    featureList: FEATURES[locale],
+  };
 
-const jsonLd = {
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  name: "Inventory CRM",
-  url: BASE_URL,
-  description: "Pratite stanje artikala, primajte robu, analizirajte kretanje zaliha i izvozite izveštaje za vašu radnju.",
-  applicationCategory: "BusinessApplication",
-  operatingSystem: "Web",
-  offers: {
-    "@type": "Offer",
-    price: "0",
-    priceCurrency: "EUR",
-  },
-  featureList: [
-    "Upravljanje artiklima sa varijantama",
-    "Prijem robe i skeniranje barkoda",
-    "Analitika i grafikon aktivnosti",
-    "Audit dnevnik promena stanja",
-    "Uvoz iz CSV, XLS i XLSX",
-    "Izvoz u Excel i PDF",
-    "Timski rad sa ulogama",
-  ],
-  inLanguage: ["sr", "en", "ru", "de", "es", "it"],
-};
-
-export default function LoginLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       {children}
     </>
   );
