@@ -9,22 +9,27 @@ import {
   collection,
   deleteField,
   doc,
+  FieldValue,
   getDoc,
   getDocs,
+  increment,
   limit,
   query,
   runTransaction,
   serverTimestamp,
   setDoc,
+  Timestamp,
+  updateDoc,
   where,
   writeBatch,
   WriteBatch,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { uploadProductImage } from "@/lib/cloudinary";
+import { uploadProductImage, uploadShopImage } from "@/lib/cloudinary";
 import { applyStockDelta } from "@/lib/stock-invariants";
 import { getLocalizedOptionValue } from "@/lib/product-field-options";
-import { AppLocale, Product, ProductCustomField, ProductVariant, SaleChannel, SaleLine } from "@/lib/types";
+import { CatalogChannels } from "@/lib/catalog-channels";
+import { AppLocale, CatalogStatEvent, Product, ProductCustomField, ProductVariant, SaleChannel, SaleLine } from "@/lib/types";
 
 const BATCH_LIMIT = 450;
 const CATALOG_LOCALES: AppLocale[] = ["sr", "en", "ru", "de", "es", "it"];
@@ -104,10 +109,12 @@ function buildCatalogDoc(
   imageUrl: string,
   images: string[],
   salePrice: number | undefined,
+  compareAtPrice: number | undefined,
   variantLabels: string[],
   definitions: ProductCustomField[],
   values: Record<string, string | number | boolean>,
-  hidden: boolean
+  hidden: boolean,
+  createdAt?: Timestamp | FieldValue
 ) {
   const fields = definitions
     .map((definition) => {
@@ -129,9 +136,11 @@ function buildCatalogDoc(
     imageUrl,
     images: images.length > 0 ? images : (imageUrl ? [imageUrl] : []),
     salePrice: salePrice !== undefined ? salePrice : deleteField(),
+    compareAtPrice: salePrice !== undefined && compareAtPrice !== undefined && compareAtPrice > salePrice ? compareAtPrice : deleteField(),
     variants: variantLabels,
     fields,
     hidden,
+    ...(createdAt ? { createdAt } : {}),
     updatedAt: serverTimestamp(),
   };
 }
@@ -143,19 +152,24 @@ async function isCatalogEnabled(shopId: string) {
 
 export interface CatalogSettings {
   enabled: boolean;
-  contact: string;
+  channels: CatalogChannels;
 }
 
 /** Enables/disables the public catalog. Enabling publishes every product
  * (customer-safe fields only); disabling deletes all catalog documents. */
 export async function updateCatalogSettings(shopId: string, settings: CatalogSettings) {
   const shopRef = doc(db, "shops", shopId);
-  const contact = settings.contact.trim().slice(0, 100);
+  const contactFields = {
+    catalogWhatsapp: settings.channels.whatsapp.trim().slice(0, 100),
+    catalogTelegram: settings.channels.telegram.trim().slice(0, 100),
+    catalogInstagram: settings.channels.instagram.trim().slice(0, 100),
+    catalogContact: deleteField(),
+  };
 
   if (!settings.enabled) {
     const catalogDocs = await getDocs(collection(db, "shops", shopId, "catalog"));
     await commitInChunks([
-      (batch) => batch.update(shopRef, { catalogEnabled: false, catalogContact: contact }),
+      (batch) => batch.update(shopRef, { catalogEnabled: false, ...contactFields }),
       ...catalogDocs.docs.map((catalogDoc): BatchOperation => (batch) => batch.delete(catalogDoc.ref)),
     ]);
     return;
@@ -175,15 +189,30 @@ export async function updateCatalogSettings(shopId: string, settings: CatalogSet
       data.imageUrl ?? "",
       Array.isArray(data.images) ? data.images : [],
       typeof data.salePrice === "number" ? data.salePrice : undefined,
+      typeof data.compareAtPrice === "number" ? data.compareAtPrice : undefined,
       variantLabels,
       data.customFieldDefinitions ?? [],
       data.customFieldValues ?? {},
-      data.catalogHidden === true
+      data.catalogHidden === true,
+      data.createdAt instanceof Timestamp ? data.createdAt : undefined
     );
     operations.push((batch) => batch.set(doc(db, "shops", shopId, "catalog", productDoc.id), catalogDoc, { merge: true }));
   }
-  operations.push((batch) => batch.update(shopRef, { catalogEnabled: true, catalogContact: contact }));
+  operations.push((batch) => batch.update(shopRef, { catalogEnabled: true, ...contactFields }));
   await commitInChunks(operations);
+}
+
+/** Uploads (or removes when `file` is null) the catalog logo or cover image. */
+export async function setCatalogImage(shopId: string, kind: "logo" | "cover", file: File | null) {
+  const field = kind === "logo" ? "catalogLogoUrl" : "catalogCoverUrl";
+  const url = file ? await uploadShopImage(file, shopId, kind) : null;
+  await updateDoc(doc(db, "shops", shopId), { [field]: url ?? deleteField() });
+}
+
+/** Best-effort, anonymous daily counter for the public catalog. */
+export function trackCatalogEvent(shopId: string, event: CatalogStatEvent) {
+  const day = new Date().toISOString().slice(0, 10);
+  setDoc(doc(db, "shops", shopId, "catalogStats", day), { [event]: increment(1) }, { merge: true }).catch(() => undefined);
 }
 
 // ─── Products ────────────────────────────────────────────────────────────────
@@ -209,7 +238,8 @@ export async function saveProduct(
   costPrice?: number,
   salePrice?: number,
   supplier?: { name: string; contact?: string; notes?: string },
-  catalogHidden = false
+  catalogHidden = false,
+  compareAtPrice?: number
 ): Promise<string> {
   if (variants.length === 0) throw new Error("VARIANT_REQUIRED");
   if (variants.length > 200) throw new Error("TOO_MANY_VARIANTS");
@@ -219,8 +249,11 @@ export async function saveProduct(
   if (new Set(variants.map((variant) => variant.id).filter(Boolean)).size !== variants.filter((variant) => variant.id).length) {
     throw new Error("DUPLICATE_VARIANT");
   }
-  if ([costPrice, salePrice].some((price) => price !== undefined && (!Number.isFinite(price) || price < 0))) {
+  if ([costPrice, salePrice, compareAtPrice].some((price) => price !== undefined && (!Number.isFinite(price) || price < 0))) {
     throw new Error("PRICE_INVALID");
+  }
+  if (compareAtPrice !== undefined && (salePrice === undefined || compareAtPrice <= salePrice)) {
+    throw new Error("COMPARE_PRICE_INVALID");
   }
 
   const products = collection(db, "shops", shopId, "products");
@@ -245,9 +278,11 @@ export async function saveProduct(
 
   const existingSnap = await getDocs(variantsCol);
   const existingVariants = new Map(existingSnap.docs.map((variantDoc) => [variantDoc.id, variantDoc]));
+  let isNewProduct = false;
 
   await runTransaction(db, async (tx) => {
     const productSnap = await tx.get(docRef);
+    isNewProduct = !productSnap.exists();
     if (productSnap.exists()) {
       const existingTotal = productSnap.data().totalQuantity ?? 0;
       if (existingTotal !== total) {
@@ -284,9 +319,11 @@ export async function saveProduct(
       catalogHidden,
       costPrice: costPrice !== undefined ? costPrice : deleteField(),
       salePrice: salePrice !== undefined ? salePrice : deleteField(),
+      compareAtPrice: compareAtPrice !== undefined ? compareAtPrice : deleteField(),
       supplier: supplier?.name?.trim()
         ? { name: supplier.name.trim(), contact: supplier.contact?.trim() ?? "", notes: supplier.notes?.trim() ?? "" }
         : deleteField(),
+      ...(productSnap.exists() ? {} : { createdAt: serverTimestamp() }),
       updatedAt: serverTimestamp(),
     }, { merge: true });
 
@@ -306,7 +343,7 @@ export async function saveProduct(
   if (await isCatalogEnabled(shopId)) {
     await setDoc(
       doc(db, "shops", shopId, "catalog", id),
-      buildCatalogDoc(name, category, imageUrl, imageUrls, salePrice, variants.map((variant) => variant.label.trim()).filter(Boolean), customFieldDefinitions, customFieldValues, catalogHidden),
+      buildCatalogDoc(name, category, imageUrl, imageUrls, salePrice, compareAtPrice, variants.map((variant) => variant.label.trim()).filter(Boolean), customFieldDefinitions, customFieldValues, catalogHidden, isNewProduct ? serverTimestamp() : undefined),
       { merge: true }
     );
   }

@@ -1,3 +1,5 @@
+import type { CatalogChannels } from "@/lib/catalog-channels";
+
 export interface UserProfile {
   uid: string;
   shopId: string;
@@ -22,6 +24,7 @@ export interface Product {
   totalQuantity: number;
   costPrice?: number;   // purchase price per unit
   salePrice?: number;   // selling price per unit
+  compareAtPrice?: number;
   supplier?: Supplier;
   customFieldDefinitions: ProductCustomField[];
   customFieldValues: Record<string, string | number | boolean>;
@@ -66,6 +69,8 @@ export interface CatalogItem {
   imageUrl: string;
   images: string[];
   salePrice?: number;
+  compareAtPrice?: number;
+  isNew: boolean;
   variants: string[];
   fields: CatalogField[];
   hidden: boolean;
@@ -74,8 +79,14 @@ export interface CatalogItem {
 export interface ShopCatalogSettings {
   name: string;
   catalogEnabled: boolean;
-  catalogContact: string;
+  channels: CatalogChannels;
+  logoUrl: string;
+  coverUrl: string;
 }
+
+export type CatalogStatEvent = "views" | "whatsapp" | "telegram" | "instagram" | "share";
+
+export type CatalogStatsDay = { day: string } & Record<CatalogStatEvent, number>;
 
 export interface SaleLine {
   productId: string;

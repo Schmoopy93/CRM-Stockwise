@@ -7,6 +7,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  increment,
   runTransaction,
   serverTimestamp,
   setDoc,
@@ -171,6 +172,44 @@ test("members can import a new product with variants and optional pricing metada
   });
   batch.set(variantRef, { label: "Blue / S", sku: "DR-1-BS", quantity: 4 });
   await assertSucceeds(batch.commit());
+});
+
+test("new products may carry a server createdAt and a compare-at price, but createdAt is immutable", async () => {
+  const db = firestoreFor("owner-a");
+  const productRef = doc(db, "shops", shopId, "products", "sale-product");
+  await assertSucceeds(setDoc(productRef, {
+    name: "Sale dress",
+    sku: "",
+    category: "Clothing",
+    minStock: 0,
+    imageUrl: "",
+    totalQuantity: 0,
+    salePrice: 30,
+    compareAtPrice: 40,
+    customFieldDefinitions: [],
+    customFieldValues: {},
+    createdAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(productRef, { compareAtPrice: 45, updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(productRef, { createdAt: serverTimestamp() }));
+});
+
+test("anonymous visitors can only bump one catalog counter by one while the catalog is enabled", async () => {
+  const signedOutDb = firestoreFor();
+  const statsRef = doc(signedOutDb, "shops", shopId, "catalogStats", "2026-09-29");
+  await assertFails(setDoc(statsRef, { views: increment(1) }, { merge: true }));
+
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), "shops", shopId), { catalogEnabled: true });
+  });
+  await assertSucceeds(setDoc(statsRef, { views: increment(1) }, { merge: true }));
+  await assertSucceeds(setDoc(statsRef, { whatsapp: increment(1) }, { merge: true }));
+  await assertFails(setDoc(statsRef, { views: increment(5) }, { merge: true }));
+  await assertFails(setDoc(statsRef, { views: increment(1), share: increment(1) }, { merge: true }));
+  await assertFails(setDoc(statsRef, { orders: increment(1) }, { merge: true }));
+  await assertFails(setDoc(doc(signedOutDb, "shops", shopId, "catalogStats", "not-a-day"), { views: increment(1) }, { merge: true }));
+  await assertFails(getDoc(statsRef));
+  await assertSucceeds(getDoc(doc(firestoreFor("staff-a"), "shops", shopId, "catalogStats", "2026-09-29")));
 });
 
 test("only shop owners can change shop configuration", async () => {

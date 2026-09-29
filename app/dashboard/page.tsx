@@ -7,24 +7,28 @@ import { useAuth } from "@/lib/auth-context";
 import { useProducts, useShop } from "@/lib/hooks";
 import { updateCatalogSettings } from "@/lib/actions";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
+import { CATALOG_CHANNELS, CatalogChannels, hasAnyChannel, isValidChannel } from "@/lib/catalog-channels";
 import { usePagination } from "@/lib/use-pagination";
 import ListPagination from "@/components/ListPagination";
+import CatalogBrandingFields from "@/components/CatalogBrandingFields";
 import { Plus, Search, AlertTriangle, Package, TrendingDown, Layers, ArrowRight, DollarSign, Store, Copy, Check, ExternalLink } from "lucide-react";
 
 function CatalogSettingsCard({ shopId }: { shopId: string }) {
   const { t } = useI18n();
-  const { catalogEnabled, catalogContact, loading } = useShop(shopId);
-  const [contact, setContact] = useState<string | null>(null);
+  const { catalogEnabled, channels, logoUrl, coverUrl, loading } = useShop(shopId);
+  const [draft, setDraft] = useState<CatalogChannels | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-  const effectiveContact = contact ?? catalogContact;
+  const effectiveChannels = draft ?? channels;
+  const channelsValid = hasAnyChannel(effectiveChannels);
   const catalogUrl = typeof window !== "undefined" ? `${window.location.origin}/catalog/${shopId}` : "";
 
   async function save(enabled: boolean) {
     setError(""); setSaving(true);
     try {
-      await updateCatalogSettings(shopId, { enabled, contact: effectiveContact });
+      await updateCatalogSettings(shopId, { enabled, channels: effectiveChannels });
+      setDraft(null);
     } catch (err: unknown) {
       setError(translateError(err, t, "catalog.error"));
     } finally { setSaving(false); }
@@ -50,7 +54,7 @@ function CatalogSettingsCard({ shopId }: { shopId: string }) {
           </span>
           <button
             onClick={() => save(!catalogEnabled)}
-            disabled={saving || (!catalogEnabled && !effectiveContact.trim())}
+            disabled={saving || (!catalogEnabled && !channelsValid)}
             aria-pressed={catalogEnabled}
             style={{
               width: 44, height: 24, borderRadius: 99, position: "relative", cursor: "pointer",
@@ -66,27 +70,39 @@ function CatalogSettingsCard({ shopId }: { shopId: string }) {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-        <input className="input" type="text" placeholder={t("catalog.contactPlaceholder")} value={effectiveContact}
-          onChange={(e) => setContact(e.target.value)} style={{ flex: "1 1 200px" }} />
-        {catalogEnabled && (
-          <>
-            <a href={`/catalog/${shopId}`} target="_blank" rel="noopener noreferrer"
-              style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.78rem", color: "var(--accent-2)", textDecoration: "none", border: "1px solid var(--border)", borderRadius: 9, padding: "0.5rem 0.8rem" }}>
-              <ExternalLink size={13} /> {t("catalog.open")}
-            </a>
-            <button
-              onClick={() => { navigator.clipboard.writeText(catalogUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
-              style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.78rem", color: "var(--text-2)", background: "transparent", border: "1px solid var(--border)", borderRadius: 9, padding: "0.5rem 0.8rem", cursor: "pointer" }}>
-              {copied ? <Check size={13} color="var(--green)" /> : <Copy size={13} />}
-              {copied ? t("catalog.copied") : t("catalog.copyLink")}
-            </button>
-          </>
-        )}
+      <div className="catalog-channels">
+        {CATALOG_CHANNELS.map((channel) => {
+          const value = effectiveChannels[channel];
+          const invalid = value.trim() !== "" && !isValidChannel(channel, value);
+          return (
+            <input key={channel} className="input" type={channel === "whatsapp" ? "tel" : "text"} inputMode={channel === "whatsapp" ? "tel" : "text"}
+              aria-label={t(`catalog.${channel}Placeholder`)} placeholder={t(`catalog.${channel}Placeholder`)} value={value} aria-invalid={invalid || undefined}
+              onChange={(e) => setDraft({ ...effectiveChannels, [channel]: e.target.value })}
+              style={invalid ? { borderColor: "var(--red)" } : undefined} />
+          );
+        })}
       </div>
+      <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("catalog.channelsHint")}</p>
+
+      <CatalogBrandingFields shopId={shopId} logoUrl={logoUrl} coverUrl={coverUrl} />
+
       {catalogEnabled && (
-        <button onClick={() => save(true)} disabled={saving || contact === null}
-          style={{ alignSelf: "flex-start", fontSize: "0.75rem", color: "var(--accent-2)", background: "none", border: "none", cursor: contact === null ? "default" : "pointer", padding: 0 }}>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+          <a href={`/catalog/${shopId}`} target="_blank" rel="noopener noreferrer"
+            style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.78rem", color: "var(--accent-2)", textDecoration: "none", border: "1px solid var(--border)", borderRadius: 9, padding: "0.5rem 0.8rem" }}>
+            <ExternalLink size={13} /> {t("catalog.open")}
+          </a>
+          <button
+            onClick={() => { navigator.clipboard.writeText(catalogUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+            style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.78rem", color: "var(--text-2)", background: "transparent", border: "1px solid var(--border)", borderRadius: 9, padding: "0.5rem 0.8rem", cursor: "pointer" }}>
+            {copied ? <Check size={13} color="var(--green)" /> : <Copy size={13} />}
+            {copied ? t("catalog.copied") : t("catalog.copyLink")}
+          </button>
+        </div>
+      )}
+      {catalogEnabled && (
+        <button onClick={() => save(true)} disabled={saving || draft === null || !channelsValid}
+          style={{ alignSelf: "flex-start", fontSize: "0.75rem", color: "var(--accent-2)", background: "none", border: "none", cursor: draft === null || !channelsValid ? "default" : "pointer", opacity: draft === null || !channelsValid ? 0.5 : 1, padding: 0 }}>
           {t("catalog.saveContact")}
         </button>
       )}

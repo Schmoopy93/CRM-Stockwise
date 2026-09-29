@@ -328,6 +328,7 @@ select.input { cursor: pointer; }
   .product-form { grid-template-columns: minmax(0, 1fr); }
   .product-form-side { position: static; max-height: none; overflow: visible; }
 }
+.catalog-channels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 0.5rem; }
 
 /* ===== Products list (All products) ===== */
 .products-page {

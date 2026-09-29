@@ -76,7 +76,8 @@ export default function ProductEditPage() {
         profile.shopId, id, name, sku, category, minStock, imageSlots, variants, customFieldDefinitions, customFieldValues,
         parsePrice(pricing.costPrice), parsePrice(pricing.salePrice),
         { name: pricing.supplierName, contact: pricing.supplierContact, notes: product?.supplier?.notes },
-        catalogHidden
+        catalogHidden,
+        parsePrice(pricing.compareAtPrice)
       );
       router.replace(`/dashboard/products/${savedId}`);
     } catch (err: unknown) {

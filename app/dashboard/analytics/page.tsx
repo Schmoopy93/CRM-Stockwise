@@ -2,15 +2,95 @@
 
 import { useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useProducts, useAllStockEvents } from "@/lib/hooks";
+import { useProducts, useAllStockEvents, useCatalogStats } from "@/lib/hooks";
 import { INTL_LOCALES, Locale, useI18n } from "@/lib/i18n-context";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell,
 } from "recharts";
-import { TrendingDown, TrendingUp, Activity, Package } from "lucide-react";
+import { TrendingDown, TrendingUp, Activity, Package, Eye, MessageCircle, Send, AtSign, Share2, Percent } from "lucide-react";
 
 function formatDay(date: Date, locale: Locale) {
   return date.toLocaleDateString(INTL_LOCALES[locale], { day: "2-digit", month: "2-digit" });
+}
+
+const CHANNEL_COLORS = { whatsapp: "#25d366", telegram: "#229ed9", instagram: "#dd2a7b" } as const;
+
+function CatalogStatsSection({ shopId, locale }: { shopId: string | undefined; locale: Locale }) {
+  const { t } = useI18n();
+  const stats = useCatalogStats(shopId, 30);
+
+  const totals = useMemo(() => stats.reduce(
+    (sum, day) => ({
+      views: sum.views + day.views,
+      whatsapp: sum.whatsapp + day.whatsapp,
+      telegram: sum.telegram + day.telegram,
+      instagram: sum.instagram + day.instagram,
+      share: sum.share + day.share,
+    }),
+    { views: 0, whatsapp: 0, telegram: 0, instagram: 0, share: 0 }
+  ), [stats]);
+
+  const chartData = useMemo(() => {
+    const byDay = new Map(stats.map((day) => [day.day, day]));
+    const now = new Date();
+    return Array.from({ length: 14 }, (_, i) => {
+      const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (13 - i)));
+      const row = byDay.get(date.toISOString().slice(0, 10));
+      return { date: formatDay(date, locale), whatsapp: row?.whatsapp ?? 0, telegram: row?.telegram ?? 0, instagram: row?.instagram ?? 0 };
+    });
+  }, [stats, locale]);
+
+  const clicks = totals.whatsapp + totals.telegram + totals.instagram;
+  const conversion = totals.views > 0 ? Math.round((clicks / totals.views) * 100) : 0;
+
+  return (
+    <div className="glass" style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      <div>
+        <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          {t("analytics.catalogTitle")}
+        </h2>
+        <p style={{ fontSize: "0.75rem", color: "var(--text-3)", margin: "4px 0 0" }}>{t("analytics.catalogSubtitle")}</p>
+      </div>
+
+      <div className="analytics-stats" style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "0.75rem" }}>
+        {[
+          { icon: <Eye size={15} />, label: t("analytics.catalogViews"), value: totals.views, color: "#6366f1" },
+          { icon: <MessageCircle size={15} />, label: "WhatsApp", value: totals.whatsapp, color: CHANNEL_COLORS.whatsapp },
+          { icon: <Send size={15} />, label: "Telegram", value: totals.telegram, color: CHANNEL_COLORS.telegram },
+          { icon: <AtSign size={15} />, label: "Instagram", value: totals.instagram, color: CHANNEL_COLORS.instagram },
+          { icon: <Share2 size={15} />, label: t("analytics.catalogShares"), value: totals.share, color: "#22d3ee" },
+          { icon: <Percent size={15} />, label: t("analytics.catalogConversion"), value: `${conversion}%`, color: "var(--green)" },
+        ].map(({ icon, label, value, color }) => (
+          <div key={label} style={{ padding: "0.85rem 1rem", borderRadius: 12, background: "var(--bg-3)", display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: "var(--text-2)" }}>
+              <span style={{ color, display: "flex" }}>{icon}</span>
+              {label}
+            </span>
+            <p style={{ fontSize: "1.35rem", fontWeight: 700, margin: 0, color: "var(--text-1)", lineHeight: 1 }}>{value}</p>
+          </div>
+        ))}
+      </div>
+
+      {totals.views === 0 && clicks === 0 ? (
+        <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "1.5rem 0", margin: 0 }}>{t("analytics.catalogEmpty")}</p>
+      ) : (
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+            <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
+            <Tooltip
+              contentStyle={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+              labelStyle={{ color: "var(--text-2)" }}
+              cursor={{ fill: "var(--bg-3)" }}
+            />
+            <Bar dataKey="whatsapp" name="WhatsApp" stackId="clicks" fill={CHANNEL_COLORS.whatsapp} />
+            <Bar dataKey="telegram" name="Telegram" stackId="clicks" fill={CHANNEL_COLORS.telegram} />
+            <Bar dataKey="instagram" name="Instagram" stackId="clicks" fill={CHANNEL_COLORS.instagram} radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
 }
 
 export default function AnalyticsPage() {
@@ -170,6 +250,8 @@ export default function AnalyticsPage() {
           )}
         </div>
       </div>
+
+      <CatalogStatsSection shopId={profile?.shopId} locale={locale} />
     </div>
   );
 }

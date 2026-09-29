@@ -6,16 +6,18 @@ import { useI18n } from "@/lib/i18n-context";
 export interface ProductPricingValues {
   costPrice: string;
   salePrice: string;
+  compareAtPrice: string;
   supplierName: string;
   supplierContact: string;
 }
 
-export const emptyPricing: ProductPricingValues = { costPrice: "", salePrice: "", supplierName: "", supplierContact: "" };
+export const emptyPricing: ProductPricingValues = { costPrice: "", salePrice: "", compareAtPrice: "", supplierName: "", supplierContact: "" };
 
 export function pricingFromProduct(product: Product): ProductPricingValues {
   return {
     costPrice: product.costPrice !== undefined ? String(product.costPrice) : "",
     salePrice: product.salePrice !== undefined ? String(product.salePrice) : "",
+    compareAtPrice: product.compareAtPrice !== undefined ? String(product.compareAtPrice) : "",
     supplierName: product.supplier?.name ?? "",
     supplierContact: product.supplier?.contact ?? "",
   };
@@ -53,6 +55,11 @@ export default function ProductPricingFields({ values, onChange }: ProductPricin
         <div>
           <label style={labelStyle}>{t("product.salePrice")} (€)</label>
           <input className="input" type="text" inputMode="decimal" placeholder={t("product.optional")} value={values.salePrice} onChange={(e) => update("salePrice", e.target.value)} />
+        </div>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label style={labelStyle}>{t("product.compareAtPrice")} (€)</label>
+          <input className="input" type="text" inputMode="decimal" placeholder={t("product.optional")} value={values.compareAtPrice} onChange={(e) => update("compareAtPrice", e.target.value)} />
+          <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: "5px 0 0" }}>{t("product.compareAtPriceHint")}</p>
         </div>
         <div>
           <label style={labelStyle}>{t("product.supplier")}</label>

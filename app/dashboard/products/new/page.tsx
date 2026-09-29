@@ -49,7 +49,9 @@ export default function NewProductPage() {
       const savedId = await saveProduct(
         profile.shopId, null, name, sku, category, minStock, imageSlots, variants, customFieldDefinitions, customFieldValues,
         parsePrice(pricing.costPrice), parsePrice(pricing.salePrice),
-        { name: pricing.supplierName, contact: pricing.supplierContact }
+        { name: pricing.supplierName, contact: pricing.supplierContact },
+        false,
+        parsePrice(pricing.compareAtPrice)
       );
       router.replace(`/dashboard/products/${savedId}`);
     } catch (err: unknown) {

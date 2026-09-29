@@ -5,23 +5,23 @@ import { createPortal } from "react-dom";
 import { X, Check, ZoomIn } from "lucide-react";
 import { useI18n } from "@/lib/i18n-context";
 
-const OUT = 800; // output canvas size
-
 interface Props {
   src: string;
   fileName: string;
+  aspect?: number;
+  outputWidth?: number;
   onCancel: () => void;
   onCropped: (file: File, previewUrl: string) => void;
 }
 
-export default function ImageCropper({ src, fileName, onCancel, onCropped }: Props) {
+export default function ImageCropper({ src, fileName, aspect = 1, outputWidth = 1600, onCancel, onCropped }: Props) {
   const { t } = useI18n();
   const boxRef = useRef<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const preRef = useRef<HTMLImageElement | null>(null);
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const [view, setView] = useState(320);
-  const [base, setBase] = useState(0);
+  const [natural, setNatural] = useState({ w: 0, h: 0 });
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
 
@@ -41,27 +41,26 @@ export default function ImageCropper({ src, fileName, onCancel, onCropped }: Pro
     return () => ro.disconnect();
   }, []);
 
-  function computeBase(img: HTMLImageElement, v: number) {
-    if (!img.naturalWidth || !img.naturalHeight) return 0;
-    const scale = Math.max(v / img.naturalWidth, v / img.naturalHeight);
-    return Math.max(img.naturalWidth, img.naturalHeight) * scale;
-  }
+  const viewHeight = view / aspect;
+  const ready = natural.w > 0 && natural.h > 0;
+  const fit = ready ? Math.max(view / natural.w, viewHeight / natural.h) : 0;
 
   function onImgLoad() {
     const img = preRef.current;
     if (!img) return;
-    setBase(computeBase(img, view));
+    setNatural({ w: img.naturalWidth, h: img.naturalHeight });
   }
 
   const clamp = useCallback((next: { x: number; y: number }, z: number) => {
-    const half = Math.max(0, (base * z - view) / 2);
+    const halfX = Math.max(0, (natural.w * fit * z - view) / 2);
+    const halfY = Math.max(0, (natural.h * fit * z - viewHeight) / 2);
     return {
-      x: Math.min(half, Math.max(-half, next.x)),
-      y: Math.min(half, Math.max(-half, next.y)),
+      x: Math.min(halfX, Math.max(-halfX, next.x)),
+      y: Math.min(halfY, Math.max(-halfY, next.y)),
     };
-  }, [base, view]);
+  }, [natural, fit, view, viewHeight]);
 
-  const shownOffset = base ? clamp(offset, zoom) : offset;
+  const shownOffset = ready ? clamp(offset, zoom) : offset;
 
   function handleZoom(z: number) {
     const clamped = Math.min(4, Math.max(1, z));
@@ -82,22 +81,25 @@ export default function ImageCropper({ src, fileName, onCancel, onCropped }: Pro
 
   function confirm() {
     const img = imgRef.current;
-    if (!img || !base) return;
-    const size = base * zoom;
-    const scale = OUT / view;
+    if (!img || !ready) return;
+    const outWidth = Math.round(Math.min(outputWidth, view / (fit * zoom)));
+    const outHeight = Math.round(outWidth / aspect);
+    const scale = outWidth / view;
     const canvas = document.createElement("canvas");
-    canvas.width = OUT;
-    canvas.height = OUT;
+    canvas.width = outWidth;
+    canvas.height = outHeight;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, OUT, OUT);
+    ctx.fillRect(0, 0, outWidth, outHeight);
     ctx.drawImage(
       img,
-      (view / 2 - size / 2 + shownOffset.x) * scale,
-      (view / 2 - size / 2 + shownOffset.y) * scale,
-      size * scale,
-      size * scale
+      (view / 2 - width / 2 + shownOffset.x) * scale,
+      (viewHeight / 2 - height / 2 + shownOffset.y) * scale,
+      width * scale,
+      height * scale
     );
     canvas.toBlob((blob) => {
       if (!blob) return;
@@ -105,7 +107,8 @@ export default function ImageCropper({ src, fileName, onCancel, onCropped }: Pro
     }, "image/jpeg", 0.9);
   }
 
-  const size = base * zoom;
+  const width = natural.w * fit * zoom;
+  const height = natural.h * fit * zoom;
 
   return createPortal(
     <>
@@ -113,7 +116,7 @@ export default function ImageCropper({ src, fileName, onCancel, onCropped }: Pro
       onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
       style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem", background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}
     >
-      <div style={{ width: "100%", maxWidth: 380, background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 20, padding: "1.25rem", boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}>
+      <div style={{ width: "100%", maxWidth: aspect > 1 ? 560 : 380, background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 20, padding: "1.25rem", boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
           <p style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-1)", margin: 0 }}>{t("cropper.title")}</p>
           <button onClick={onCancel} aria-label={t("back")} style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer", color: "var(--text-3)" }}>
@@ -124,15 +127,15 @@ export default function ImageCropper({ src, fileName, onCancel, onCropped }: Pro
         <div
           ref={boxRef}
           onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
-          style={{ position: "relative", width: "100%", height: view, borderRadius: 14, overflow: "hidden", background: "var(--bg-3)", touchAction: "none", cursor: "grab" }}
+          style={{ position: "relative", width: "100%", height: viewHeight, borderRadius: 14, overflow: "hidden", background: "var(--bg-3)", touchAction: "none", cursor: "grab" }}
         >
-          {base > 0 && (
+          {ready && (
             <img
               ref={imgRef}
               src={src} alt="" draggable={false}
               style={{
                 position: "absolute", left: "50%", top: "50%",
-                width: size, height: size,
+                width, height,
                 maxWidth: "none", maxHeight: "none",
                 transform: `translate(calc(-50% + ${shownOffset.x}px), calc(-50% + ${shownOffset.y}px))`,
                 userSelect: "none", pointerEvents: "none",
@@ -154,13 +157,13 @@ export default function ImageCropper({ src, fileName, onCancel, onCropped }: Pro
           <button onClick={onCancel} style={{ flex: 1, padding: "0.6rem", background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 10, fontSize: "0.82rem", fontWeight: 600, color: "var(--text-2)", cursor: "pointer" }}>
             {t("back")}
           </button>
-          <button onClick={confirm} disabled={!base} className="btn-primary" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: "0.82rem", padding: "0.6rem", opacity: base ? 1 : 0.5, cursor: base ? "pointer" : "wait" }}>
+          <button onClick={confirm} disabled={!ready} className="btn-primary" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: "0.82rem", padding: "0.6rem", opacity: ready ? 1 : 0.5, cursor: ready ? "pointer" : "wait" }}>
             <Check size={14} /> {t("cropper.confirm")}
           </button>
         </div>
       </div>
       </div>
-      {/* hidden preloader drives base size + readiness */}
+      {/* hidden preloader drives natural size + readiness */}
       <img src={src} alt="" ref={preRef} onLoad={onImgLoad} style={{ display: "none" }} />
     </>
     ,
