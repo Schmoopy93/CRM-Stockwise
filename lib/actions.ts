@@ -4,6 +4,7 @@ import {
   signOut as firebaseSignOut,
 } from "firebase/auth";
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
@@ -16,7 +17,7 @@ import {
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
 import { applyStockDelta } from "@/lib/stock-invariants";
-import { ProductCustomField, ProductVariant } from "@/lib/types";
+import { ProductCustomField, ProductVariant, SaleChannel, SaleLine } from "@/lib/types";
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
@@ -272,5 +273,73 @@ export async function receiveStock(
       if (completedLineKeys.length > 0) throw new PartialReceiptError(completedLineKeys, { cause: error });
       throw error;
     }
+  }
+}
+
+export interface SaleBuyer {
+  channel: SaleChannel;
+  buyerName: string;
+  buyerInstagram: string;
+  note?: string;
+}
+
+/** Each line is decremented atomically (reason "sale"). Completed lines are
+ * returned on partial failure so the UI can retain only pending lines for a
+ * safe retry. The sale document is written only after every line succeeded.
+ */
+export async function recordSale(
+  shopId: string,
+  lines: SaleLine[],
+  buyer: SaleBuyer,
+  actorUid: string,
+  actorName: string
+) {
+  if (lines.length === 0) throw new Error("Dodajte bar jednu stavku prodaje");
+  if (lines.length > 100) throw new Error("Prodaja može sadržati najviše 100 artikala");
+  if (lines.some((line) => !Number.isSafeInteger(line.quantity) || line.quantity <= 0)) {
+    throw new Error("Količina prodaje mora biti pozitivan ceo broj");
+  }
+  if (lines.some((line) => !Number.isFinite(line.unitPrice) || line.unitPrice < 0)) {
+    throw new Error("Cena po jedinici mora biti nenegativan broj");
+  }
+  if (new Set(lines.map((line) => `${line.productId}/${line.variantId}`)).size !== lines.length) {
+    throw new Error("Ista varijanta ne može biti uneta dva puta u prodaju");
+  }
+  const total = lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+  if (!Number.isSafeInteger(Math.round(total * 100))) throw new Error("Ukupan iznos je van dozvoljenog opsega");
+
+  const completedLineKeys: string[] = [];
+  try {
+    for (const line of lines) {
+      await adjustStock(
+        shopId,
+        line.productId,
+        { id: line.variantId, label: line.variantLabel, sku: "", quantity: 0 },
+        -line.quantity,
+        actorUid,
+        actorName,
+        "sale"
+      );
+      completedLineKeys.push(`${line.productId}/${line.variantId}`);
+    }
+  } catch (error) {
+    if (completedLineKeys.length > 0) throw new PartialReceiptError(completedLineKeys, { cause: error });
+    throw error;
+  }
+
+  try {
+    await addDoc(collection(db, "shops", shopId, "sales"), {
+      lines,
+      total: Math.round(total * 100) / 100,
+      channel: buyer.channel,
+      buyerName: buyer.buyerName.trim().slice(0, 100),
+      buyerInstagram: buyer.buyerInstagram.trim().replace(/^@/, "").slice(0, 100),
+      note: (buyer.note ?? "").trim().slice(0, 500),
+      actorUid,
+      actorName,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    throw new PartialReceiptError(completedLineKeys, { cause: error });
   }
 }

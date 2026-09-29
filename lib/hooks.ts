@@ -11,7 +11,7 @@ import {
   limit,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Product, ProductVariant, StockEvent } from "@/lib/types";
+import { Product, ProductVariant, Sale, StockEvent } from "@/lib/types";
 
 export function useProducts(shopId: string | undefined) {
   const [products, setProducts] = useState<Product[]>([]);
@@ -141,6 +141,40 @@ export function useAllStockEvents(shopId: string | undefined, days = 30) {
   }, [shopId, days]);
 
   return events;
+}
+
+export function useSales(shopId: string | undefined, count = 20) {
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!shopId) return;
+    const q = query(
+      collection(db, "shops", shopId, "sales"),
+      orderBy("createdAt", "desc"),
+      limit(count)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setSales(
+        snap.docs.map((d) => ({
+          id: d.id,
+          lines: d.data().lines ?? [],
+          total: d.data().total ?? 0,
+          channel: d.data().channel ?? "other",
+          buyerName: d.data().buyerName ?? "",
+          buyerInstagram: d.data().buyerInstagram ?? "",
+          note: d.data().note ?? "",
+          actorUid: d.data().actorUid ?? "",
+          actorName: d.data().actorName ?? "",
+          createdAt: d.data().createdAt?.toDate() ?? null,
+        }))
+      );
+      setLoading(false);
+    });
+    return unsub;
+  }, [shopId, count]);
+
+  return { sales, loading };
 }
 
 export function useStockEvents(shopId: string | undefined, productId: string | undefined) {

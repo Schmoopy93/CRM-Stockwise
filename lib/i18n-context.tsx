@@ -4,15 +4,21 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 import sr from "./i18n/sr.json";
 import en from "./i18n/en.json";
 import ru from "./i18n/ru.json";
+import de from "./i18n/de.json";
+import es from "./i18n/es.json";
+import it from "./i18n/it.json";
 
-export type Locale = "sr" | "en" | "ru";
+export type Locale = "sr" | "en" | "ru" | "de" | "es" | "it";
 
-const TRANSLATIONS: Record<Locale, Record<string, string>> = { sr, en, ru };
+const TRANSLATIONS: Record<Locale, Record<string, string>> = { sr, en, ru, de, es, it };
 
 export const LOCALE_LABELS: Record<Locale, string> = {
   sr: "Srpski 🇷🇸",
   en: "English 🇬🇧",
   ru: "Русский 🇷🇺",
+  de: "Deutsch 🇩🇪",
+  es: "Español 🇪🇸",
+  it: "Italiano 🇮🇹",
 };
 
 const STORAGE_KEY = "inventory-locale";

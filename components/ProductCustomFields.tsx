@@ -246,7 +246,7 @@ export default function ProductCustomFields({
               const currentValue = String(values[field.key] ?? "");
               const optionValues = field.optionValues ?? field.optionsByLocale?.en ?? field.options ?? [];
               if (optionValues.includes(currentValue)) return currentValue;
-              for (const language of [locale, "sr", "en", "ru"] as const) {
+              for (const language of [locale, "sr", "en", "ru", "de", "es", "it"] as const) {
                 const index = field.optionsByLocale?.[language]?.indexOf(currentValue) ?? -1;
                 if (index >= 0) return optionValues[index] ?? currentValue;
               }

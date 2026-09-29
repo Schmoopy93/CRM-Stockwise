@@ -168,6 +168,32 @@ service cloud.firestore {
         }
       }
 
+      match /sales/{saleId} {
+        allow read: if isMember(shopId);
+        allow create: if isMember(shopId)
+          && request.resource.data.keys().hasOnly([
+            'lines', 'total', 'channel', 'buyerName', 'buyerInstagram', 'note', 'actorUid', 'actorName', 'createdAt'
+          ])
+          && request.resource.data.lines is list
+          && request.resource.data.lines.size() > 0
+          && request.resource.data.lines.size() <= 100
+          && request.resource.data.total is number
+          && request.resource.data.total >= 0
+          && request.resource.data.total <= 100000000
+          && request.resource.data.channel in ['instagram', 'facebook', 'store', 'phone', 'other']
+          && request.resource.data.buyerName is string
+          && request.resource.data.buyerName.size() <= 100
+          && request.resource.data.buyerInstagram is string
+          && request.resource.data.buyerInstagram.size() <= 100
+          && request.resource.data.note is string
+          && request.resource.data.note.size() <= 500
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.actorName is string
+          && request.resource.data.actorName.size() <= 100
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+
       match /stockEvents/{eventId} {
         allow read: if isMember(shopId);
         allow create: if isMember(shopId)

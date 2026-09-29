@@ -27,7 +27,7 @@ export interface Product {
 }
 
 export type ProductCustomFieldType = "text" | "number" | "date" | "boolean" | "select";
-export type AppLocale = "sr" | "en" | "ru";
+export type AppLocale = "sr" | "en" | "ru" | "de" | "es" | "it";
 
 export interface ProductCustomField {
   key: string;
@@ -45,6 +45,30 @@ export interface ProductVariant {
   label: string;
   sku: string;
   quantity: number;
+}
+
+export type SaleChannel = "instagram" | "facebook" | "store" | "phone" | "other";
+
+export interface SaleLine {
+  productId: string;
+  productName: string;
+  variantId: string;
+  variantLabel: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface Sale {
+  id: string;
+  lines: SaleLine[];
+  total: number;
+  channel: SaleChannel;
+  buyerName: string;
+  buyerInstagram: string;
+  note: string;
+  actorUid: string;
+  actorName: string;
+  createdAt: Date | null;
 }
 
 export interface StockEvent {

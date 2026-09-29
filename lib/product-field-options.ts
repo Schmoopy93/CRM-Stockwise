@@ -12,7 +12,7 @@ export function getLocalizedOptionValue(
   }
 
   // Older saved products stored the visible option text as the value.
-  for (const language of [locale, "sr", "en", "ru"] as const) {
+  for (const language of [locale, "sr", "en", "ru", "de", "es", "it"] as const) {
     const index = field.optionsByLocale?.[language]?.indexOf(value) ?? -1;
     if (index >= 0) return field.optionsByLocale?.[locale]?.[index] ?? value;
   }

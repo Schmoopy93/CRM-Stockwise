@@ -21,6 +21,9 @@ export const metadata: Metadata = {
       "sr-RS": BASE_URL,
       "en-US": `${BASE_URL}?lang=en`,
       "ru-RU": `${BASE_URL}?lang=ru`,
+      "de-DE": `${BASE_URL}?lang=de`,
+      "es-ES": `${BASE_URL}?lang=es`,
+      "it-IT": `${BASE_URL}?lang=it`,
     },
   },
   openGraph: {
@@ -30,7 +33,7 @@ export const metadata: Metadata = {
     description: "Pratite stanje artikala, primajte robu, analizirajte kretanje zaliha i izvozite izveštaje za vašu radnju.",
     siteName: "Inventory CRM",
     locale: "sr_RS",
-    alternateLocale: ["en_US", "ru_RU"],
+    alternateLocale: ["en_US", "ru_RU", "de_DE", "es_ES", "it_IT"],
   },
   twitter: {
     card: "summary_large_image",
@@ -64,7 +67,7 @@ const jsonLd = {
     "Izvoz u Excel i PDF",
     "Timski rad sa ulogama",
   ],
-  inLanguage: ["sr", "en", "ru"],
+  inLanguage: ["sr", "en", "ru", "de", "es", "it"],
 };
 
 export default function LoginLayout({ children }: { children: React.ReactNode }) {

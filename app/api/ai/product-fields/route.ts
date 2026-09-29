@@ -1,11 +1,15 @@
 import type { AppLocale, ProductCustomField, ProductCustomFieldType } from "@/lib/types";
 
 const rateLimits = new Map<string, { count: number; resetAt: number }>();
-const locales: AppLocale[] = ["sr", "en", "ru"];
+const locales: AppLocale[] = ["sr", "en", "ru", "de", "es", "it"];
 const allowedTypes = new Set<ProductCustomFieldType>(["text", "number", "date", "boolean", "select"]);
 
+const localeNames: Record<AppLocale, string> = {
+  sr: "Serbian (Latin script)", en: "English", ru: "Russian", de: "German", es: "Spanish", it: "Italian",
+};
+
 function parseLocale(value: unknown): AppLocale {
-  return value === "en" || value === "ru" ? value : "sr";
+  return value === "en" || value === "ru" || value === "de" || value === "es" || value === "it" ? value : "sr";
 }
 
 function localizedMessage(locale: AppLocale, key: "login" | "session" | "limit" | "invalid" | "missing" | "ai") {
@@ -33,6 +37,30 @@ function localizedMessage(locale: AppLocale, key: "login" | "session" | "limit" 
       invalid: "Некорректный запрос.",
       missing: "Укажите категорию или название товара.",
       ai: "AI временно недоступен. Повторите попытку.",
+    },
+    de: {
+      login: "Anmeldung erforderlich.",
+      session: "Ihre Sitzung ist ungültig.",
+      limit: "Vorschlagslimit erreicht. Bitte in einer Minute erneut versuchen.",
+      invalid: "Ungültige Anfrage.",
+      missing: "Geben Sie eine Kategorie oder einen Produktnamen ein.",
+      ai: "KI ist derzeit nicht verfügbar. Bitte versuchen Sie es erneut.",
+    },
+    es: {
+      login: "Se requiere iniciar sesión.",
+      session: "Su sesión no es válida.",
+      limit: "Límite de sugerencias alcanzado. Inténtelo de nuevo en un minuto.",
+      invalid: "Solicitud no válida.",
+      missing: "Introduzca una categoría o el nombre del producto.",
+      ai: "La IA no está disponible temporalmente. Inténtelo de nuevo.",
+    },
+    it: {
+      login: "È necessario effettuare l'accesso.",
+      session: "La sessione non è valida.",
+      limit: "Limite di suggerimenti raggiunto. Riprova tra un minuto.",
+      invalid: "Richiesta non valida.",
+      missing: "Inserisci una categoria o il nome del prodotto.",
+      ai: "L'IA non è momentaneamente disponibile. Riprova.",
     },
   };
   return messages[locale][key];
@@ -169,7 +197,7 @@ async function suggestWithAi(category: string, name: string, locale: AppLocale):
       messages: [
         {
           role: "system",
-          content: `You suggest a product category and useful extra product attributes for small Instagram shops selling clothing, phones, cosmetics, perfumes, glasses, and accessories. Suggest concrete details customers ask about before buying. Return JSON shaped like {"category":"...","fields":[{"labels":{"sr":"...","en":"...","ru":"..."},"type":"text|number|date|boolean|select","required":false,"optionsByLocale":{"sr":["..."],"en":["..."],"ru":["..."]}}]}. "category" is a short product category (1-3 words) in the active UI language, predicted from the product name; if a category is already given, return it cleaned up in the active UI language. Translate every label and select option naturally into Serbian (Latin script), English, and Russian. The active UI language is ${locale}; make it the primary wording. Return at most 6 fields. Do not suggest name, SKU, category, quantity, price, shipping, or variants as fields. For phones consider model, storage, condition, and battery; for clothes size, color, and material; for perfume volume and concentration; for glasses frame and lens details. Only include optionsByLocale for select fields.`,
+          content: `You suggest a product category and useful extra product attributes for small Instagram shops selling clothing, phones, cosmetics, perfumes, glasses, and accessories. Suggest concrete details customers ask about before buying. Return JSON shaped like {"category":"...","fields":[{"labels":{"sr":"...","en":"...","ru":"...","de":"...","es":"...","it":"..."},"type":"text|number|date|boolean|select","required":false,"optionsByLocale":{"sr":["..."],"en":["..."],"ru":["..."],"de":["..."],"es":["..."],"it":["..."]}}]}. "category" is a short product category (1-3 words) in the active UI language, predicted from the product name; if a category is already given, return it cleaned up in the active UI language. Translate every label and select option naturally into Serbian (Latin script), English, Russian, German, Spanish, and Italian. The active UI language is ${localeNames[locale]}; make it the primary wording. Return at most 6 fields. Do not suggest name, SKU, category, quantity, price, shipping, or variants as fields. For phones consider model, storage, condition, and battery; for clothes size, color, and material; for perfume volume and concentration; for glasses frame and lens details. Only include optionsByLocale for select fields.`,
         },
         { role: "user", content: `Category: ${category || "not specified"}\nProduct name: ${name || "not specified"}` },
       ],

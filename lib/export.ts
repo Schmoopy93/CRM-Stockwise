@@ -6,13 +6,16 @@ const exportLabels: Record<AppLocale, Record<string, string>> = {
   sr: { product: "Artikal", sku: "SKU", category: "Kategorija", variant: "Varijanta", variantSku: "SKU varijante", quantity: "Količina", min: "Min. stanje", status: "Status", low: "⚠ Nisko", ok: "U redu", none: "—", title: "Stanje artikala", date: "Datum", products: "Artikala", total: "Ukupno komada" },
   en: { product: "Product", sku: "SKU", category: "Category", variant: "Variant", variantSku: "Variant SKU", quantity: "Quantity", min: "Min. stock", status: "Status", low: "⚠ Low", ok: "OK", none: "—", title: "Product stock", date: "Date", products: "Products", total: "Total units" },
   ru: { product: "Товар", sku: "Артикул", category: "Категория", variant: "Вариант", variantSku: "Артикул варианта", quantity: "Количество", min: "Мин. остаток", status: "Статус", low: "⚠ Мало", ok: "В норме", none: "—", title: "Остатки товаров", date: "Дата", products: "Товаров", total: "Всего единиц" },
+  de: { product: "Artikel", sku: "SKU", category: "Kategorie", variant: "Variante", variantSku: "Varianten-SKU", quantity: "Menge", min: "Min. Bestand", status: "Status", low: "⚠ Niedrig", ok: "OK", none: "—", title: "Artikelbestand", date: "Datum", products: "Artikel", total: "Gesamtanzahl" },
+  es: { product: "Producto", sku: "SKU", category: "Categoría", variant: "Variante", variantSku: "SKU de variante", quantity: "Cantidad", min: "Stock mín.", status: "Estado", low: "⚠ Bajo", ok: "OK", none: "—", title: "Stock de productos", date: "Fecha", products: "Productos", total: "Unidades totales" },
+  it: { product: "Prodotto", sku: "SKU", category: "Categoria", variant: "Variante", variantSku: "SKU variante", quantity: "Quantità", min: "Scorta min.", status: "Stato", low: "⚠ Basso", ok: "OK", none: "—", title: "Giacenza prodotti", date: "Data", products: "Prodotti", total: "Totale unità" },
 };
 
 function localizedValue(product: Product, key: string, locale: AppLocale, fallback: string | number) {
   const field = product.customFieldDefinitions?.find((definition) => definition.key === key);
   const value = product.customFieldValues?.[key];
   if (value === undefined || value === "") return fallback;
-  if (typeof value === "boolean") return value ? ({ sr: "Da", en: "Yes", ru: "Да" } as const)[locale] : ({ sr: "Ne", en: "No", ru: "Нет" } as const)[locale];
+  if (typeof value === "boolean") return value ? ({ sr: "Da", en: "Yes", ru: "Да", de: "Ja", es: "Sí", it: "Sì" } as const)[locale] : ({ sr: "Ne", en: "No", ru: "Нет", de: "Nein", es: "No", it: "No" } as const)[locale];
   if (field?.type === "select") return getLocalizedOptionValue(field, String(value), locale);
   return value;
 }

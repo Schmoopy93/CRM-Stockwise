@@ -9,6 +9,9 @@ const LOCALES: { code: Locale; country: string; label: string }[] = [
   { code: "sr", country: "rs", label: "Srpski" },
   { code: "en", country: "gb", label: "English" },
   { code: "ru", country: "ru", label: "Русский" },
+  { code: "de", country: "de", label: "Deutsch" },
+  { code: "es", country: "es", label: "Español" },
+  { code: "it", country: "it", label: "Italiano" },
 ];
 
 function Flag({ country, label }: { country: string; label: string }) {

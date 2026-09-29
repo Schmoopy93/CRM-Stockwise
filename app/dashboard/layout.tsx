@@ -10,17 +10,38 @@ import { signOut } from "@/lib/actions";
 import { useI18n } from "@/lib/i18n-context";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
-import { LayoutGrid, Package, PackagePlus, BarChart2, Download, LogOut, ChevronRight, Upload, ClipboardList, Menu, X } from "lucide-react";
+import { LayoutGrid, Package, PackagePlus, BarChart2, Download, LogOut, ChevronRight, Upload, ClipboardList, Menu, X, ShoppingBag, AlertTriangle } from "lucide-react";
 
 function NotificationWidget({ shopId }: { shopId: string | undefined }) {
   const { products } = useProducts(shopId);
   const { t } = useI18n();
+  const [open, setOpen] = useState(false);
   useLowStockNotifications(products);
-  const n = products.filter((p) => p.minStock > 0 && p.totalQuantity <= p.minStock).length;
-  if (n === 0) return null;
+  const low = products
+    .filter((p) => p.minStock > 0 && p.totalQuantity <= p.minStock)
+    .sort((a, b) => (a.totalQuantity / Math.max(a.minStock, 1)) - (b.totalQuantity / Math.max(b.minStock, 1)));
+  if (low.length === 0) return null;
   return (
-    <div style={{ margin: "0 0 0.5rem", background: "var(--amber-dim)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, padding: "0.625rem 0.75rem", fontSize: "0.75rem", color: "var(--amber)", fontWeight: 600 }}>
-      ⚠ {t("notify.lowStockBadge", { n })}
+    <div>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+        style={{ width: "100%", margin: "0 0 0.5rem", background: "var(--amber-dim)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, padding: "0.625rem 0.75rem", fontSize: "0.75rem", color: "var(--amber)", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, textAlign: "left" }}>
+        <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+        {t("notify.lowStockBadge", { n: low.length })}
+        <ChevronRight size={13} style={{ marginLeft: "auto", transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} />
+      </button>
+      {open && (
+        <div style={{ margin: "0 0 0.5rem", background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 10, padding: "0.4rem", display: "flex", flexDirection: "column", gap: 2, maxHeight: 240, overflowY: "auto" }}>
+          {low.map((p) => (
+            <Link key={p.id} href={`/dashboard/products/${p.id}`} onClick={() => setOpen(false)}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "0.45rem 0.5rem", borderRadius: 7, textDecoration: "none", color: "var(--text-1)", fontSize: "0.75rem" }}
+              onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg-2)")}
+              onMouseOut={(e) => (e.currentTarget.style.background = "transparent")}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+              <span style={{ color: p.totalQuantity === 0 ? "var(--red)" : "var(--amber)", fontWeight: 700, flexShrink: 0 }}>{p.totalQuantity}/{p.minStock}</span>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -57,6 +78,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: "/dashboard", icon: LayoutGrid, label: t("nav.overview"), exact: true },
     { href: "/dashboard/analytics", icon: BarChart2, label: t("nav.analytics"), exact: false },
     { href: "/dashboard/receive", icon: PackagePlus, label: t("nav.receive"), exact: false },
+    { href: "/dashboard/sales", icon: ShoppingBag, label: t("nav.sales"), exact: false },
     { href: "/dashboard/import", icon: Upload, label: t("nav.import"), exact: false },
     { href: "/dashboard/audit", icon: ClipboardList, label: t("nav.audit"), exact: false },
     { href: "/dashboard/export", icon: Download, label: t("nav.export"), exact: false },

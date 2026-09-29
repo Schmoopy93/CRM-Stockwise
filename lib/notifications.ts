@@ -2,9 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import { Product } from "./types";
+import { useI18n } from "./i18n-context";
 
 export function useLowStockNotifications(products: Product[]) {
   const notifiedRef = useRef<Set<string>>(new Set());
+  const { t } = useI18n();
 
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
@@ -26,8 +28,8 @@ export function useLowStockNotifications(products: Product[]) {
         if (notifiedRef.current.has(p.id)) continue;
         notifiedRef.current.add(p.id);
 
-        new Notification(`⚠️ Nisko stanje: ${p.name}`, {
-          body: `Stanje: ${p.totalQuantity} kom (minimum: ${p.minStock})`,
+        new Notification(t("notify.lowStockTitle", { name: p.name }), {
+          body: t("notify.lowStockBody", { qty: p.totalQuantity, min: p.minStock }),
           icon: "/favicon.ico",
           tag: `low-stock-${p.id}`,
         });
@@ -35,5 +37,5 @@ export function useLowStockNotifications(products: Product[]) {
     }
 
     notify();
-  }, [products]);
+  }, [products, t]);
 }
