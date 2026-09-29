@@ -20,16 +20,13 @@ const AuthContext = createContext<AuthContextType>({
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loadedProfile, setLoadedProfile] = useState<{ uid: string; profile: UserProfile | null } | null>(null);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (!u) {
-        setProfile(null);
-        setLoading(false);
-      }
+      setAuthLoading(false);
     });
     return unsubAuth;
   }, []);
@@ -37,20 +34,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!user) return;
     const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
-      if (snap.exists()) {
-        setProfile({
-          uid: user.uid,
-          shopId: snap.data().shopId ?? "",
-          displayName: snap.data().displayName ?? user.displayName ?? "",
-          role: snap.data().role ?? "staff",
-        });
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
+      setLoadedProfile({
+        uid: user.uid,
+        profile: snap.exists()
+          ? {
+              uid: user.uid,
+              shopId: snap.data().shopId ?? "",
+              displayName: snap.data().displayName ?? user.displayName ?? "",
+              role: snap.data().role ?? "staff",
+            }
+          : null,
+      });
+    }, () => {
+      setLoadedProfile({ uid: user.uid, profile: null });
     });
     return unsub;
   }, [user]);
+
+  const profileReady = user !== null && loadedProfile?.uid === user.uid;
+  const profile = profileReady ? loadedProfile.profile : null;
+  const loading = authLoading || (user !== null && !profileReady);
 
   return (
     <AuthContext.Provider value={{ user, profile, loading }}>

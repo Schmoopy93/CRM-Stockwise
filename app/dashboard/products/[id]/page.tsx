@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
-import { useI18n } from "@/lib/i18n-context";
+import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { getLocalizedOptionValue } from "@/lib/product-field-options";
 import { useProduct, useVariants, useStockEvents } from "@/lib/hooks";
 import { usePagination } from "@/lib/use-pagination";
@@ -50,7 +50,7 @@ export default function ProductDetailPage() {
     try {
       await adjustStock(profile.shopId, id, variant, delta, profile.uid, profile.displayName);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : t("stock.insufficient"));
+      setError(translateError(e, t, "stock.insufficient"));
     } finally {
       setAdjusting(null);
     }
@@ -70,12 +70,12 @@ export default function ProductDetailPage() {
       await deleteProduct(profile.shopId, id);
       router.replace("/dashboard");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : t("product.deleteError"));
+      setError(translateError(e, t, "product.deleteError"));
       setDeleting(false);
     }
   }
 
-  const fmtLocale = locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US";
+  const fmtLocale = INTL_LOCALES[locale];
 
   if (loading) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="spinner" /></div>;
 

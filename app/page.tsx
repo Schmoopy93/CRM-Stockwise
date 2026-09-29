@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { signOut } from "@/lib/actions";
 
 export default function Home() {
   const { user, profile, loading } = useAuth();
@@ -14,6 +15,8 @@ export default function Home() {
       router.replace("/login");
     } else if (profile) {
       router.replace("/dashboard");
+    } else {
+      void signOut().finally(() => router.replace("/login?setup=1"));
     }
   }, [user, profile, loading, router]);
 

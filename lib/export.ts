@@ -1,15 +1,20 @@
 import * as XLSX from "xlsx";
-import { AppLocale, Product, ProductVariant } from "./types";
+import { AppLocale, Product, ProductCustomField, ProductVariant } from "./types";
 import { getLocalizedOptionValue } from "./product-field-options";
+import { INTL_LOCALES } from "./i18n-context";
 
 const exportLabels: Record<AppLocale, Record<string, string>> = {
-  sr: { product: "Artikal", sku: "SKU", category: "Kategorija", variant: "Varijanta", variantSku: "SKU varijante", quantity: "Količina", min: "Min. stanje", status: "Status", low: "⚠ Nisko", ok: "U redu", none: "—", title: "Stanje artikala", date: "Datum", products: "Artikala", total: "Ukupno komada" },
-  en: { product: "Product", sku: "SKU", category: "Category", variant: "Variant", variantSku: "Variant SKU", quantity: "Quantity", min: "Min. stock", status: "Status", low: "⚠ Low", ok: "OK", none: "—", title: "Product stock", date: "Date", products: "Products", total: "Total units" },
-  ru: { product: "Товар", sku: "Артикул", category: "Категория", variant: "Вариант", variantSku: "Артикул варианта", quantity: "Количество", min: "Мин. остаток", status: "Статус", low: "⚠ Мало", ok: "В норме", none: "—", title: "Остатки товаров", date: "Дата", products: "Товаров", total: "Всего единиц" },
-  de: { product: "Artikel", sku: "SKU", category: "Kategorie", variant: "Variante", variantSku: "Varianten-SKU", quantity: "Menge", min: "Min. Bestand", status: "Status", low: "⚠ Niedrig", ok: "OK", none: "—", title: "Artikelbestand", date: "Datum", products: "Artikel", total: "Gesamtanzahl" },
-  es: { product: "Producto", sku: "SKU", category: "Categoría", variant: "Variante", variantSku: "SKU de variante", quantity: "Cantidad", min: "Stock mín.", status: "Estado", low: "⚠ Bajo", ok: "OK", none: "—", title: "Stock de productos", date: "Fecha", products: "Productos", total: "Unidades totales" },
-  it: { product: "Prodotto", sku: "SKU", category: "Categoria", variant: "Variante", variantSku: "SKU variante", quantity: "Quantità", min: "Scorta min.", status: "Stato", low: "⚠ Basso", ok: "OK", none: "—", title: "Giacenza prodotti", date: "Data", products: "Prodotti", total: "Totale unità" },
+  sr: { product: "Artikal", sku: "SKU", category: "Kategorija", variant: "Varijanta", variantSku: "SKU varijante", quantity: "Količina", min: "Min. stanje", status: "Status", low: "⚠ Nisko", ok: "U redu", none: "—", title: "Stanje artikala", date: "Datum", products: "Artikala", total: "Ukupno komada", extra: "Dodatno" },
+  en: { product: "Product", sku: "SKU", category: "Category", variant: "Variant", variantSku: "Variant SKU", quantity: "Quantity", min: "Min. stock", status: "Status", low: "⚠ Low", ok: "OK", none: "—", title: "Product stock", date: "Date", products: "Products", total: "Total units", extra: "Extra" },
+  ru: { product: "Товар", sku: "Артикул", category: "Категория", variant: "Вариант", variantSku: "Артикул варианта", quantity: "Количество", min: "Мин. остаток", status: "Статус", low: "⚠ Мало", ok: "В норме", none: "—", title: "Остатки товаров", date: "Дата", products: "Товаров", total: "Всего единиц", extra: "Дополнительно" },
+  de: { product: "Artikel", sku: "SKU", category: "Kategorie", variant: "Variante", variantSku: "Varianten-SKU", quantity: "Menge", min: "Min. Bestand", status: "Status", low: "⚠ Niedrig", ok: "OK", none: "—", title: "Artikelbestand", date: "Datum", products: "Artikel", total: "Gesamtanzahl", extra: "Zusätzlich" },
+  es: { product: "Producto", sku: "SKU", category: "Categoría", variant: "Variante", variantSku: "SKU de variante", quantity: "Cantidad", min: "Stock mín.", status: "Estado", low: "⚠ Bajo", ok: "OK", none: "—", title: "Stock de productos", date: "Fecha", products: "Productos", total: "Unidades totales", extra: "Adicional" },
+  it: { product: "Prodotto", sku: "SKU", category: "Categoria", variant: "Variante", variantSku: "SKU variante", quantity: "Quantità", min: "Scorta min.", status: "Stato", low: "⚠ Basso", ok: "OK", none: "—", title: "Giacenza prodotti", date: "Data", products: "Prodotti", total: "Totale unità", extra: "Extra" },
 };
+
+function fieldLabel(field: ProductCustomField, locale: AppLocale) {
+  return field.labels?.[locale] ?? field.label;
+}
 
 function localizedValue(product: Product, key: string, locale: AppLocale, fallback: string | number) {
   const field = product.customFieldDefinitions?.find((definition) => definition.key === key);
@@ -32,7 +37,7 @@ export function exportToExcel(
   function customValues(product: Product) {
     return Object.fromEntries((product.customFieldDefinitions ?? []).map((field) => {
       const value = localizedValue(product, field.key, locale, "");
-      return [`${locale === "sr" ? "Dodatno" : locale === "en" ? "Extra" : "Дополнительно"}: ${field.labels?.[locale] ?? field.label}`, value];
+      return [`${labels.extra}: ${fieldLabel(field, locale)}`, value];
     }));
   }
 
@@ -77,7 +82,7 @@ export function exportToExcel(
   ];
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Stanje artikala");
+  XLSX.utils.book_append_sheet(wb, ws, labels.title);
 
   const date = new Date().toISOString().slice(0, 10);
   XLSX.writeFile(wb, `${shopName}-stanje-${date}.xlsx`);
@@ -90,10 +95,15 @@ export function exportToPrint(
   locale: AppLocale = "sr"
 ) {
   const labels = exportLabels[locale];
-  const date = new Date().toLocaleDateString("sr-RS");
+  const date = new Date().toLocaleDateString(INTL_LOCALES[locale]);
   const customDefinitions = Array.from(new Map(products.flatMap((product) =>
-    (product.customFieldDefinitions ?? []).map((field) => [`${field.labels?.[locale] ?? field.label}`.toLocaleLowerCase(), field] as const)
+    (product.customFieldDefinitions ?? []).map((field) => [fieldLabel(field, locale).toLocaleLowerCase(), field] as const)
   )).values());
+  const customValue = (product: Product, column: ProductCustomField) => {
+    const columnLabel = fieldLabel(column, locale).toLocaleLowerCase();
+    const field = (product.customFieldDefinitions ?? []).find((definition) => fieldLabel(definition, locale).toLocaleLowerCase() === columnLabel);
+    return field ? localizedValue(product, field.key, locale, labels.none) : labels.none;
+  };
   const escapeHtml = (value: unknown) => String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -144,12 +154,9 @@ export function exportToPrint(
             <td style="color:#888">${escapeHtml(r.sku || "—")}</td>
             <td>${escapeHtml(r.category || "—")}</td>
             <td>${escapeHtml(r.variant)}</td>
-            <td class="${r.minStock > 0 && r.quantity <= r.minStock ? "low" : ""}">${r.quantity}</td>
+            <td class="${r.minStock > 0 && r.product.totalQuantity <= r.minStock ? "low" : ""}">${r.quantity}</td>
             <td style="color:#aaa">${r.minStock || "—"}</td>
-            ${customDefinitions.map((field) => {
-              const value = localizedValue(r.product, field.key, locale, labels.none);
-              return `<td>${escapeHtml(value)}</td>`;
-            }).join("")}
+            ${customDefinitions.map((field) => `<td>${escapeHtml(customValue(r.product, field))}</td>`).join("")}
           </tr>
         `).join("")}
       </tbody>

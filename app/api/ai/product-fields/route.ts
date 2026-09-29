@@ -181,7 +181,7 @@ function resolveAiProvider(): { apiKey: string; baseURL: string; model: string }
   throw new Error("AI key is not configured");
 }
 
-async function suggestWithAi(category: string, name: string, locale: AppLocale): Promise<{ category: string; fields: ProductCustomField[] }> {
+async function suggestWithAi(category: string, name: string, existingCategories: string[], locale: AppLocale): Promise<{ category: string; fields: ProductCustomField[] }> {
   const { apiKey, baseURL, model } = resolveAiProvider();
 
   const response = await fetch(`${baseURL}/chat/completions`, {
@@ -197,9 +197,9 @@ async function suggestWithAi(category: string, name: string, locale: AppLocale):
       messages: [
         {
           role: "system",
-          content: `You suggest a product category and useful extra product attributes for small Instagram shops selling clothing, phones, cosmetics, perfumes, glasses, and accessories. Suggest concrete details customers ask about before buying. Return JSON shaped like {"category":"...","fields":[{"labels":{"sr":"...","en":"...","ru":"...","de":"...","es":"...","it":"..."},"type":"text|number|date|boolean|select","required":false,"optionsByLocale":{"sr":["..."],"en":["..."],"ru":["..."],"de":["..."],"es":["..."],"it":["..."]}}]}. "category" is a short product category (1-3 words) in the active UI language, predicted from the product name; if a category is already given, return it cleaned up in the active UI language. Translate every label and select option naturally into Serbian (Latin script), English, Russian, German, Spanish, and Italian. The active UI language is ${localeNames[locale]}; make it the primary wording. Return at most 6 fields. Do not suggest name, SKU, category, quantity, price, shipping, or variants as fields. For phones consider model, storage, condition, and battery; for clothes size, color, and material; for perfume volume and concentration; for glasses frame and lens details. Only include optionsByLocale for select fields.`,
+          content: `You suggest a product category and useful extra product attributes for small Instagram shops selling clothing, phones, cosmetics, perfumes, glasses, and accessories. Suggest concrete details customers ask about before buying. Return JSON shaped like {"category":"...","fields":[{"labels":{"sr":"...","en":"...","ru":"...","de":"...","es":"...","it":"..."},"type":"text|number|date|boolean|select","required":false,"optionsByLocale":{"sr":["..."],"en":["..."],"ru":["..."],"de":["..."],"es":["..."],"it":["..."]}}]}. "category" is a short product category (1-3 words). The shop's existing categories are listed in the user message: if the product fits one of them, return that existing category exactly as written. Only when none fits, propose a new category in the active UI language, predicted from the product name. If a category is already given, keep it, using the matching existing category name when there is one. Translate every label and select option naturally into Serbian (Latin script), English, Russian, German, Spanish, and Italian. The active UI language is ${localeNames[locale]}; make it the primary wording. Return at most 6 fields. Do not suggest name, SKU, category, quantity, price, shipping, or variants as fields. For phones consider model, storage, condition, and battery; for clothes size, color, and material; for perfume volume and concentration; for glasses frame and lens details. Only include optionsByLocale for select fields.`,
         },
-        { role: "user", content: `Category: ${category || "not specified"}\nProduct name: ${name || "not specified"}` },
+        { role: "user", content: `Category: ${category || "not specified"}\nProduct name: ${name || "not specified"}\nExisting shop categories: ${existingCategories.length ? existingCategories.join(" | ") : "none"}` },
       ],
     }),
     signal: AbortSignal.timeout(20_000),
@@ -219,7 +219,8 @@ async function suggestWithAi(category: string, name: string, locale: AppLocale):
   const suggestedCategory = parsed && typeof parsed === "object" && "category" in parsed && typeof parsed.category === "string"
     ? parsed.category.trim().slice(0, 80)
     : "";
-  return { category: suggestedCategory, fields: cleanAiFields(parsed, locale) };
+  const existingMatch = existingCategories.find((existing) => normalize(existing) === normalize(suggestedCategory));
+  return { category: existingMatch ?? suggestedCategory, fields: cleanAiFields(parsed, locale) };
 }
 
 export async function POST(request: Request) {
@@ -247,6 +248,13 @@ export async function POST(request: Request) {
   const locale = "locale" in body ? parseLocale(body.locale) : headerLocale;
   const category = "category" in body && typeof body.category === "string" ? body.category.trim().slice(0, 80) : "";
   const name = "name" in body && typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
+  const existingCategories = "categories" in body && Array.isArray(body.categories)
+    ? body.categories
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.trim().slice(0, 80))
+      .filter(Boolean)
+      .slice(0, 100)
+    : [];
   if (!category && !name) return Response.json({ error: localizedMessage(locale, "missing") }, { status: 400 });
 
   const now = Date.now();
@@ -259,7 +267,7 @@ export async function POST(request: Request) {
     : { count: 1, resetAt: now + 60_000 });
 
   try {
-    const { category: suggestedCategory, fields } = await suggestWithAi(category, name, locale);
+    const { category: suggestedCategory, fields } = await suggestWithAi(category, name, existingCategories, locale);
     return Response.json({ category: suggestedCategory, fields, source: "ai" });
   } catch (cause) {
     console.error("AI product-fields suggestion failed:", cause);

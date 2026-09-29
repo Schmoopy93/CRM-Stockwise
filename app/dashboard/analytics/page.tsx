@@ -3,14 +3,14 @@
 import { useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useProducts, useAllStockEvents } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n-context";
+import { INTL_LOCALES, Locale, useI18n } from "@/lib/i18n-context";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell,
 } from "recharts";
 import { TrendingDown, TrendingUp, Activity, Package } from "lucide-react";
 
-function formatDay(date: Date, locale: string) {
-  return date.toLocaleDateString(locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US", { day: "2-digit", month: "2-digit" });
+function formatDay(date: Date, locale: Locale) {
+  return date.toLocaleDateString(INTL_LOCALES[locale], { day: "2-digit", month: "2-digit" });
 }
 
 export default function AnalyticsPage() {

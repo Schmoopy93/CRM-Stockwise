@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 export const PAGE_SIZE = 12;
 
@@ -11,21 +11,17 @@ export const PAGE_SIZE = 12;
 export function usePagination<T>(items: T[], deps: unknown[] = [], pageSize = PAGE_SIZE) {
   const [visibleCount, setVisibleCount] = useState(pageSize);
   const [page, setPage] = useState(1);
+  const [prevDeps, setPrevDeps] = useState(deps);
 
-  // Reset whenever the result set changes.
-  useEffect(() => {
+  if (deps.length !== prevDeps.length || deps.some((dep, i) => !Object.is(dep, prevDeps[i]))) {
+    setPrevDeps(deps);
     setVisibleCount(pageSize);
     setPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }
 
   const totalItems = items.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-
-  // Clamp if the list shrinks (e.g. items removed) while a later page is active.
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  const currentPage = Math.min(page, totalPages);
 
   const visible = useMemo(() => items.slice(0, visibleCount), [items, visibleCount]);
   const hasMore = visibleCount < totalItems;
@@ -44,7 +40,7 @@ export function usePagination<T>(items: T[], deps: unknown[] = [], pageSize = PA
 
   return {
     visible,
-    page,
+    page: currentPage,
     totalPages,
     totalItems,
     hasMore,

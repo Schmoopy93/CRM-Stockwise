@@ -4,7 +4,8 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { I18nProvider } from "@/lib/i18n-context";
 import { ThemeProvider } from "@/lib/theme-context";
-import { BASE_URL, localeFromHeaders } from "@/lib/seo";
+import { BASE_URL, localeFromHeaders, seoCopy } from "@/lib/seo";
+import { CookieNotice } from "@/components/CookieNotice";
 
 const inter = Inter({
   subsets: ["latin", "cyrillic"],
@@ -12,27 +13,30 @@ const inter = Inter({
   preload: true,
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL(BASE_URL),
-  title: {
-    default: "Stockwise — Upravljanje zalihama u realnom vremenu",
-    template: "%s — Stockwise",
-  },
-  description: "Pratite stanje artikala, primajte robu, analizirajte kretanje zaliha i izvozite izveštaje za vašu radnju.",
-  applicationName: "Stockwise",
-  referrer: "origin-when-cross-origin",
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: { index: true, follow: true, "max-snippet": -1, "max-image-preview": "large" },
-  },
-  icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico",
-    apple: "/favicon.ico",
-  },
-  manifest: "/manifest.json",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { title, description } = seoCopy(await localeFromHeaders());
+  return {
+    metadataBase: new URL(BASE_URL),
+    title: {
+      default: title,
+      template: "%s — Stockwise",
+    },
+    description,
+    applicationName: "Stockwise",
+    referrer: "origin-when-cross-origin",
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: { index: true, follow: true, "max-snippet": -1, "max-image-preview": "large" },
+    },
+    icons: {
+      icon: "/favicon.ico",
+      shortcut: "/favicon.ico",
+      apple: "/favicon.ico",
+    },
+    manifest: "/manifest.json",
+  };
+}
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -45,7 +49,7 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // middleware.ts resolves the language from ?lang= or Accept-Language, so the
+  // proxy.ts resolves the language from ?lang= or the saved cookie, so the
   // document language is correct on the server — not just after hydration.
   const locale = await localeFromHeaders();
 
@@ -55,6 +59,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <ThemeProvider>
           <I18nProvider>
             <AuthProvider>{children}</AuthProvider>
+            <CookieNotice />
           </I18nProvider>
         </ThemeProvider>
       </body>

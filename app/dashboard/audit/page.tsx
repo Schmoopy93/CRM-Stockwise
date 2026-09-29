@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useProducts, useAllStockEvents } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n-context";
+import { INTL_LOCALES, useI18n } from "@/lib/i18n-context";
 import { usePagination } from "@/lib/use-pagination";
 import ListPagination from "@/components/ListPagination";
 import { StockEvent } from "@/lib/types";
@@ -56,7 +56,7 @@ export default function AuditPage() {
   const productName = (id: string) => products.find((p) => p.id === id)?.name ?? id.slice(0, 8);
 
   const hasFilters = actorFilter !== "all" || reasonFilter !== "all" || productFilter !== "all" || Boolean(dateFrom || dateTo);
-  const dateLocale = locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US";
+  const dateLocale = INTL_LOCALES[locale];
 
   const pagingLabels = {
     loadMore: t("paging.loadMore"),
@@ -198,7 +198,7 @@ export default function AuditPage() {
                           ? <>
                               <span style={{ color: "var(--text-2)" }}>{e.createdAt.toLocaleDateString(dateLocale)}</span>
                               {" "}
-                              <span style={{ fontSize: "0.75rem" }}>{e.createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                              <span style={{ fontSize: "0.75rem" }}>{e.createdAt.toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}</span>
                             </>
                           : "—"}
                       </td>

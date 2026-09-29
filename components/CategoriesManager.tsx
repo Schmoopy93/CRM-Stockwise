@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
-import { useI18n } from "@/lib/i18n-context";
+import { translateError, useI18n } from "@/lib/i18n-context";
 import { renameCategory } from "@/lib/actions";
 import { Pencil, X, Check } from "lucide-react";
 
@@ -19,8 +19,6 @@ export default function CategoriesManager({ shopId, categories, onRenamed, onClo
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
 
   async function submit(oldName: string) {
     setError(""); setSaving(true);
@@ -29,11 +27,9 @@ export default function CategoriesManager({ shopId, categories, onRenamed, onClo
       onRenamed(oldName, value);
       setEditing(null);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t("categories.error"));
+      setError(translateError(err, t, "categories.error"));
     } finally { setSaving(false); }
   }
-
-  if (!mounted) return null;
 
   return createPortal(
     <div

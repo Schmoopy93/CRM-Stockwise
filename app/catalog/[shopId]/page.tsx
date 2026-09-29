@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useParams } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useCatalog } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n-context";
+import { INTL_LOCALES, Locale, useI18n } from "@/lib/i18n-context";
 import { CatalogItem } from "@/lib/types";
 import { Search, Package, MessageCircle, AtSign, X, ChevronLeft, ChevronRight, Images } from "lucide-react";
 
@@ -21,7 +22,7 @@ function contactLink(contact: string) {
   return `https://instagram.com/${trimmed.replace(/^@/, "")}`;
 }
 
-function CatalogCard({ item, locale, onOpen }: { item: CatalogItem; locale: string; onOpen: () => void }) {
+function CatalogCard({ item, locale, onOpen }: { item: CatalogItem; locale: Locale; onOpen: () => void }) {
   const { t } = useI18n();
   const images = item.images.length > 0 ? item.images : item.imageUrl ? [item.imageUrl] : [];
   return (
@@ -50,7 +51,7 @@ function CatalogCard({ item, locale, onOpen }: { item: CatalogItem; locale: stri
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {item.fields.slice(0, 4).map((field, i) => {
               const label = field.labels?.[locale as never] || field.label;
-              const value = typeof field.value === "boolean" ? t(field.value ? "yes" : "no") : String(field.value);
+              const value = typeof field.value === "boolean" ? t(field.value ? "yes" : "no") : field.values?.[locale] ?? String(field.value);
               return (
                 <p key={i} className="cat-card-field">
                   <span>{label}</span>
@@ -78,7 +79,7 @@ function CatalogCard({ item, locale, onOpen }: { item: CatalogItem; locale: stri
         <div className="cat-card-foot">
           {item.salePrice !== undefined ? (
             <span className="cat-card-price">
-              {item.salePrice.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+              {item.salePrice.toLocaleString(INTL_LOCALES[locale], { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
               <em>€</em>
             </span>
           ) : <span />}
@@ -90,7 +91,7 @@ function CatalogCard({ item, locale, onOpen }: { item: CatalogItem; locale: stri
 
 function CatalogDetailModal({ item, locale, contactLink: link, isInstagram, onClose }: {
   item: CatalogItem;
-  locale: string;
+  locale: Locale;
   contactLink: string;
   isInstagram: boolean;
   onClose: () => void;
@@ -181,7 +182,7 @@ function CatalogDetailModal({ item, locale, contactLink: link, isInstagram, onCl
 
           {item.salePrice !== undefined && (
             <p className="cat-modal-price">
-              {item.salePrice.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+              {item.salePrice.toLocaleString(INTL_LOCALES[locale], { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
               <em>€</em>
             </p>
           )}
@@ -191,7 +192,7 @@ function CatalogDetailModal({ item, locale, contactLink: link, isInstagram, onCl
               <p className="cat-modal-section">{t("product.customDetails")}</p>
               {item.fields.map((field, i) => {
                 const label = field.labels?.[locale as never] || field.label;
-                const value = typeof field.value === "boolean" ? t(field.value ? "yes" : "no") : String(field.value);
+                const value = typeof field.value === "boolean" ? t(field.value ? "yes" : "no") : field.values?.[locale] ?? String(field.value);
                 return (
                   <div key={i} className="cat-modal-field">
                     <span>{label}</span>
@@ -352,6 +353,10 @@ export default function PublicCatalogPage() {
             </section>
           </div>
         )}
+
+        <footer style={{ marginTop: "3rem", textAlign: "center", fontSize: "0.72rem", color: "var(--text-3)" }}>
+          <Link href="/cookies" style={{ color: "var(--text-3)" }}>{t("cookies.title")}</Link>
+        </footer>
 
         {selected && (
           <CatalogDetailModal

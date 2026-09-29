@@ -22,8 +22,6 @@ export default function ImageCropper({ src, fileName, onCancel, onCropped }: Pro
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const [view, setView] = useState(320);
   const [base, setBase] = useState(0);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
 
@@ -63,11 +61,7 @@ export default function ImageCropper({ src, fileName, onCancel, onCropped }: Pro
     };
   }, [base, view]);
 
-  // Re-clamp when viewport or image dimensions settle
-  useEffect(() => {
-    if (!base) return;
-    setOffset((o) => clamp(o, zoom));
-  }, [base, view, zoom, clamp]);
+  const shownOffset = base ? clamp(offset, zoom) : offset;
 
   function handleZoom(z: number) {
     const clamped = Math.min(4, Math.max(1, z));
@@ -77,7 +71,7 @@ export default function ImageCropper({ src, fileName, onCancel, onCropped }: Pro
 
   function onPointerDown(e: React.PointerEvent) {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    dragRef.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+    dragRef.current = { x: e.clientX, y: e.clientY, ox: shownOffset.x, oy: shownOffset.y };
   }
   function onPointerMove(e: React.PointerEvent) {
     const d = dragRef.current;
@@ -100,8 +94,8 @@ export default function ImageCropper({ src, fileName, onCancel, onCropped }: Pro
     ctx.fillRect(0, 0, OUT, OUT);
     ctx.drawImage(
       img,
-      (view / 2 - size / 2 + offset.x) * scale,
-      (view / 2 - size / 2 + offset.y) * scale,
+      (view / 2 - size / 2 + shownOffset.x) * scale,
+      (view / 2 - size / 2 + shownOffset.y) * scale,
       size * scale,
       size * scale
     );
@@ -112,8 +106,6 @@ export default function ImageCropper({ src, fileName, onCancel, onCropped }: Pro
   }
 
   const size = base * zoom;
-
-  if (!mounted) return null;
 
   return createPortal(
     <>
@@ -142,7 +134,7 @@ export default function ImageCropper({ src, fileName, onCancel, onCropped }: Pro
                 position: "absolute", left: "50%", top: "50%",
                 width: size, height: size,
                 maxWidth: "none", maxHeight: "none",
-                transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
+                transform: `translate(calc(-50% + ${shownOffset.x}px), calc(-50% + ${shownOffset.y}px))`,
                 userSelect: "none", pointerEvents: "none",
               }}
             />

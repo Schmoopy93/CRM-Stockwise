@@ -56,8 +56,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [user, loading, router]);
+    if (loading) return;
+    if (!user) {
+      router.replace("/login");
+    } else if (!profile) {
+      void signOut().finally(() => router.replace("/login?setup=1"));
+    }
+  }, [user, profile, loading, router]);
 
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -74,7 +79,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }, [mobileNavOpen]);
 
   if (loading) return <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="spinner" /></div>;
-  if (!user) return null;
+  if (!user || !profile) return null;
 
   const NAV = [
     { href: "/dashboard", icon: LayoutGrid, label: t("nav.overview"), exact: true },
@@ -93,7 +98,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <button className="mobile-menu-button" type="button" aria-label={mobileNavOpen ? t("nav.closeMenu") : t("nav.openMenu")} aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((open) => !open)}>
           {mobileNavOpen ? <X size={21} /> : <Menu size={21} />}
         </button>
-        <span className="mobile-brand"><span aria-hidden="true">📦</span> Inventory</span>
+        <span className="mobile-brand"><span aria-hidden="true">📦</span> {t("brand")}</span>
         <span className="mobile-user-name">{profile?.displayName ?? "—"}</span>
       </header>
 
@@ -105,7 +110,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <div style={{ width: 32, height: 32, background: "linear-gradient(135deg, var(--accent), var(--accent-2))", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, boxShadow: "0 4px 12px var(--accent-glow)" }}>
             📦
           </div>
-          <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-1)" }}>Inventory</span>
+          <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-1)" }}>{t("brand")}</span>
         </div>
 
         <NotificationWidget shopId={profile?.shopId} />

@@ -2,22 +2,42 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signOut as firebaseSignOut,
+  User,
 } from "firebase/auth";
 import {
   addDoc,
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
+  limit,
+  query,
   runTransaction,
   serverTimestamp,
   setDoc,
+  where,
   writeBatch,
+  WriteBatch,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { uploadProductImage } from "@/lib/cloudinary";
 import { applyStockDelta } from "@/lib/stock-invariants";
-import { ProductCustomField, ProductVariant, SaleChannel, SaleLine } from "@/lib/types";
+import { getLocalizedOptionValue } from "@/lib/product-field-options";
+import { AppLocale, Product, ProductCustomField, ProductVariant, SaleChannel, SaleLine } from "@/lib/types";
+
+const BATCH_LIMIT = 450;
+const CATALOG_LOCALES: AppLocale[] = ["sr", "en", "ru", "de", "es", "it"];
+
+type BatchOperation = (batch: WriteBatch) => void;
+
+async function commitInChunks(operations: BatchOperation[]) {
+  for (let start = 0; start < operations.length; start += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    for (const operation of operations.slice(start, start + BATCH_LIMIT)) operation(batch);
+    await batch.commit();
+  }
+}
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
@@ -29,7 +49,20 @@ export async function signInWithGoogle(
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
   const credential = await signInWithPopup(auth, provider);
-  const user = credential.user;
+  try {
+    await ensureUserProfile(credential.user, mode, shopName, shopId);
+  } catch (error) {
+    await firebaseSignOut(auth).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function ensureUserProfile(
+  user: User,
+  mode: "login" | "newShop" | "joinShop",
+  shopName: string,
+  shopId: string
+) {
   const userRef = doc(db, "users", user.uid);
   const userSnap = await getDoc(userRef);
 
@@ -77,19 +110,25 @@ function buildCatalogDoc(
   hidden: boolean
 ) {
   const fields = definitions
-    .map((definition) => ({
-      label: definition.label,
-      labels: definition.labels ?? {},
-      type: definition.type,
-      value: values[definition.key],
-    }))
+    .map((definition) => {
+      const value = values[definition.key];
+      return {
+        label: definition.label,
+        labels: definition.labels ?? {},
+        type: definition.type,
+        value,
+        ...(definition.type === "select" && value !== undefined && value !== ""
+          ? { values: Object.fromEntries(CATALOG_LOCALES.map((locale) => [locale, getLocalizedOptionValue(definition, String(value), locale)])) }
+          : {}),
+      };
+    })
     .filter((field) => field.value !== undefined && field.value !== "");
   return {
     name: name.trim(),
     category: category.trim(),
     imageUrl,
     images: images.length > 0 ? images : (imageUrl ? [imageUrl] : []),
-    ...(salePrice !== undefined ? { salePrice } : {}),
+    salePrice: salePrice !== undefined ? salePrice : deleteField(),
     variants: variantLabels,
     fields,
     hidden,
@@ -112,16 +151,17 @@ export interface CatalogSettings {
 export async function updateCatalogSettings(shopId: string, settings: CatalogSettings) {
   const shopRef = doc(db, "shops", shopId);
   const contact = settings.contact.trim().slice(0, 100);
-  const batch = writeBatch(db);
 
   if (!settings.enabled) {
     const catalogDocs = await getDocs(collection(db, "shops", shopId, "catalog"));
-    for (const catalogDoc of catalogDocs.docs) batch.delete(catalogDoc.ref);
-    batch.update(shopRef, { catalogEnabled: false, catalogContact: contact });
-    await batch.commit();
+    await commitInChunks([
+      (batch) => batch.update(shopRef, { catalogEnabled: false, catalogContact: contact }),
+      ...catalogDocs.docs.map((catalogDoc): BatchOperation => (batch) => batch.delete(catalogDoc.ref)),
+    ]);
     return;
   }
 
+  const operations: BatchOperation[] = [];
   const productsSnap = await getDocs(collection(db, "shops", shopId, "products"));
   for (const productDoc of productsSnap.docs) {
     const data = productDoc.data();
@@ -129,24 +169,21 @@ export async function updateCatalogSettings(shopId: string, settings: CatalogSet
     const variantLabels = variantsSnap.docs
       .map((variantDoc) => (variantDoc.data().label ?? "").trim())
       .filter(Boolean);
-    batch.set(
-      doc(db, "shops", shopId, "catalog", productDoc.id),
-      buildCatalogDoc(
-        data.name ?? "",
-        data.category ?? "",
-        data.imageUrl ?? "",
-        Array.isArray(data.images) ? data.images : [],
-        typeof data.salePrice === "number" ? data.salePrice : undefined,
-        variantLabels,
-        data.customFieldDefinitions ?? [],
-        data.customFieldValues ?? {},
-        data.catalogHidden === true
-      ),
-      { merge: true }
+    const catalogDoc = buildCatalogDoc(
+      data.name ?? "",
+      data.category ?? "",
+      data.imageUrl ?? "",
+      Array.isArray(data.images) ? data.images : [],
+      typeof data.salePrice === "number" ? data.salePrice : undefined,
+      variantLabels,
+      data.customFieldDefinitions ?? [],
+      data.customFieldValues ?? {},
+      data.catalogHidden === true
     );
+    operations.push((batch) => batch.set(doc(db, "shops", shopId, "catalog", productDoc.id), catalogDoc, { merge: true }));
   }
-  batch.update(shopRef, { catalogEnabled: true, catalogContact: contact });
-  await batch.commit();
+  operations.push((batch) => batch.update(shopRef, { catalogEnabled: true, catalogContact: contact }));
+  await commitInChunks(operations);
 }
 
 // ─── Products ────────────────────────────────────────────────────────────────
@@ -174,13 +211,16 @@ export async function saveProduct(
   supplier?: { name: string; contact?: string; notes?: string },
   catalogHidden = false
 ): Promise<string> {
-  if (variants.length === 0) throw new Error("Dodaj bar jednu varijantu");
-  if (variants.length > 200) throw new Error("Artikal može imati najviše 200 varijanti");
+  if (variants.length === 0) throw new Error("VARIANT_REQUIRED");
+  if (variants.length > 200) throw new Error("TOO_MANY_VARIANTS");
   if (variants.some((variant) => !Number.isSafeInteger(variant.quantity) || variant.quantity < 0)) {
-    throw new Error("Količina varijante mora biti nenegativan ceo broj");
+    throw new Error("VARIANT_QUANTITY_INVALID");
   }
   if (new Set(variants.map((variant) => variant.id).filter(Boolean)).size !== variants.filter((variant) => variant.id).length) {
-    throw new Error("Varijanta ne može biti dodata više puta");
+    throw new Error("DUPLICATE_VARIANT");
+  }
+  if ([costPrice, salePrice].some((price) => price !== undefined && (!Number.isFinite(price) || price < 0))) {
+    throw new Error("PRICE_INVALID");
   }
 
   const products = collection(db, "shops", shopId, "products");
@@ -200,7 +240,7 @@ export async function saveProduct(
 
   const variantsCol = collection(docRef, "variants");
   const total = variants.reduce((sum, variant) => sum + variant.quantity, 0);
-  if (!Number.isSafeInteger(total)) throw new Error("Ukupna količina je van dozvoljenog opsega");
+  if (!Number.isSafeInteger(total)) throw new Error("VALUE_OUT_OF_RANGE");
   const incomingIds = new Set(variants.map((variant) => variant.id).filter(Boolean));
 
   const existingSnap = await getDocs(variantsCol);
@@ -211,22 +251,22 @@ export async function saveProduct(
     if (productSnap.exists()) {
       const existingTotal = productSnap.data().totalQuantity ?? 0;
       if (existingTotal !== total) {
-        throw new Error("Količinu menjajte kroz korekciju stanja kako bi promena bila zabeležena u istoriji");
+        throw new Error("QUANTITY_CHANGE_NOT_ALLOWED");
       }
       for (const variant of variants) {
         if (!variant.id) {
-          if (variant.quantity !== 0) throw new Error("Nova varijanta mora početi sa nulom; koristite prijem robe za unos stanja");
+          if (variant.quantity !== 0) throw new Error("NEW_VARIANT_NONZERO");
           continue;
         }
         const previous = existingVariants.get(variant.id);
-        if (!previous) throw new Error("Varijanta nije deo ovog artikla");
+        if (!previous) throw new Error("VARIANT_NOT_IN_PRODUCT");
         if ((previous.data().quantity ?? 0) !== variant.quantity) {
-          throw new Error("Količinu menjajte kroz korekciju stanja kako bi promena bila zabeležena u istoriji");
+          throw new Error("QUANTITY_CHANGE_NOT_ALLOWED");
         }
       }
       for (const previous of existingSnap.docs) {
         if (!incomingIds.has(previous.id) && (previous.data().quantity ?? 0) !== 0) {
-          throw new Error("Varijanta sa zalihom ne može biti uklonjena; prvo korigujte stanje na nulu");
+          throw new Error("VARIANT_REMOVE_WITH_STOCK");
         }
       }
     }
@@ -242,9 +282,11 @@ export async function saveProduct(
       customFieldDefinitions,
       customFieldValues,
       catalogHidden,
-      ...(costPrice !== undefined ? { costPrice } : {}),
-      ...(salePrice !== undefined ? { salePrice } : {}),
-      ...(supplier?.name?.trim() ? { supplier: { name: supplier.name.trim(), contact: supplier.contact?.trim() ?? "", notes: supplier.notes?.trim() ?? "" } } : {}),
+      costPrice: costPrice !== undefined ? costPrice : deleteField(),
+      salePrice: salePrice !== undefined ? salePrice : deleteField(),
+      supplier: supplier?.name?.trim()
+        ? { name: supplier.name.trim(), contact: supplier.contact?.trim() ?? "", notes: supplier.notes?.trim() ?? "" }
+        : deleteField(),
       updatedAt: serverTimestamp(),
     }, { merge: true });
 
@@ -274,15 +316,15 @@ export async function saveProduct(
 export async function deleteProduct(shopId: string, productId: string) {
   const productRef = doc(db, "shops", shopId, "products", productId);
   const productSnap = await getDoc(productRef);
-  if (!productSnap.exists()) throw new Error("Artikal nije pronađen");
+  if (!productSnap.exists()) throw new Error("PRODUCT_NOT_FOUND");
   if ((productSnap.data().totalQuantity ?? 0) > 0) {
-    throw new Error("Pre brisanja uklonite sve zalihe artikla kroz korekciju stanja");
+    throw new Error("DELETE_WITH_STOCK");
   }
   const variants = await getDocs(collection(productRef, "variants"));
   if (variants.docs.some((variant) => (variant.data().quantity ?? 0) > 0)) {
-    throw new Error("Pre brisanja uklonite sve zalihe artikla kroz korekciju stanja");
+    throw new Error("DELETE_WITH_STOCK");
   }
-  if (variants.size > 499) throw new Error("Artikal ima previše varijanti za bezbedno brisanje");
+  if (variants.size > 499) throw new Error("TOO_MANY_VARIANTS_TO_DELETE");
   const batch = writeBatch(db);
   for (const variant of variants.docs) batch.delete(variant.ref);
   batch.delete(productRef);
@@ -298,28 +340,28 @@ export async function deleteProduct(shopId: string, productId: string) {
 export async function renameCategory(shopId: string, oldName: string, newName: string) {
   const from = oldName.trim();
   const to = newName.trim();
-  if (!from) throw new Error("Izaberite kategoriju za preimenovanje");
-  if (!to) throw new Error("Unesite novi naziv kategorije");
-  if (to.length > 100) throw new Error("Naziv kategorije može imati najviše 100 znakova");
-  if (from.toLowerCase() === to.toLowerCase()) throw new Error("Novi naziv je isti kao stari");
+  if (!from) throw new Error("CATEGORY_REQUIRED");
+  if (!to) throw new Error("CATEGORY_NAME_REQUIRED");
+  if (to.length > 100) throw new Error("CATEGORY_NAME_TOO_LONG");
+  if (from.toLowerCase() === to.toLowerCase()) throw new Error("CATEGORY_NAME_UNCHANGED");
 
   const productsSnap = await getDocs(collection(db, "shops", shopId, "products"));
   const affected = productsSnap.docs.filter((productDoc) => (productDoc.data().category ?? "").trim().toLowerCase() === from.toLowerCase());
-  if (affected.length === 0) throw new Error("Kategorija više ne postoji");
+  if (affected.length === 0) throw new Error("CATEGORY_NOT_FOUND");
 
   const catalogEnabled = await isCatalogEnabled(shopId);
-  const batch = writeBatch(db);
+  const operations: BatchOperation[] = [];
   for (const productDoc of affected) {
-    batch.update(productDoc.ref, { category: to, updatedAt: serverTimestamp() });
+    operations.push((batch) => batch.update(productDoc.ref, { category: to, updatedAt: serverTimestamp() }));
     if (catalogEnabled) {
-      batch.set(
+      operations.push((batch) => batch.set(
         doc(db, "shops", shopId, "catalog", productDoc.id),
         { category: to, updatedAt: serverTimestamp() },
         { merge: true }
-      );
+      ));
     }
   }
-  await batch.commit();
+  await commitInChunks(operations);
 }
 
 // ─── Stock ───────────────────────────────────────────────────────────────────
@@ -330,6 +372,27 @@ export interface StockReceiptLine {
   productId: string;
   variantId: string;
   quantity: number;
+}
+
+export async function findProductByCode(
+  shopId: string,
+  products: Product[],
+  rawCode: string
+): Promise<{ product: Product; variantId?: string } | null> {
+  const code = rawCode.trim();
+  if (!code) return null;
+  const product = products.find((candidate) => candidate.sku === code || candidate.name === code);
+  if (product) return { product };
+
+  const matches = await Promise.all(products.map(async (candidate) => {
+    const snap = await getDocs(query(
+      collection(db, "shops", shopId, "products", candidate.id, "variants"),
+      where("sku", "==", code),
+      limit(1)
+    ));
+    return snap.empty ? null : { product: candidate, variantId: snap.docs[0].id };
+  }));
+  return matches.find((match) => match !== null) ?? null;
 }
 
 export class PartialReceiptError extends Error {
@@ -348,7 +411,7 @@ export async function adjustStock(
   actorName: string,
   reason: StockMovementReason = "adjustment"
 ) {
-  if (!Number.isSafeInteger(delta) || delta === 0) throw new Error("Promena mora biti ceo broj različit od nule");
+  if (!Number.isSafeInteger(delta) || delta === 0) throw new Error("DELTA_INVALID");
 
   const productRef = doc(db, "shops", shopId, "products", productId);
   const variantRef = doc(productRef, "variants", variant.id);
@@ -356,14 +419,13 @@ export async function adjustStock(
 
   await runTransaction(db, async (tx) => {
     const variantSnap = await tx.get(variantRef);
-    if (!variantSnap.exists()) throw new Error("Varijanta više ne postoji");
+    if (!variantSnap.exists()) throw new Error("VARIANT_NOT_FOUND");
     const productSnap = await tx.get(productRef);
-    if (!productSnap.exists()) throw new Error("Artikal više ne postoji");
-    const next = applyStockDelta(
-      variantSnap.data().quantity ?? 0,
-      productSnap.data().totalQuantity ?? 0,
-      delta
-    );
+    if (!productSnap.exists()) throw new Error("PRODUCT_NOT_FOUND");
+    const variantQuantity = variantSnap.data().quantity ?? 0;
+    const productQuantity = productSnap.data().totalQuantity ?? 0;
+    if (variantQuantity + delta < 0 || productQuantity + delta < 0) throw new Error("INSUFFICIENT_STOCK");
+    const next = applyStockDelta(variantQuantity, productQuantity, delta);
 
     tx.update(variantRef, { quantity: next.variantQuantity, lastStockEventId: eventRef.id });
     tx.update(productRef, { totalQuantity: next.productQuantity, lastStockEventId: eventRef.id, updatedAt: serverTimestamp() });
@@ -389,13 +451,13 @@ export async function receiveStock(
   actorUid: string,
   actorName: string
 ) {
-  if (lines.length === 0) throw new Error("Dodajte bar jednu stavku prijema");
-  if (lines.length > 100) throw new Error("Prijem može sadržati najviše 100 artikala");
+  if (lines.length === 0) throw new Error("LINES_REQUIRED");
+  if (lines.length > 100) throw new Error("TOO_MANY_LINES");
   if (lines.some((line) => !Number.isSafeInteger(line.quantity) || line.quantity <= 0)) {
-    throw new Error("Količina prijema mora biti pozitivan ceo broj");
+    throw new Error("LINE_QUANTITY_INVALID");
   }
   if (new Set(lines.map((line) => `${line.productId}/${line.variantId}`)).size !== lines.length) {
-    throw new Error("Ista varijanta ne može biti uneta dva puta u prijem");
+    throw new Error("DUPLICATE_VARIANT");
   }
 
   const completedLineKeys: string[] = [];
@@ -436,19 +498,19 @@ export async function recordSale(
   actorUid: string,
   actorName: string
 ) {
-  if (lines.length === 0) throw new Error("Dodajte bar jednu stavku prodaje");
-  if (lines.length > 100) throw new Error("Prodaja može sadržati najviše 100 artikala");
+  if (lines.length === 0) throw new Error("LINES_REQUIRED");
+  if (lines.length > 100) throw new Error("TOO_MANY_LINES");
   if (lines.some((line) => !Number.isSafeInteger(line.quantity) || line.quantity <= 0)) {
-    throw new Error("Količina prodaje mora biti pozitivan ceo broj");
+    throw new Error("LINE_QUANTITY_INVALID");
   }
   if (lines.some((line) => !Number.isFinite(line.unitPrice) || line.unitPrice < 0)) {
-    throw new Error("Cena po jedinici mora biti nenegativan broj");
+    throw new Error("PRICE_INVALID");
   }
   if (new Set(lines.map((line) => `${line.productId}/${line.variantId}`)).size !== lines.length) {
-    throw new Error("Ista varijanta ne može biti uneta dva puta u prodaju");
+    throw new Error("DUPLICATE_VARIANT");
   }
   const total = lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
-  if (!Number.isSafeInteger(Math.round(total * 100))) throw new Error("Ukupan iznos je van dozvoljenog opsega");
+  if (!Number.isSafeInteger(Math.round(total * 100))) throw new Error("VALUE_OUT_OF_RANGE");
 
   const completedLineKeys: string[] = [];
   try {

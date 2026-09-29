@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { useAuth } from "@/lib/auth-context";
-import { useI18n } from "@/lib/i18n-context";
+import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { useProducts } from "@/lib/hooks";
 import { saveProduct } from "@/lib/actions";
 import { parseProductImportFile, ParsedProductImportRow } from "@/lib/product-import";
@@ -157,7 +157,7 @@ export default function ImportPage() {
           rowNumber: first.rowNumber,
           name: first.name,
           status: "error",
-          message: error instanceof Error ? error.message : t("import.unknownError"),
+          message: translateError(error, t, "import.unknownError"),
         });
       }
     }
@@ -170,7 +170,7 @@ export default function ImportPage() {
   const totalUnits = rows.reduce((sum, row) => sum + row.quantity, 0);
   const importedCount = results.filter((result) => result.status === "ok").length;
   const failedCount = results.filter((result) => result.status === "error").length;
-  const numberFormat = new Intl.NumberFormat(locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US");
+  const numberFormat = new Intl.NumberFormat(INTL_LOCALES[locale]);
 
   return (
     <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.5rem", maxWidth: 900 }}>

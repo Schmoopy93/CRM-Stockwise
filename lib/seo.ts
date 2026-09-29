@@ -37,11 +37,13 @@ export function localeFromParam(value: string | string[] | undefined): Locale {
   return (LOCALES as string[]).includes(code) ? (code as Locale) : "sr";
 }
 
-/** Header name middleware.ts writes the resolved locale into. */
+/** Header name proxy.ts writes the resolved locale into. */
 export const LOCALE_HEADER = "x-stokwise-locale";
 
+export const LOCALE_COOKIE = "inventory-locale";
+
 /**
- * Reads the locale that middleware.ts resolved from the URL. Layouts cannot access
+ * Reads the locale that proxy.ts resolved from the URL or cookie. Layouts cannot access
  * searchParams, so the language has to travel through a request header to make
  * `<html lang>` and the metadata render on the server.
  */
@@ -78,7 +80,7 @@ export function buildMetadata({ locale, path = "/", title, description, noindex 
   for (const l of LOCALES) {
     languages[LOCALE_TAGS[l].hreflang] = urlFor(l);
   }
-  languages["x-default"] = urlFor(locale);
+  languages["x-default"] = urlFor("sr");
 
   return {
     title,

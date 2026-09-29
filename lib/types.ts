@@ -56,6 +56,7 @@ export interface CatalogField {
   labels?: Partial<Record<AppLocale, string>>;
   type: ProductCustomFieldType;
   value: string | number | boolean;
+  values?: Partial<Record<AppLocale, string>>;
 }
 
 export interface CatalogItem {

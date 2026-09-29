@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signInWithGoogle } from "@/lib/actions";
 import { useI18n } from "@/lib/i18n-context";
@@ -28,38 +29,46 @@ const FEATURE_KEYS = [
   { icon: Layers,       key: "variants",  color: "rgba(168,85,247,0.1)",  iconColor: "#a855f7" },
 ] as const;
 
+function subscribeToNothing() {
+  return () => {};
+}
+
+function readSetupRequested() {
+  return new URLSearchParams(window.location.search).get("setup") === "1";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>("login");
+  const setupRequested = useSyncExternalStore(subscribeToNothing, readSetupRequested, () => false);
+  const [modal, setModal] = useState<{ open: boolean; mode: Mode } | null>(null);
+  const { open, mode } = modal ?? (setupRequested ? { open: true, mode: "newShop" as Mode } : { open: false, mode: "login" as Mode });
   const [shopName, setShopName] = useState("");
   const [shopId, setShopId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const shownError = error || (modal === null && setupRequested ? t("auth.profileRequired") : "");
 
-  // Close on Escape
+  const closeModal = useCallback(() => {
+    if (loading) return;
+    setModal({ open: false, mode });
+    setError("");
+  }, [loading, mode]);
+
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") closeModal(); }
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
-  }, [open]);
+  }, [open, closeModal]);
 
   function openModal(m: Mode = "login") {
-    setMode(m);
+    setModal({ open: true, mode: m });
     setError("");
     setShopName("");
     setShopId("");
-    setOpen(true);
-  }
-
-  function closeModal() {
-    if (loading) return;
-    setOpen(false);
-    setError("");
   }
 
   async function handleGoogleSignIn() {
@@ -73,7 +82,7 @@ export default function LoginPage() {
     } catch (err: unknown) {
       const code = err && typeof err === "object" && "code" in err && typeof err.code === "string" ? err.code : "";
       const message = err instanceof Error ? err.message : "";
-      if (message === "GOOGLE_PROFILE_REQUIRED") { setMode("newShop"); setLoading(false); return; }
+      if (message === "GOOGLE_PROFILE_REQUIRED") { setModal({ open: true, mode: "newShop" }); setError(t("auth.profileRequired")); setLoading(false); return; }
       const errorKey =
         message === "GOOGLE_SHOP_NAME_REQUIRED" ? "auth.googleShopNameRequired"
         : message === "GOOGLE_SHOP_ID_REQUIRED" ? "auth.googleShopIdRequired"
@@ -224,7 +233,7 @@ export default function LoginPage() {
             {/* Tabs */}
             <div style={{ display: "flex", gap: 2, background: "var(--bg-3)", borderRadius: 11, padding: 3, marginBottom: "1.25rem", border: "1px solid var(--border)" }}>
               {TABS.map((tab) => (
-                <button key={tab.id} onClick={() => { setMode(tab.id); setError(""); }} style={{
+                <button key={tab.id} onClick={() => { setModal({ open: true, mode: tab.id }); setError(""); }} style={{
                   flex: 1, padding: "0.48rem 0",
                   fontSize: "0.75rem", fontWeight: 600,
                   borderRadius: 9, border: "none", cursor: "pointer",
@@ -244,9 +253,9 @@ export default function LoginPage() {
             </p>
 
             {/* Error */}
-            {error && (
+            {shownError && (
               <div role="alert" style={{ background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 10, padding: "0.65rem 0.9rem", fontSize: "0.8rem", color: "var(--red)", marginBottom: "1rem", lineHeight: 1.5 }}>
-                {error}
+                {shownError}
               </div>
             )}
 
@@ -301,6 +310,8 @@ export default function LoginPage() {
           <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-3)" }}>{t("brand")}</span>
           <span style={{ fontSize: "0.78rem", color: "var(--border)" }}>·</span>
           <span style={{ fontSize: "0.75rem", color: "var(--text-3)" }}>{new Date().getFullYear()}</span>
+          <span style={{ fontSize: "0.78rem", color: "var(--border)" }}>·</span>
+          <Link href="/cookies" style={{ fontSize: "0.75rem", color: "var(--text-3)" }}>{t("cookies.title")}</Link>
         </div>
       </footer>
 

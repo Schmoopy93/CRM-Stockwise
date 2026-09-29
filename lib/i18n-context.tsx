@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useSyncExternalStore, useCallback } from "react";
+import { createContext, useContext, useEffect, useSyncExternalStore, useCallback } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import sr from "./i18n/sr.json";
 import en from "./i18n/en.json";
 import ru from "./i18n/ru.json";
@@ -20,6 +21,25 @@ export const LOCALE_LABELS: Record<Locale, string> = {
   es: "Español 🇪🇸",
   it: "Italiano 🇮🇹",
 };
+
+export const INTL_LOCALES: Record<Locale, string> = {
+  sr: "sr-RS",
+  en: "en-US",
+  ru: "ru-RU",
+  de: "de-DE",
+  es: "es-ES",
+  it: "it-IT",
+};
+
+export function translateError(
+  error: unknown,
+  t: (key: string) => string,
+  fallbackKey: string
+): string {
+  const key = `errors.${error instanceof Error ? error.message : ""}`;
+  const translated = t(key);
+  return translated === key ? t(fallbackKey) : translated;
+}
 
 const STORAGE_KEY = "inventory-locale";
 
@@ -56,16 +76,21 @@ const localeStore = {
   },
   set(locale: Locale) {
     cachedLocale = locale;
-    window.localStorage.setItem(STORAGE_KEY, locale);
-    // Keep the URL shareable in the same language the visitor picked — including
-    // Serbian (?lang=sr), so every language behaves consistently. A full
-    // navigation is used instead of replaceState so the server re-renders the
-    // <html lang> and OpenGraph/browser-card metadata for the new language.
-    const url = new URL(window.location.href);
-    url.searchParams.set("lang", locale);
-    window.location.href = url.toString();
+    window.dispatchEvent(new Event(CHANGE_EVENT));
   },
 };
+
+const ONE_YEAR = 60 * 60 * 24 * 365;
+
+function persistLocale(locale: Locale) {
+  window.localStorage.setItem(STORAGE_KEY, locale);
+  document.cookie = `${STORAGE_KEY}=${locale}; path=/; max-age=${ONE_YEAR}; samesite=lax`;
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("lang") !== locale) {
+    url.searchParams.set("lang", locale);
+    window.history.replaceState(null, "", url);
+  }
+}
 
 let cachedLocale: Locale | null = null;
 
@@ -86,6 +111,14 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   // contract fits better than mirroring it into state with an effect.
   const locale = useSyncExternalStore(localeStore.subscribe, localeStore.get, () => "sr" as Locale);
   const setLocale = localeStore.set;
+  const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (locale !== localeStore.get()) return;
+    persistLocale(locale);
+    if (document.documentElement.lang !== locale) router.refresh();
+  }, [locale, pathname, router]);
 
   const t = useCallback(
     (key: string, vars?: Record<string, string | number>): string => {

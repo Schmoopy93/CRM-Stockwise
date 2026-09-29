@@ -89,6 +89,7 @@ export function useProducts(shopId: string | undefined) {
           supplier: d.data().supplier ?? undefined,
           customFieldDefinitions: d.data().customFieldDefinitions ?? [],
           customFieldValues: d.data().customFieldValues ?? {},
+          catalogHidden: d.data().catalogHidden === true,
         }))
       );
       setLoading(false);
@@ -123,6 +124,7 @@ export function useProduct(shopId: string | undefined, productId: string | undef
             supplier: snap.data().supplier ?? undefined,
             customFieldDefinitions: snap.data().customFieldDefinitions ?? [],
             customFieldValues: snap.data().customFieldValues ?? {},
+            catalogHidden: snap.data().catalogHidden === true,
           });
         } else {
           setProduct(null);

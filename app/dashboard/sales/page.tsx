@@ -3,8 +3,8 @@
 import { useState, lazy, Suspense } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useProducts, useSales } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n-context";
-import { PartialReceiptError, recordSale } from "@/lib/actions";
+import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
+import { findProductByCode, PartialReceiptError, recordSale } from "@/lib/actions";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { Product, ProductVariant, SaleChannel } from "@/lib/types";
@@ -20,7 +20,8 @@ interface SaleEntry { product: Product; variants: ProductVariant[]; variantId: s
 
 export default function SalesPage() {
   const { profile } = useAuth();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const intlLocale = INTL_LOCALES[locale];
   const { products } = useProducts(profile?.shopId);
   const { sales } = useSales(profile?.shopId);
   const [lines, setLines] = useState<SaleEntry[]>([]);
@@ -84,11 +85,20 @@ export default function SalesPage() {
     setSearch("");
   }
 
-  function handleScan(code: string) {
+  async function handleScan(code: string) {
     setShowScanner(false);
-    const product = products.find((p) => p.sku === code || p.name === code);
-    if (product) void addLine(product);
-    else { setError(t("receive.notFound", { code })); setTimeout(() => setError(""), 4000); }
+    if (!profile) return;
+    try {
+      const match = await findProductByCode(profile.shopId, products, code);
+      if (match) {
+        await addLine(match.product, match.variantId);
+        return;
+      }
+      setError(t("receive.notFound", { code }));
+      setTimeout(() => setError(""), 4000);
+    } catch {
+      setError(t("receive.loadVariantsError"));
+    }
   }
 
   function updateQty(idx: number, delta: number) {
@@ -97,7 +107,10 @@ export default function SalesPage() {
 
   async function handleConfirm() {
     if (!profile || lines.length === 0) return;
-    const unitPrices = lines.map((line) => parseFloat(line.unitPrice.replace(",", ".")) || -1);
+    const unitPrices = lines.map((line) => {
+      const price = parseFloat(line.unitPrice.replace(",", "."));
+      return Number.isFinite(price) ? price : -1;
+    });
     if (unitPrices.some((price) => price < 0)) {
       setError(t("sales.invalidPrice"));
       return;
@@ -125,7 +138,7 @@ export default function SalesPage() {
         setLines((current) => current.filter((line) => !completed.has(`${line.product.id}/${line.variantId}`)));
         setError(t("receive.partialFailure", { n: completed.size }));
       } else {
-        setError(t("sales.atomicFailure"));
+        setError(translateError(cause, t, "sales.atomicFailure"));
       }
     }
     finally { setSaving(false); }
@@ -242,7 +255,7 @@ export default function SalesPage() {
             <div>
               <p style={{ margin: 0, fontWeight: 600, color: "var(--text-1)" }}>
                 {t("sales.summary", { n: lines.length, qty: lines.reduce((s, l) => s + l.quantity, 0) })}
-                {total > 0 && <span style={{ color: "var(--accent-2)" }}> · €{total.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                {total > 0 && <span style={{ color: "var(--accent-2)" }}> · €{total.toLocaleString(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
               </p>
               <p style={{ margin: "2px 0 0", fontSize: "0.78rem", color: "var(--text-2)" }}>{t("sales.summaryNote")}</p>
             </div>
@@ -270,10 +283,10 @@ export default function SalesPage() {
                     <span>{t(`sales.channel.${sale.channel}`)}</span>
                     {sale.buyerName && <span>· {sale.buyerName}</span>}
                     {sale.buyerInstagram && <span>· @{sale.buyerInstagram}</span>}
-                    {sale.createdAt && <span>· {sale.createdAt.toLocaleString()}</span>}
+                    {sale.createdAt && <span>· {sale.createdAt.toLocaleString(intlLocale)}</span>}
                   </p>
                 </div>
-                <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--green)" }}>€{sale.total.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--green)" }}>€{sale.total.toLocaleString(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             ))}
           </div>

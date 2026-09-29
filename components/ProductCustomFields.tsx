@@ -16,6 +16,7 @@ interface ProductCustomFieldsProps {
   onDefinitionsChange: (definitions: ProductCustomField[]) => void;
   onValuesChange: (values: Record<string, FieldValue>) => void;
   onCategorySuggest?: (category: string) => void;
+  existingCategories?: string[];
 }
 
 const fieldTypes: Array<{ value: ProductCustomFieldType; labelKey: string }> = [
@@ -40,6 +41,7 @@ export default function ProductCustomFields({
   onDefinitionsChange,
   onValuesChange,
   onCategorySuggest,
+  existingCategories = [],
 }: ProductCustomFieldsProps) {
   const { locale, t } = useI18n();
   const [suggestions, setSuggestions] = useState<ProductCustomField[]>([]);
@@ -63,7 +65,7 @@ export default function ProductCustomFields({
           Authorization: `Bearer ${token}`,
           "X-App-Locale": locale,
         },
-        body: JSON.stringify({ category, name, locale }),
+        body: JSON.stringify({ category, name, locale, categories: existingCategories }),
       });
       const result: unknown = await response.json();
       if (!response.ok) {
@@ -81,7 +83,10 @@ export default function ProductCustomFields({
       const suggestedCategory = "category" in result && typeof result.category === "string" ? result.category.trim() : "";
       if (suggestedCategory && onCategorySuggest && suggestedCategory.toLocaleLowerCase() !== category.trim().toLocaleLowerCase()) {
         onCategorySuggest(suggestedCategory);
-        setMessage(t("product.customFieldCategorySuggested", { category: suggestedCategory }));
+        setMessage(t(
+          existingCategories.includes(suggestedCategory) ? "product.customFieldCategoryExisting" : "product.customFieldCategorySuggested",
+          { category: suggestedCategory }
+        ));
       } else {
         setMessage(t("product.customFieldSuggestionReady"));
       }

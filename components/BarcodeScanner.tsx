@@ -12,30 +12,35 @@ interface BarcodeScannerProps {
 
 export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [error, setError] = useState("");
-  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const [error, setError] = useState<{ key: string; msg: string } | null>(null);
+  const onScanRef = useRef(onScan);
   const { t } = useI18n();
 
   useEffect(() => {
+    onScanRef.current = onScan;
+  });
+
+  useEffect(() => {
     const reader = new BrowserMultiFormatReader();
-    readerRef.current = reader;
+    let scanned = false;
 
     reader
       .decodeFromVideoDevice(null, videoRef.current!, (result, err) => {
-        if (result) {
-          onScan(result.getText());
+        if (result && !scanned) {
+          scanned = true;
           reader.reset();
+          onScanRef.current(result.getText());
         }
         if (err && !(err instanceof NotFoundException)) {
-          setError(t("scan.cameraErrorDetail", { msg: err.message }));
+          setError({ key: "scan.cameraErrorDetail", msg: err.message });
         }
       })
-      .catch((e: Error) => setError(t("scan.cameraUnavailableDetail", { msg: e.message })));
+      .catch((e: Error) => setError({ key: "scan.cameraUnavailableDetail", msg: e.message }));
 
     return () => {
       reader.reset();
     };
-  }, [onScan]);
+  }, []);
 
   return (
     <div
@@ -87,7 +92,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         {/* Status */}
         <div style={{ padding: "1rem 1.25rem", textAlign: "center" }}>
           {error ? (
-            <p style={{ fontSize: "0.82rem", color: "var(--red)" }}>{error}</p>
+            <p style={{ fontSize: "0.82rem", color: "var(--red)" }}>{t(error.key, { msg: error.msg })}</p>
           ) : (
             <p style={{ fontSize: "0.82rem", color: "var(--text-2)" }}>
               {t("scan.hint")}

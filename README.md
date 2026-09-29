@@ -1,43 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Stockwise
 
-## Getting Started
+Web aplikacija za evidenciju zaliha malih radnji i Instagram prodavaca (Next.js App Router + Firebase).
 
-First, run the development server:
+## Pokretanje
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Aplikacija je dostupna na [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Promenljive okruženja
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Napravite `.env.local` u korenu projekta:
 
-## Learn More
+| Promenljiva | Obavezna | Namena |
+| --- | --- | --- |
+| `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`, `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID` | da | Firebase web konfiguracija |
+| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`, `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | za slike | Otpremanje fotografija artikala (unsigned preset) |
+| `GROQ_API_KEY` (opciono `GROQ_MODEL`) ili `OPENAI_API_KEY` (opciono `OPENAI_MODEL`) | ne | AI asistent i AI predlozi dodatnih polja; Groq ima prednost ako su oba podešena |
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+AI ključevi su serverski i ne prefiksiraju se sa `NEXT_PUBLIC_`. Posle izmene promenljivih okruženja ponovo pokrenite razvojni server.
 
 ## Predlozi dodatnih polja artikla
 
-Forma artikla podržava dodatna polja i bez AI konfiguracije, koristeći ugrađene predloške kategorija. Za AI predloge kopirajte `.env.local.example` u `.env.local` i podesite `OPENAI_API_KEY` (po želji i `OPENAI_MODEL`). Taj ključ je serverski i ne treba ga prefiksirati sa `NEXT_PUBLIC_`. Posle izmene promenljivih okruženja ponovo pokrenite razvojni server.
+Dodatna polja artikla uvek se mogu dodati ručno. Dugme za AI predlog polja i kategorije radi samo kada je podešen jedan od AI ključeva iz tabele iznad; AI prvo bira neku od postojećih kategorija radnje, a novu predlaže samo kada nijedna ne odgovara.
 
 ## Uvoz tabela i audit dnevnik
 

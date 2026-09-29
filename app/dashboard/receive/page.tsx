@@ -3,8 +3,8 @@
 import { useState, lazy, Suspense } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useProducts } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n-context";
-import { PartialReceiptError, receiveStock } from "@/lib/actions";
+import { translateError, useI18n } from "@/lib/i18n-context";
+import { findProductByCode, PartialReceiptError, receiveStock } from "@/lib/actions";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { Product, ProductVariant } from "@/lib/types";
@@ -68,11 +68,20 @@ export default function ReceivePage() {
     setSearch("");
   }
 
-  function handleScan(code: string) {
+  async function handleScan(code: string) {
     setShowScanner(false);
-    const product = products.find((p) => p.sku === code || p.name === code);
-    if (product) void addLine(product);
-    else { setError(t("receive.notFound", { code })); setTimeout(() => setError(""), 4000); }
+    if (!profile) return;
+    try {
+      const match = await findProductByCode(profile.shopId, products, code);
+      if (match) {
+        await addLine(match.product, match.variantId);
+        return;
+      }
+      setError(t("receive.notFound", { code }));
+      setTimeout(() => setError(""), 4000);
+    } catch {
+      setError(t("receive.loadVariantsError"));
+    }
   }
 
   function updateQty(idx: number, delta: number) {
@@ -95,7 +104,7 @@ export default function ReceivePage() {
         setLines((current) => current.filter((line) => !completed.has(`${line.product.id}/${line.variantId}`)));
         setError(t("receive.partialFailure", { n: completed.size }));
       } else {
-        setError(t("receive.atomicFailure"));
+        setError(translateError(cause, t, "receive.atomicFailure"));
       }
     }
     finally { setSaving(false); }

@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useI18n } from "@/lib/i18n-context";
-import { useProducts } from "@/lib/hooks";
+import { INTL_LOCALES, useI18n } from "@/lib/i18n-context";
+import { useProducts, useShop } from "@/lib/hooks";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { exportToExcel, exportToPrint } from "@/lib/export";
@@ -14,6 +14,7 @@ export default function ExportPage() {
   const { profile } = useAuth();
   const { locale, t } = useI18n();
   const { products, loading } = useProducts(profile?.shopId);
+  const { name: shopName } = useShop(profile?.shopId);
   const [exporting, setExporting] = useState(false);
 
   async function loadVariants() {
@@ -35,7 +36,7 @@ export default function ExportPage() {
     setExporting(true);
     try {
       const variants = await loadVariants();
-      exportToExcel(products, variants, "Radnja", locale);
+      exportToExcel(products, variants, shopName || undefined, locale);
     } finally {
       setExporting(false);
     }
@@ -45,7 +46,7 @@ export default function ExportPage() {
     setExporting(true);
     try {
       const variants = await loadVariants();
-      exportToPrint(products, variants, "Radnja", locale);
+      exportToPrint(products, variants, shopName || undefined, locale);
     } finally {
       setExporting(false);
     }
@@ -75,7 +76,7 @@ export default function ExportPage() {
         <div>
           <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("export.date")}</p>
           <p style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
-            {new Date().toLocaleDateString(locale === "sr" ? "sr-RS" : locale === "ru" ? "ru-RU" : "en-US")}
+            {new Date().toLocaleDateString(INTL_LOCALES[locale])}
           </p>
         </div>
       </div>
