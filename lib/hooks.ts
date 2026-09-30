@@ -8,11 +8,12 @@ import {
   onSnapshot,
   orderBy,
   query,
+  Timestamp,
   where,
   limit,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Product, ProductVariant, Sale, ShopCatalogSettings, StockEvent } from "@/lib/types";
+import { Product, ProductVariant, Sale, ShopCatalogSettings, StockEvent, Customer } from "@/lib/types";
 import { CatalogItem, CatalogOrder, CatalogStatsDay } from "@/lib/types";
 import { channelsFromShop, EMPTY_CHANNELS } from "@/lib/catalog-channels";
 import {
@@ -323,6 +324,7 @@ export function useSales(shopId: string | undefined, count = 20) {
           channel: d.data().channel ?? "other",
           buyerName: d.data().buyerName ?? "",
           buyerInstagram: d.data().buyerInstagram ?? "",
+          customerId: d.data().customerId ?? "",
           note: d.data().note ?? "",
           actorUid: d.data().actorUid ?? "",
           actorName: d.data().actorName ?? "",
@@ -358,6 +360,7 @@ export function useOrders(shopId: string | undefined, count = 100) {
           currency: isSupportedCurrency(d.data().currency) ? d.data().currency : undefined,
           customerName: d.data().customerName ?? "",
           customerContact: d.data().customerContact ?? "",
+          customerId: d.data().customerId ?? "",
           note: d.data().note ?? "",
           channel: d.data().channel ?? "other",
           status: d.data().status ?? "new",
@@ -402,4 +405,121 @@ export function useStockEvents(shopId: string | undefined, productId: string | u
   }, [shopId, productId]);
 
   return events;
+}
+
+// ─── Customers ───────────────────────────────────────────────────────────────
+
+/** One mapper for the customer shape, shared by the list and the single-record
+ * read so a field added here shows up in both at once. */
+function toCustomer(id: string, data: Record<string, unknown>): Customer {
+  return {
+    id,
+    name: (data.name as string) ?? "",
+    contact: (data.contact as string) ?? "",
+    email: (data.email as string) ?? "",
+    note: (data.note as string) ?? "",
+    tags: Array.isArray(data.tags) ? (data.tags as string[]) : [],
+    createdAt: (data.createdAt as Timestamp | undefined)?.toDate() ?? null,
+    updatedAt: (data.updatedAt as Timestamp | undefined)?.toDate() ?? null,
+  };
+}
+
+export function useCustomers(shopId: string | undefined) {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!shopId) return;
+    const q = query(collection(db, "shops", shopId, "customers"), orderBy("name"));
+    const unsub = onSnapshot(q, (snap) => {
+      setCustomers(snap.docs.map((d) => toCustomer(d.id, d.data())));
+      setLoading(false);
+    }, () => setLoading(false));
+    return unsub;
+  }, [shopId]);
+
+  return { customers, loading };
+}
+
+export function useCustomer(shopId: string | undefined, customerId: string | undefined) {
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!shopId || !customerId) return;
+    const unsub = onSnapshot(doc(db, "shops", shopId, "customers", customerId), (snap) => {
+      setCustomer(snap.exists() ? toCustomer(snap.id, snap.data()) : null);
+      setLoading(false);
+    }, () => setLoading(false));
+    return unsub;
+  }, [shopId, customerId]);
+
+  return { customer, loading };
+}
+
+export interface CustomerActivity {
+  sales: Sale[];
+  orders: CatalogOrder[];
+  loading: boolean;
+}
+
+/** Everything a customer actually did, by id rather than by name.
+ *
+ * The buyer name on a sale is a copy of what was typed at the till, so matching
+ * on it would silently merge two people called Ana and miss anyone whose name
+ * was misspelled. Only sales and orders that carry the id are returned, which
+ * means history starts accruing from the moment a sale is attributed. */
+export function useCustomerActivity(shopId: string | undefined, customerId: string | undefined): CustomerActivity {
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [orders, setOrders] = useState<CatalogOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!shopId || !customerId) return;
+    const salesQuery = query(
+      collection(db, "shops", shopId, "sales"),
+      where("customerId", "==", customerId),
+      orderBy("createdAt", "desc")
+    );
+    const ordersQuery = query(
+      collection(db, "shops", shopId, "orders"),
+      where("customerId", "==", customerId),
+      orderBy("createdAt", "desc")
+    );
+    const unsubSales = onSnapshot(salesQuery, (snap) => {
+      setSales(snap.docs.map((d) => ({
+        id: d.id,
+        lines: d.data().lines ?? [],
+        total: d.data().total ?? 0,
+        channel: d.data().channel ?? "other",
+        buyerName: d.data().buyerName ?? "",
+        buyerInstagram: d.data().buyerInstagram ?? "",
+        customerId: d.data().customerId ?? "",
+        note: d.data().note ?? "",
+        actorUid: d.data().actorUid ?? "",
+        actorName: d.data().actorName ?? "",
+        createdAt: d.data().createdAt?.toDate() ?? null,
+      })));
+    }, () => setSales([]));
+    const unsubOrders = onSnapshot(ordersQuery, (snap) => {
+      setOrders(snap.docs.map((d) => ({
+        id: d.id,
+        code: d.data().code ?? "",
+        lines: Array.isArray(d.data().lines) ? d.data().lines : [],
+        total: d.data().total ?? 0,
+        currency: isSupportedCurrency(d.data().currency) ? d.data().currency : undefined,
+        customerName: d.data().customerName ?? "",
+        customerContact: d.data().customerContact ?? "",
+        customerId: d.data().customerId ?? "",
+        note: d.data().note ?? "",
+        channel: d.data().channel ?? "other",
+        status: d.data().status ?? "new",
+        createdAt: d.data().createdAt?.toDate() ?? null,
+      })));
+    }, () => setOrders([]));
+    const timer = setTimeout(() => setLoading(false), 0);
+    return () => { clearTimeout(timer); unsubSales(); unsubOrders(); };
+  }, [shopId, customerId]);
+
+  return { sales, orders, loading };
 }

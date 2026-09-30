@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useProducts, useSales, useShopMoney } from "@/lib/hooks";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { findProductByCode, PartialReceiptError, recordSale } from "@/lib/actions";
+import CustomerPicker from "@/components/CustomerPicker";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { Product, ProductVariant, SaleChannel } from "@/lib/types";
@@ -38,6 +39,7 @@ export default function SalesPage() {
   const [channel, setChannel] = useState<SaleChannel>("instagram");
   const [buyerName, setBuyerName] = useState("");
   const [buyerInstagram, setBuyerInstagram] = useState("");
+  const [customerId, setCustomerId] = useState("");
   const [note, setNote] = useState("");
 
   const filtered = search.length > 1
@@ -131,11 +133,11 @@ export default function SalesPage() {
           quantity: line.quantity,
           unitPrice: unitPrices[idx],
         })),
-        { channel, buyerName, buyerInstagram, note },
+        { channel, buyerName, buyerInstagram, customerId, note },
         profile.uid,
         profile.displayName
       );
-      setDone(true); setLines([]); setBuyerName(""); setBuyerInstagram(""); setNote("");
+      setDone(true); setLines([]); setBuyerName(""); setBuyerInstagram(""); setCustomerId(""); setNote("");
     } catch (cause) {
       if (cause instanceof PartialReceiptError) {
         const completed = new Set(cause.completedLineKeys);
@@ -255,6 +257,10 @@ export default function SalesPage() {
             </div>
           </div>
           <input className="input" placeholder={t("sales.notePlaceholder")} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} disabled={saving} style={{ padding: "0.5rem 0.75rem", fontSize: "0.82rem" }} />
+          {/* Attribution is separate from the buyer fields above: those record
+              what was typed at the till, this records who the shop already knows
+              the person to be, which is what makes their history findable. */}
+          {profile && <CustomerPicker shopId={profile.shopId} value={customerId} onChange={setCustomerId} />}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
             <div>
               <p style={{ margin: 0, fontWeight: 600, color: "var(--text-1)" }}>

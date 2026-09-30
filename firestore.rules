@@ -55,6 +55,35 @@ service cloud.firestore {
             && (!('notes' in data.supplier) || data.supplier.notes is string)));
     }
 
+    /** A customer record: who the shop sells to. Staff-written, so the shape is
+     * pinned here and the caps match `lib/customers.ts`. Tags are a filter
+     * list — capped, and every entry has to be a string, so they stay usable as
+     * an exact-match index rather than free text. */
+    function validCustomerProfile(data) {
+      return data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 100
+        && data.contact is string
+        && data.contact.size() <= 100
+        && data.email is string
+        && data.email.size() <= 254
+        && data.note is string
+        && data.note.size() <= 2000
+        && data.tags is list
+        && data.tags.size() <= 20
+        && (data.tags.size() == 0 || (data.tags[0] is string && data.tags[0].size() <= 30));
+    }
+
+    /** A link from a sale or an order to a customer record. Optional everywhere
+     * it appears, because an anonymous catalog order has no customer and an old
+     * sale predates the CRM — absence is valid, presence is not. */
+    function validCustomerRef(data) {
+      return !('customerId' in data)
+        || (data.customerId is string
+          && data.customerId.size() > 0
+          && data.customerId.size() <= 100);
+    }
+
     function validStatStep(after, before, key) {
       return after.get(key, 0) == before.get(key, 0)
         || after.get(key, 0) == before.get(key, 0) + 1;
@@ -217,6 +246,29 @@ service cloud.firestore {
         }
       }
 
+      match /customers/{customerId} {
+        // Customer records are private to the shop: a contact and a purchase
+        // history are not catalog material and never become world-readable.
+        allow read: if isMember(shopId);
+        allow create: if isMember(shopId)
+          && request.resource.data.keys().hasOnly([
+            'name', 'contact', 'email', 'note', 'tags', 'createdAt', 'updatedAt'
+          ])
+          && validCustomerProfile(request.resource.data)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        // `createdAt` is absent from the allowed diff, so a record can be edited
+        // forever but never backdated into the shop's history.
+        allow update: if isMember(shopId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['name', 'contact', 'email', 'note', 'tags', 'updatedAt'])
+          && validCustomerProfile(request.resource.data);
+        // Deleting a record leaves sales and orders pointing at a missing
+        // document. They keep the name and contact written on them, so the
+        // history still reads; only the CRM entry is gone.
+        allow delete: if isMember(shopId);
+      }
+
       match /catalog/{catalogId} {
         // World-readable: documents contain only customer-safe fields.
         allow read: if true;
@@ -289,20 +341,22 @@ service cloud.firestore {
           && request.resource.data.channel in ['whatsapp', 'telegram', 'instagram', 'other']
           && request.resource.data.status == 'new'
           && request.resource.data.createdAt == request.time;
-        // Members move an order through its lifecycle and attach the customer
-        // contact, but they may not rewrite what was ordered, in what currency,
-        // or when. `total` and `currency` stay fixed from the moment the customer
-        // placed it, so the quote the shop approved is still the quote on file.
+        // Members move an order through its lifecycle, attach the customer
+        // contact, and claim the order for a customer record, but they may not
+        // rewrite what was ordered, in what currency, or when. `total` and
+        // `currency` stay fixed from the moment the customer placed it, so the
+        // quote the shop approved is still the quote on file.
         allow update: if isMember(shopId)
           && request.resource.data.keys().hasOnly([
-            'code', 'lines', 'total', 'currency', 'customerName', 'customerContact', 'note', 'channel', 'status', 'createdAt'
+            'code', 'lines', 'total', 'currency', 'customerName', 'customerContact', 'customerId', 'note', 'channel', 'status', 'createdAt'
           ])
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'customerName', 'customerContact'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'customerName', 'customerContact', 'customerId'])
           && request.resource.data.status in ['new', 'confirmed', 'fulfilled', 'cancelled']
           && request.resource.data.customerName is string
           && request.resource.data.customerName.size() <= 100
           && request.resource.data.customerContact is string
-          && request.resource.data.customerContact.size() <= 100;
+          && request.resource.data.customerContact.size() <= 100
+          && validCustomerRef(request.resource.data);
         allow delete: if false;
       }
 
@@ -310,7 +364,7 @@ service cloud.firestore {
         allow read: if isMember(shopId);
         allow create: if isMember(shopId)
           && request.resource.data.keys().hasOnly([
-            'lines', 'total', 'channel', 'buyerName', 'buyerInstagram', 'note', 'actorUid', 'actorName', 'createdAt'
+            'lines', 'total', 'channel', 'buyerName', 'buyerInstagram', 'customerId', 'note', 'actorUid', 'actorName', 'createdAt'
           ])
           && request.resource.data.lines is list
           && request.resource.data.lines.size() > 0
@@ -325,11 +379,19 @@ service cloud.firestore {
           && request.resource.data.buyerInstagram.size() <= 100
           && request.resource.data.note is string
           && request.resource.data.note.size() <= 500
+          && validCustomerRef(request.resource.data)
           && request.resource.data.actorUid == request.auth.uid
           && request.resource.data.actorName is string
           && request.resource.data.actorName.size() <= 100
           && request.resource.data.createdAt == request.time;
-        allow update, delete: if false;
+        // A sale is otherwise immutable — its lines are already reflected in the
+        // stock ledger, so nothing here may be rewritten. Attributing it to a
+        // customer is the single exception: it records who it was to, and the
+        // buyer name and total on file stay exactly what the till produced.
+        allow update: if isMember(shopId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customerId'])
+          && validCustomerRef(request.resource.data);
+        allow delete: if false;
       }
 
       match /stockEvents/{eventId} {

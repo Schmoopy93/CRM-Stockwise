@@ -9,6 +9,7 @@ import {
   collection,
   deleteField,
   doc,
+  deleteDoc,
   FieldValue,
   getDoc,
   getDocs,
@@ -28,6 +29,7 @@ import { auth, db } from "@/lib/firebase";
 import { uploadProductImage, uploadShopImage } from "@/lib/cloudinary";
 import { applyStockDelta } from "@/lib/stock-invariants";
 import { normalizeOrderInput, newOrderCode, orderTotal, ORDER_STATUSES, type OrderInput } from "@/lib/orders";
+import { normalizeCustomer, type CustomerInput } from "@/lib/customers";
 import { getLocalizedOptionValue } from "@/lib/product-field-options";
 import { CatalogChannels } from "@/lib/catalog-channels";
 import { BASE_CURRENCY, isSupportedCurrency, roundForCurrency } from "@/lib/currency";
@@ -291,6 +293,53 @@ export async function placeCatalogOrder(shopId: string, input: OrderInput, curre
 export async function updateOrderStatus(shopId: string, orderId: string, status: OrderStatus) {
   if (!ORDER_STATUSES.includes(status)) throw new Error("ORDER_STATUS_INVALID");
   await updateDoc(doc(db, "shops", shopId, "orders", orderId), { status });
+}
+
+// ─── Customers ───────────────────────────────────────────────────────────────
+
+/** Creates or updates a customer. Returns the document id so a form can jump
+ * straight to the new record. Tags and lengths are normalized here as well as in
+ * the rules: the rules are the gate, this keeps the stored value identical
+ * between both paths. */
+export async function saveCustomer(
+  shopId: string,
+  customerId: string | null,
+  input: CustomerInput
+): Promise<string> {
+  const customer = normalizeCustomer(input);
+  const ref = customerId
+    ? doc(db, "shops", shopId, "customers", customerId)
+    : doc(collection(db, "shops", shopId, "customers"));
+
+  const payload = { ...customer, updatedAt: serverTimestamp() };
+  if (customerId) {
+    await updateDoc(ref, payload);
+  } else {
+    await setDoc(ref, { ...customer, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  }
+  return ref.id;
+}
+
+/** Deleting a customer never touches sales or orders that referenced it: those
+ * documents keep the name and contact that were on them, so the sale history
+ * stays readable after the CRM record is gone. */
+export async function deleteCustomer(shopId: string, customerId: string) {
+  await deleteDoc(doc(db, "shops", shopId, "customers", customerId));
+}
+
+/** Attaches a catalog order to a customer. Customers place orders anonymously,
+ * so the link can only be made from inside the shop, and only to an order that
+ * already exists — the order's lines, total and currency are untouched. */
+export async function linkOrderToCustomer(shopId: string, orderId: string, customerId: string | null) {
+  const ref = doc(db, "shops", shopId, "orders", orderId);
+  await updateDoc(ref, { customerId: customerId || deleteField() });
+}
+
+/** Attributes a recorded sale to a customer. A sale is otherwise immutable, so
+ * this is the one field the rules let a member change after the fact. */
+export async function linkSaleToCustomer(shopId: string, saleId: string, customerId: string | null) {
+  const ref = doc(db, "shops", shopId, "sales", saleId);
+  await updateDoc(ref, { customerId: customerId || deleteField() });
 }
 
 // ─── Products ────────────────────────────────────────────────────────────────
@@ -599,6 +648,8 @@ export interface SaleBuyer {
   channel: SaleChannel;
   buyerName: string;
   buyerInstagram: string;
+  /** Customer this sale is attributed to, when one was picked at the till. */
+  customerId?: string;
   note?: string;
 }
 
@@ -653,6 +704,7 @@ export async function recordSale(
       channel: buyer.channel,
       buyerName: buyer.buyerName.trim().slice(0, 100),
       buyerInstagram: buyer.buyerInstagram.trim().replace(/^@/, "").slice(0, 100),
+      ...(buyer.customerId ? { customerId: buyer.customerId.slice(0, 100) } : {}),
       note: (buyer.note ?? "").trim().slice(0, 500),
       actorUid,
       actorName,

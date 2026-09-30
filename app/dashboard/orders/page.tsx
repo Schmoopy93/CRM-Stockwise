@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useOrders } from "@/lib/hooks";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
-import { updateOrderStatus } from "@/lib/actions";
+import { updateOrderStatus, linkOrderToCustomer } from "@/lib/actions";
+import { CustomerLinkChip } from "@/components/CustomerPicker";
 import { formatCatalogPrice } from "@/lib/catalog-channels";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { OrderStatus } from "@/lib/types";
@@ -50,6 +51,19 @@ export default function OrdersPage() {
     setBusyId(orderId); setError("");
     try {
       await updateOrderStatus(profile.shopId, orderId, status);
+    } catch (cause) {
+      setError(translateError(cause, t, "orders.updateFailed"));
+    } finally { setBusyId(""); }
+  }
+
+  /** Visitors place orders anonymously, so claiming one for a customer is an
+   * action only the shop can take — and it is the only way an order ever becomes
+   * part of a customer's history. */
+  async function setCustomer(orderId: string, customerId: string) {
+    if (!profile) return;
+    setBusyId(orderId); setError("");
+    try {
+      await linkOrderToCustomer(profile.shopId, orderId, customerId || null);
     } catch (cause) {
       setError(translateError(cause, t, "orders.updateFailed"));
     } finally { setBusyId(""); }
@@ -111,6 +125,15 @@ export default function OrdersPage() {
                     {order.createdAt && <span>· {order.createdAt.toLocaleString(intl)}</span>}
                   </p>
                   {order.note && <p style={{ margin: "0.3rem 0 0", fontSize: "0.78rem", color: "var(--text-2)" }}>{order.note}</p>}
+                  {profile && (
+                    <div style={{ marginTop: "0.5rem" }}>
+                      <CustomerLinkChip
+                        shopId={profile.shopId}
+                        value={order.customerId ?? ""}
+                        onChange={(customerId) => setCustomer(order.id, customerId)}
+                      />
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>
                   <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-1)" }}>

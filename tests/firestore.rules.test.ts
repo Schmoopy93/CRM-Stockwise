@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -266,6 +267,118 @@ test("customers can place catalog orders but members own the lifecycle", async (
   // Restating what the customer agreed to, or in what currency, is not allowed.
   await assertFails(updateDoc(doc(staffDb, "shops", shopId, "orders", "o5"), { currency: "RSD" }));
   await assertFails(deleteDoc(doc(staffDb, "shops", shopId, "orders", "o5")));
+});
+
+test("customer records are private to the shop and pinned to a validated shape", async () => {
+  const staffDb = firestoreFor("staff-a");
+  const outsiderDb = firestoreFor("outsider");
+  const signedOutDb = firestoreFor();
+  const customerRef = doc(staffDb, "shops", shopId, "customers", "c1");
+
+  const valid = { name: "Ana", contact: "+381641234567", email: "", note: "", tags: ["vip"] };
+  await assertSucceeds(setDoc(customerRef, { ...valid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+
+  // A contact and a purchase history are not catalog material, so no customer
+  // document is reachable without a session or from another shop.
+  await assertFails(getDoc(doc(signedOutDb, "shops", shopId, "customers", "c1")));
+  await assertFails(getDocs(collection(signedOutDb, "shops", shopId, "customers")));
+  await assertFails(getDoc(doc(outsiderDb, "shops", shopId, "customers", "c1")));
+  await assertFails(setDoc(doc(signedOutDb, "shops", shopId, "customers", "c2"), valid));
+  await assertSucceeds(getDoc(doc(staffDb, "shops", shopId, "customers", "c1")));
+
+  // The rules pin the shape so a member cannot smuggle in fields the catalog
+  // or the export would then have to know about.
+  await assertFails(setDoc(doc(staffDb, "shops", shopId, "customers", "c3"), { ...valid, costPrice: 0 }));
+  await assertFails(setDoc(doc(staffDb, "shops", shopId, "customers", "c4"), { ...valid, name: "" }));
+  await assertFails(setDoc(doc(staffDb, "shops", shopId, "customers", "c5"), { ...valid, email: 117 }));
+  await assertFails(setDoc(doc(staffDb, "shops", shopId, "customers", "c6"), { ...valid, name: "x".repeat(101) }));
+  await assertFails(setDoc(doc(staffDb, "shops", shopId, "customers", "c7"), { ...valid, note: "x".repeat(2001) }));
+  await assertFails(setDoc(doc(staffDb, "shops", shopId, "customers", "c8"), { ...valid, tags: Array.from({ length: 21 }, (_, i) => `t${i}`) }));
+  await assertFails(setDoc(doc(staffDb, "shops", shopId, "customers", "c9"), { ...valid, tags: ["x".repeat(31)] }));
+  await assertFails(setDoc(doc(staffDb, "shops", shopId, "customers", "c10"), { ...valid, tags: "vip" }));
+
+  // createdAt and updatedAt come from the server on create and cannot be faked.
+  await assertFails(setDoc(doc(staffDb, "shops", shopId, "customers", "c11"), { ...valid, createdAt: Timestamp.fromMillis(0), updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(staffDb, "shops", shopId, "customers", "c12"), { ...valid }));
+
+  // An empty tag list is valid — most customers have no segment.
+  await assertSucceeds(setDoc(doc(staffDb, "shops", shopId, "customers", "c13"), { ...valid, tags: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+});
+
+test("a customer record is editable forever but never backdated", async () => {
+  const db = firestoreFor("staff-a");
+  const ref = doc(db, "shops", shopId, "customers", "c1");
+  await setDoc(ref, { name: "Ana", contact: "", email: "", note: "", tags: ["vip"], createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+
+  await assertSucceeds(updateDoc(ref, { name: "Ana Petrović", note: "prefers mornings", tags: ["vip", "wholesale"], updatedAt: serverTimestamp() }));
+  // Rewriting when the record was added would let a shop backdate its CRM to
+  // make a customer look older than they are.
+  await assertFails(updateDoc(ref, { createdAt: Timestamp.fromMillis(0) }));
+  // The validated fields stay validated after the first good write.
+  await assertFails(updateDoc(ref, { email: 117, updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(ref, { tags: "vip", updatedAt: serverTimestamp() }));
+
+  // Deleting the record is a member action; the sales that referenced it keep
+  // their own copy of the name, so nothing about the history is lost.
+  await assertFails(deleteDoc(doc(firestoreFor("outsider"), "shops", shopId, "customers", "c1")));
+  await assertSucceeds(deleteDoc(ref));
+});
+
+test("sales can be attributed to a customer, but nothing else on them can change", async () => {
+  const db = firestoreFor("staff-a");
+  const sale = {
+    lines: [{ productId: "p", productName: "X", variantId: "v", variantLabel: "", quantity: 1, unitPrice: 10 }],
+    total: 10,
+    channel: "store",
+    buyerName: "Ana",
+    buyerInstagram: "",
+    note: "",
+    actorUid: "staff-a",
+    actorName: "Staff",
+  };
+
+  // An unattributed sale stays valid: a walk-in with no record is still a sale.
+  await assertSucceeds(setDoc(doc(db, "shops", shopId, "sales", "s1"), { ...sale, createdAt: serverTimestamp() }));
+  await assertSucceeds(setDoc(doc(db, "shops", shopId, "sales", "s2"), { ...sale, customerId: "c1", createdAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(db, "shops", shopId, "sales", "s3"), { ...sale, customerId: "", createdAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(db, "shops", shopId, "sales", "s4"), { ...sale, customerId: 42, createdAt: serverTimestamp() }));
+
+  // Attributing a recorded sale is the one edit allowed after the fact, because
+  // it records who it was to without touching what was sold or for how much.
+  await assertSucceeds(updateDoc(doc(db, "shops", shopId, "sales", "s1"), { customerId: "c1" }));
+  await assertSucceeds(updateDoc(doc(db, "shops", shopId, "sales", "s1"), { customerId: deleteField() }));
+  await assertFails(updateDoc(doc(db, "shops", shopId, "sales", "s1"), { total: 1 }));
+  await assertFails(updateDoc(doc(db, "shops", shopId, "sales", "s1"), { buyerName: "Someone else" }));
+  await assertFails(deleteDoc(doc(db, "shops", shopId, "sales", "s1")));
+});
+
+test("a member can claim an order for a customer without restating what was ordered", async () => {
+  const db = firestoreFor("staff-a");
+  await env.withSecurityRulesDisabled(async (context) => {
+    const disabled = context.firestore();
+    await updateDoc(doc(disabled, "shops", shopId), { catalogEnabled: true });
+    await setDoc(doc(disabled, "shops", shopId, "orders", "o1"), {
+      code: "K7M2QP",
+      lines: [{ productId: "p", productName: "X", variantLabel: "", quantity: 1 }],
+      total: 25,
+      currency: "EUR",
+      customerName: "Ana",
+      customerContact: "@ana",
+      note: "",
+      channel: "instagram",
+      status: "new",
+      createdAt: serverTimestamp(),
+    });
+  });
+
+  await assertSucceeds(updateDoc(doc(db, "shops", shopId, "orders", "o1"), { customerId: "c1" }));
+  await assertSucceeds(updateDoc(doc(db, "shops", shopId, "orders", "o1"), { customerId: deleteField() }));
+  await assertFails(updateDoc(doc(db, "shops", shopId, "orders", "o1"), { customerId: "" }));
+  await assertFails(updateDoc(doc(db, "shops", shopId, "orders", "o1"), { customerId: 7 }));
+  // Linking a customer buys no new power over the order itself.
+  await assertFails(updateDoc(doc(db, "shops", shopId, "orders", "o1"), { total: 0 }));
+  await assertFails(updateDoc(doc(db, "shops", shopId, "orders", "o1"), { currency: "RSD" }));
+  await assertFails(updateDoc(doc(db, "shops", shopId, "orders", "o1"), { lines: [] }));
 });
 
 test("rate limit buckets advance by one and can never be listed or reset", async () => {

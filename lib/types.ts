@@ -13,6 +13,24 @@ export interface Supplier {
   notes?: string;
 }
 
+/** Someone the shop sells to. Contact is the identifier a shop actually reaches
+ * them by — a phone number or a handle — and is the only field besides the name
+ * that a shop is expected to fill in. `tags` carry the segment ("vip",
+ * "wholesale") so the list can be filtered into groups.
+ *
+ * Sales and orders link here by `customerId`; the buyer name written on the sale
+ * is a copy of what was typed at the till and is not a reliable join key. */
+export interface Customer {
+  id: string;
+  name: string;
+  contact: string;
+  email: string;
+  note: string;
+  tags: string[];
+  createdAt: Date | null;
+  updatedAt: Date | null;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -115,6 +133,9 @@ export interface CatalogOrder {
   currency?: string;
   customerName: string;
   customerContact: string;
+  /** Set by the shop when it links the order to a customer record. Visitors
+   * never supply it — they have no account and no way to claim an identity. */
+  customerId?: string;
   note: string;
   channel: string;
   status: OrderStatus;
@@ -137,6 +158,8 @@ export interface Sale {
   channel: SaleChannel;
   buyerName: string;
   buyerInstagram: string;
+  /** The customer this sale was attributed to, when one was picked. */
+  customerId?: string;
   note: string;
   actorUid: string;
   actorName: string;

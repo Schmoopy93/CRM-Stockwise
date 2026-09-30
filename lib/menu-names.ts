@@ -17,6 +17,7 @@ export const MENU_KEYS: Array<{ english: string; key: string }> = [
   { english: "Receive Goods", key: "nav.receive" },
   { english: "Sales", key: "nav.sales" },
   { english: "Orders", key: "nav.orders" },
+  { english: "Customers", key: "nav.customers" },
   { english: "Overview", key: "nav.overview" },
   { english: "Public catalog", key: "catalog.settingsTitle" },
   { english: "Analytics", key: "nav.analytics" },

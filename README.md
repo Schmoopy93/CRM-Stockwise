@@ -19,7 +19,7 @@ Napravite `.env.local` u korenu projekta:
 | --- | --- | --- |
 | `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`, `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID` | da | Firebase web konfiguracija |
 | `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`, `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | za slike | Otpremanje fotografija artikala (unsigned preset) |
-| `GROQ_API_KEY` (opciono `GROQ_MODEL`) ili `OPENAI_API_KEY` (opciono `OPENAI_MODEL`) | ne | AI asistent i AI predlozi dodatnih polja; Groq ima prednost ako su oba podešena |
+| `GEMINI_API_KEY` (opciono `GEMINI_MODEL`) ili `OPENAI_API_KEY` (opciono `OPENAI_MODEL`) | ne | AI asistent i AI predlozi dodatnih polja; Gemini ima prednost ako su oba podešena |
 
 AI ključevi su serverski i ne prefiksiraju se sa `NEXT_PUBLIC_`. Posle izmene promenljivih okruženja ponovo pokrenite razvojni server.
 
@@ -31,13 +31,25 @@ Dodatna polja artikla uvek se mogu dodati ručno. Dugme za AI predlog polja i ka
 
 Uvoz artikala prihvata `.csv`, stari Excel `.xls` i `.xlsx` fajlove do 10 MB. Pre uvoza prikazuje pregled i blokira neispravne redove; više redova sa istim SKU-om artikla postaju njegove varijante. CSV separator može biti zarez, tačka-zarez ili tabulator. Primeri CSV i XLSX šablona mogu se preuzeti sa stranice Uvoz artikala. Audit dnevnik prikazuje kretanja zaliha za poslednjih 90 dana (najviše 500 događaja) i omogućava filter po zaposlenom, tipu, artiklu i periodu.
 
+## Kupci (CRM)
+
+Kupci žive u `shops/{shopId}/customers` i nikad nisu javno čitljivi — kontakt i istoriju kupovine ne treba da vidi niko van prodavnice. Zapis sadrži ime, kontakt (telefon ili @ime), email, belešku i oznake (do 20, do 30 znakova svaka, odvojene zarezom).
+
+Prodaja i porudžbina se vežu za kupca preko polja `customerId`, ne preko imena — ime kupca na prodaji je samo ono što je kazano na kasi i kao ključ spajanja spaja dve osobe istog imena. Zato istorija kupca počinje da se popunjava tek od trenutka kada prodaja ili porudžbina dobije pripisanu vezu:
+
+- na stranicama **Prodaja** i **Porudžbine** odabrana šifra kupca se zapisuje na samu prodaju / porudžbinu,
+- na stranici kupca vidi se objedinjena hronologija prodaja i porudžbina sa ukupnom potrošnjom,
+- brisanje kupca ne briše prodaje ni porudžbine — one zadržavaju ime i kontakt zapisane na sebi.
+
+Sve prodaje i porudžbine postojeće pre ovog dodatka ostaju bez veze; ne backfill-uju se automatski, jer bi pogrešno imenovanje trajno pripisalo prodaju pogrešnoj osobi.
+
 ## Google prijava
 
 U Firebase Console otvorite **Authentication → Sign-in method**, omogućite **Google** i dodajte domen aplikacije u **Authentication → Settings → Authorized domains**. Aplikacija koristi Google prijavu za sve naloge. Za kreiranje radnje izaberite **Nova radnja**, unesite naziv radnje i nastavite sa Google nalogom; za postojeću radnju izaberite **Pridruži se**, unesite Shop ID i nastavite sa Google nalogom.
 
 ## Firebase bezbednosna pravila i testovi
 
-Repozitorijum sadrži `firestore.rules`, `firestore.indexes.json`, `storage.rules` i `firebase.json`. Pravila ograničavaju čitanje na članove prodavnice, sprečavaju promenu članstva/uloge sa klijenta, štite fotografije, ne dozvoljavaju direktno menjanje lagera mimo stock događaja i sprečavaju brisanje artikla/varijante sa zalihom. Kompozitni indeks za `stockEvents(productId, createdAt desc)` potreban je istoriji promena na stranici artikla.
+Repozitorijum sadrži `firestore.rules`, `firestore.indexes.json`, `storage.rules` i `firebase.json`. Pravila ograničavaju čitanje na članove prodavnice, sprečavaju promenu članstva/uloge sa klijenta, štite fotografije, ne dozvoljavaju direktno menjanje lagera mimo stock događaja i sprečavaju brisanje artikla/varijante sa zalihom. Kompozitni indeksi su potrebni za `stockEvents(productId, createdAt desc)`, `sales(customerId, createdAt desc)` i `orders(customerId, createdAt desc)`.
 
 Pokrenite `npm test` (Node.js 22+) za lager unit testove i Firestore/Storage Emulator pravila. Za emulator testove je potrebna Java. Emulator se pokreće pod demo project ID-jem i testovi ne koriste produkcioni Firebase projekat.
 
