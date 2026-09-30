@@ -142,35 +142,59 @@ function cleanAiFields(value: unknown, locale: AppLocale): ProductCustomField[] 
   return fields;
 }
 
-function resolveAiProvider(): { apiKey: string; baseURL: string; model: string } {
-  if (process.env.GROQ_API_KEY) {
+type AiProvider = { apiKey: string; baseURL: string; models: string[] };
+
+const GEMINI_FALLBACK_MODELS = ["gemini-3-flash-preview", "gemini-flash-latest"];
+
+function resolveAiProvider(): AiProvider {
+  if (process.env.GEMINI_API_KEY) {
+    const primary = process.env.GEMINI_MODEL || "gemini-3-flash-preview";
     return {
-      apiKey: process.env.GROQ_API_KEY,
-      baseURL: "https://api.groq.com/openai/v1",
-      model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+      apiKey: process.env.GEMINI_API_KEY,
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+      models: [primary, ...GEMINI_FALLBACK_MODELS.filter((model) => model !== primary)],
     };
   }
   if (process.env.OPENAI_API_KEY) {
     return {
       apiKey: process.env.OPENAI_API_KEY,
       baseURL: "https://api.openai.com/v1",
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      models: [process.env.OPENAI_MODEL || "gpt-4o-mini"],
     };
   }
   throw new Error("AI key is not configured");
 }
 
-async function suggestWithAi(category: string, name: string, existingCategories: string[], locale: AppLocale): Promise<{ category: string; fields: ProductCustomField[] }> {
-  const { apiKey, baseURL, model } = resolveAiProvider();
+async function requestChatCompletion(
+  provider: AiProvider,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  let lastStatus = 0;
+  let lastDetail = "";
+  for (const model of provider.models) {
+    const response = await fetch(`${provider.baseURL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${provider.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ...body, model }),
+      signal: AbortSignal.timeout(20_000),
+      cache: "no-store",
+    });
+    if (response.ok) return response;
+    lastStatus = response.status;
+    lastDetail = (await response.text()).slice(0, 300);
+    // 401/403 means the key or model is invalid: retrying another model will not help.
+    if (response.status === 400 || response.status === 401 || response.status === 403) break;
+  }
+  throw new Error(`AI service unavailable (status ${lastStatus}): ${lastDetail}`);
+}
 
-  const response = await fetch(`${baseURL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
+async function suggestWithAi(category: string, name: string, existingCategories: string[], locale: AppLocale): Promise<{ category: string; fields: ProductCustomField[] }> {
+  const provider = resolveAiProvider();
+
+  const response = await requestChatCompletion(provider, {
       temperature: 0.2,
       response_format: { type: "json_object" },
       messages: [
@@ -180,11 +204,7 @@ async function suggestWithAi(category: string, name: string, existingCategories:
         },
         { role: "user", content: `Category: ${category || "not specified"}\nProduct name: ${name || "not specified"}\nExisting shop categories: ${existingCategories.length ? existingCategories.join(" | ") : "none"}` },
       ],
-    }),
-    signal: AbortSignal.timeout(20_000),
-    cache: "no-store",
   });
-  if (!response.ok) throw new Error("AI service unavailable");
 
   const payload: unknown = await response.json();
   if (!payload || typeof payload !== "object" || !("choices" in payload) || !Array.isArray(payload.choices)) {
