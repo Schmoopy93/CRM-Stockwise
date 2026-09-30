@@ -16,13 +16,21 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { ref, uploadBytes } from "firebase/storage";
+import { deleteApp, initializeApp, type FirebaseApp } from "firebase/app";
+import { connectFirestoreEmulator, getFirestore, type Firestore } from "firebase/firestore";
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
+import { consumeRateLimit } from "../lib/rate-limit.ts";
 
 const projectId = "demo-inventory-crm";
 const shopId = "shop-a";
 const productId = "product-a";
 const variantId = "variant-a";
 let env: RulesTestEnvironment;
+/** The limiter is driven through its own unauthenticated client, built from the
+ * same SDK entry point the route handlers use, so the test covers the real path
+ * instead of a stand-in. */
+let limiterApp: FirebaseApp;
+let limiterDb: Firestore;
 
 function firestoreFor(uid?: string) {
   return uid ? env.authenticatedContext(uid).firestore() : env.unauthenticatedContext().firestore();
@@ -100,9 +108,13 @@ before(async () => {
       rules: await readFile("storage.rules", "utf8"),
     },
   });
+  limiterApp = initializeApp({ projectId }, "rate-limiter-test");
+  limiterDb = getFirestore(limiterApp);
+  connectFirestoreEmulator(limiterDb, "127.0.0.1", 8080);
 });
 
 after(async () => {
+  await deleteApp(limiterApp);
   await env.cleanup();
 });
 
@@ -256,11 +268,15 @@ test("customers can place catalog orders but members own the lifecycle", async (
   await assertFails(deleteDoc(doc(staffDb, "shops", shopId, "orders", "o5")));
 });
 
-test("rate limit buckets advance by one and can never be read or reset", async () => {
+test("rate limit buckets advance by one and can never be listed or reset", async () => {
   const db = firestoreFor();
   const bucket = doc(db, "rateLimits", "assistant-hash");
 
-  await assertFails(getDoc(bucket));
+  // The limiter counts a call by reading its bucket inside a transaction, so a
+  // single bucket must be readable or every call falls back to a per-instance
+  // counter. Buckets stay unlisted: ids are hashes, so nothing is findable.
+  await assertSucceeds(getDoc(bucket));
+  await assertFails(getDocs(collection(db, "rateLimits")));
   await assertSucceeds(setDoc(bucket, { windowStart: Timestamp.fromMillis(Date.now() - 1_000), count: 1 }));
   await assertFails(setDoc(bucket, { windowStart: Timestamp.now(), count: 999 }));
   await assertFails(updateDoc(bucket, { count: 500 }));
@@ -270,6 +286,28 @@ test("rate limit buckets advance by one and can never be read or reset", async (
 
   await assertSucceeds(updateDoc(bucket, { count: 2 }));
   await assertFails(updateDoc(bucket, { count: 1 }));
+});
+
+test("the shared limiter counts calls in Firestore rather than falling back", async () => {
+  const key = "assistant:203.0.113.7";
+
+  // Four calls against a budget of three: the fourth is refused. This drives the
+  // real limiter, so it fails if the transaction cannot read its bucket — the
+  // failure that used to push every request onto the in-process fallback.
+  assert.equal(await consumeRateLimit(key, 3, limiterDb), true);
+  assert.equal(await consumeRateLimit(key, 3, limiterDb), true);
+  assert.equal(await consumeRateLimit(key, 3, limiterDb), true);
+  assert.equal(await consumeRateLimit(key, 3, limiterDb), false);
+
+  // The count lives in the store of record, not in the caller's process.
+  await env.withSecurityRulesDisabled(async (context) => {
+    const buckets = await getDocs(collection(context.firestore(), "rateLimits"));
+    assert.equal(buckets.size, 1);
+    assert.equal(buckets.docs[0].data().count, 3);
+  });
+
+  // A different caller gets its own budget.
+  assert.equal(await consumeRateLimit("assistant:198.51.100.4", 3, limiterDb), true);
 });
 
 test("only shop owners can change shop configuration", async () => {

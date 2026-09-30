@@ -1,5 +1,5 @@
 import { getApps, initializeApp } from "firebase/app";
-import { doc, getFirestore, runTransaction, Timestamp } from "firebase/firestore";
+import { doc, getFirestore, runTransaction, Timestamp, type Firestore } from "firebase/firestore";
 
 /**
  * Shared rate limiting for the AI routes.
@@ -12,13 +12,22 @@ import { doc, getFirestore, runTransaction, Timestamp } from "firebase/firestore
  * the limit instead of removing it.
  */
 
-const app = getApps()[0] ?? initializeApp({
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-});
+/** Built on first use rather than at import time: the rules test suite imports
+ * this module with no Firebase environment variables set, and an eager
+ * `initializeApp` would throw before a single test could run. */
+let sharedDatabase: Firestore | null = null;
 
-const db = getFirestore(app);
+function sharedFirestore(): Firestore {
+  if (!sharedDatabase) {
+    const app = getApps()[0] ?? initializeApp({
+      apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+      authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    });
+    sharedDatabase = getFirestore(app);
+  }
+  return sharedDatabase;
+}
 
 const FALLBACK_MAX_ENTRIES = 5_000;
 const WINDOW_MS = 60_000;
@@ -56,11 +65,11 @@ async function keyToDocId(key: string) {
  * Counts one call against `key` and reports whether it is within budget.
  * Returns `true` when the call is allowed.
  */
-export async function consumeRateLimit(key: string, limit: number): Promise<boolean> {
+export async function consumeRateLimit(key: string, limit: number, database: Firestore = sharedFirestore()): Promise<boolean> {
   const now = Date.now();
   try {
-    const ref = doc(db, "rateLimits", await keyToDocId(key));
-    return await runTransaction(db, async (transaction) => {
+    const ref = doc(database, "rateLimits", await keyToDocId(key));
+    return await runTransaction(database, async (transaction) => {
       const snap = await transaction.get(ref);
       const data = snap.data() ?? {};
       const windowStart = data.windowStart instanceof Timestamp ? data.windowStart.toMillis() : 0;

@@ -359,9 +359,16 @@ service cloud.firestore {
     }
 
     // AI rate-limit buckets shared by the serverless route handlers, so the
-    // budget holds across every instance instead of one warm function.
+    // budget holds across every instance instead of one warm function. The
+    // limiter counts a call by reading the bucket and writing it back in one
+    // transaction, so reading a single bucket has to be allowed — with reads
+    // denied the transaction could never start and every call fell back to a
+    // per-instance counter. Bucket ids are hashes of the caller, so there is
+    // nothing to list and nothing to find by guessing; listing and deleting
+    // stay closed, and a write still has to move the counter by exactly one.
     match /rateLimits/{bucketId} {
-      allow read, delete: if false;
+      allow get: if true;
+      allow list, delete: if false;
       allow create, update: if validRateLimitWrite(request.resource.data, resource == null ? {} : resource.data);
     }
   }
