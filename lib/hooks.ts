@@ -280,6 +280,48 @@ export function useAllStockEvents(shopId: string | undefined, days = 30) {
   return events;
 }
 
+export function useStockEventsInRange(shopId: string | undefined, from: Date, to: Date) {
+  const [events, setEvents] = useState<StockEvent[]>([]);
+  const [loadedRange, setLoadedRange] = useState("");
+  const [queryError, setQueryError] = useState<{ range: string; error: Error } | null>(null);
+  const rangeKey = `${shopId ?? ""}:${from.getTime()}:${to.getTime()}`;
+
+  useEffect(() => {
+    if (!shopId) return;
+    const q = query(
+      collection(db, "shops", shopId, "stockEvents"),
+      where("createdAt", ">=", from),
+      where("createdAt", "<=", to),
+      orderBy("createdAt", "desc")
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setEvents(snap.docs.map((d) => ({
+        id: d.id,
+        productId: d.data().productId ?? "",
+        variantId: d.data().variantId ?? "",
+        variantLabel: d.data().variantLabel ?? "",
+        delta: d.data().delta ?? 0,
+        reason: d.data().reason ?? "adjustment",
+        actorUid: d.data().actorUid ?? "",
+        actorName: d.data().actorName ?? "",
+        createdAt: d.data().createdAt?.toDate() ?? null,
+      })));
+      setLoadedRange(rangeKey);
+      setQueryError(null);
+    }, (cause) => {
+      setLoadedRange(rangeKey);
+      setQueryError({ range: rangeKey, error: cause });
+    });
+    return unsub;
+  }, [shopId, from, to, rangeKey]);
+
+  return {
+    events: loadedRange === rangeKey ? events : [],
+    loading: loadedRange !== rangeKey,
+    error: queryError?.range === rangeKey ? queryError.error : null,
+  };
+}
+
 export function useCatalogStats(shopId: string | undefined, days = 30) {
   const [stats, setStats] = useState<CatalogStatsDay[]>([]);
 

@@ -1,17 +1,24 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useProducts, useAllStockEvents, useCatalogStats } from "@/lib/hooks";
+import { useProducts, useStockEventsInRange, useCatalogStats } from "@/lib/hooks";
 import { INTL_LOCALES, Locale, useI18n } from "@/lib/i18n-context";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell,
 } from "recharts";
-import { TrendingDown, TrendingUp, Activity, Package, Eye, MessageCircle, Send, AtSign, Share2, Percent, ShoppingBag } from "lucide-react";
+import { TrendingDown, TrendingUp, Activity, AlertCircle, Package, Eye, MessageCircle, Send, AtSign, Share2, Percent, ShoppingBag } from "lucide-react";
 
 function formatDay(date: Date, locale: Locale) {
   return date.toLocaleDateString(INTL_LOCALES[locale], { day: "2-digit", month: "2-digit" });
 }
+
+function dateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+type ActivityRange = "30days" | "90days" | "12months" | "year";
+type ActivityGroup = "day" | "week" | "month";
 
 const CHANNEL_COLORS = { whatsapp: "#25d366", telegram: "#229ed9", instagram: "#dd2a7b" } as const;
 
@@ -98,28 +105,87 @@ function CatalogStatsSection({ shopId, locale }: { shopId: string | undefined; l
 export default function AnalyticsPage() {
   const { profile } = useAuth();
   const { locale, t } = useI18n();
-  const { products } = useProducts(profile?.shopId);
-  const events = useAllStockEvents(profile?.shopId, 30);
-
-  // Events per day (last 14 days)
-  const activityData = useMemo(() => {
-    const days: Record<string, { date: string; dodano: number; skinuto: number }> = {};
-    const now = new Date();
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const key = formatDay(d, locale);
-      days[key] = { date: key, dodano: 0, skinuto: 0 };
+  const [range, setRange] = useState<ActivityRange>("12months");
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [today] = useState(() => {
+    const date = new Date();
+    date.setHours(23, 59, 59, 999);
+    return date;
+  });
+  const dateRange = useMemo(() => {
+    const from = new Date(today);
+    from.setHours(0, 0, 0, 0);
+    if (range === "30days") {
+      from.setDate(from.getDate() - 29);
+      return { from, to: today };
     }
+    if (range === "90days") {
+      from.setDate(from.getDate() - 89);
+      return { from, to: today };
+    }
+    if (range === "12months") {
+      from.setDate(1);
+      from.setMonth(from.getMonth() - 11);
+      return { from, to: today };
+    }
+    from.setFullYear(selectedYear, 0, 1);
+    const to = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
+    if (selectedYear === today.getFullYear()) to.setTime(today.getTime());
+    return { from, to };
+  }, [range, selectedYear, today]);
+  const activityGroup: ActivityGroup = range === "30days" ? "day" : range === "90days" ? "week" : "month";
+  const { events, loading: eventsLoading, error: eventsError } = useStockEventsInRange(
+    profile?.shopId,
+    dateRange.from,
+    dateRange.to
+  );
+  const { products } = useProducts(profile?.shopId);
+
+  // Use daily, weekly, and monthly buckets as the selected period grows.
+  const activityData = useMemo(() => {
+    const buckets = new Map<string, { date: string; received: number; issued: number }>();
+    const cursor = new Date(dateRange.from);
+    if (activityGroup === "week") {
+      cursor.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
+    } else if (activityGroup === "month") {
+      cursor.setDate(1);
+    }
+    const bucketEnd = dateRange.to;
+    while (cursor <= bucketEnd) {
+      const key = activityGroup === "month"
+        ? `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`
+        : activityGroup === "week"
+          ? dateKey(cursor)
+          : dateKey(cursor);
+      const label = activityGroup === "month"
+        ? cursor.toLocaleDateString(INTL_LOCALES[locale], { month: "short" })
+        : formatDay(cursor, locale);
+      buckets.set(key, { date: label, received: 0, issued: 0 });
+      if (activityGroup === "month") cursor.setMonth(cursor.getMonth() + 1);
+      else if (activityGroup === "week") cursor.setDate(cursor.getDate() + 7);
+      else cursor.setDate(cursor.getDate() + 1);
+    }
+
     for (const ev of events) {
       if (!ev.createdAt) continue;
-      const key = formatDay(ev.createdAt, locale);
-      if (!days[key]) continue;
-      if (ev.delta > 0) days[key].dodano += ev.delta;
-      else days[key].skinuto += Math.abs(ev.delta);
+      const eventDate = ev.createdAt;
+      const key = activityGroup === "month"
+        ? `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, "0")}`
+        : activityGroup === "week"
+          ? (() => {
+            const monday = new Date(eventDate);
+            monday.setHours(0, 0, 0, 0);
+            monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+            return dateKey(monday);
+          })()
+          : dateKey(eventDate);
+      const bucket = buckets.get(key);
+      if (!bucket) continue;
+      if (ev.delta > 0) bucket.received += ev.delta;
+      else bucket.issued += Math.abs(ev.delta);
     }
-    return Object.values(days);
-  }, [events, locale]);
+    return [...buckets.values()];
+  }, [events, dateRange, activityGroup, locale]);
 
   // Top 10 products by movement
   const topMovers = useMemo(() => {
@@ -142,6 +208,10 @@ export default function AnalyticsPage() {
   // Totals
   const totalIn = events.filter((e) => e.delta > 0).reduce((s, e) => s + e.delta, 0);
   const totalOut = events.filter((e) => e.delta < 0).reduce((s, e) => s + Math.abs(e.delta), 0);
+  const yearOptions = Array.from({ length: 11 }, (_, index) => today.getFullYear() - index);
+  const rangeLabel = range === "year"
+    ? String(selectedYear)
+    : t(`analytics.range.${range}`);
 
   const ACCENT_COLORS = ["#6366f1", "#818cf8", "#a5b4fc", "#c7d2fe", "#e0e7ff", "#4f46e5", "#4338ca", "#3730a3"];
 
@@ -151,23 +221,69 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div>
         <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{t("analytics.title")}</h1>
-        <p style={{ fontSize: "0.82rem", color: "var(--text-2)", marginTop: 4 }}>{t("analytics.subtitle")}</p>
+        <p style={{ fontSize: "0.82rem", color: "var(--text-2)", marginTop: 4 }}>{t("analytics.subtitle", { range: rangeLabel })}</p>
       </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+        {(["30days", "90days", "12months", "year"] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={range === value}
+            onClick={() => setRange(value)}
+            style={{
+              padding: "0.45rem 0.8rem",
+              fontSize: "0.78rem",
+              fontWeight: 650,
+              cursor: "pointer",
+              borderRadius: 999,
+              background: range === value ? "var(--accent-glow)" : "var(--bg-2)",
+              border: `1px solid ${range === value ? "rgba(99,102,241,0.3)" : "var(--border)"}`,
+              color: range === value ? "var(--accent-2)" : "var(--text-2)",
+            }}
+          >
+            {t(`analytics.range.${value}`)}
+          </button>
+        ))}
+        {range === "year" && (
+          <select
+            className="input"
+            value={selectedYear}
+            onChange={(event) => setSelectedYear(Number(event.target.value))}
+            aria-label={t("analytics.selectYear")}
+            style={{ width: "auto", minWidth: 110 }}
+          >
+            {yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
+          </select>
+        )}
+        <span style={{ fontSize: "0.75rem", color: "var(--text-3)", marginLeft: "0.25rem" }}>
+          {dateRange.from.toLocaleDateString(INTL_LOCALES[locale])} – {dateRange.to.toLocaleDateString(INTL_LOCALES[locale])}
+        </span>
+      </div>
+
+      {eventsError && (
+        <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, padding: "0.75rem 0.9rem", fontSize: "0.82rem", color: "var(--red)" }}>
+          <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+          {t("analytics.loadFailed")}
+        </div>
+      )}
 
       {/* Stats row */}
       <div className="analytics-stats" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem" }}>
         {[
-          { icon: <Package size={16} />, label: t("analytics.products"), value: products.length, color: "#6366f1", bg: "rgba(99,102,241,0.1)" },
-          { icon: <Activity size={16} />, label: t("analytics.changes"), value: events.length, color: "#22d3ee", bg: "rgba(34,211,238,0.1)" },
-          { icon: <TrendingUp size={16} />, label: t("analytics.received"), value: totalIn, color: "var(--green)", bg: "var(--green-dim)" },
-          { icon: <TrendingDown size={16} />, label: t("analytics.issued"), value: totalOut, color: lowStock.length > 0 ? "var(--amber)" : "var(--red)", bg: lowStock.length > 0 ? "var(--amber-dim)" : "var(--red-dim)" },
-        ].map(({ icon, label, value, color, bg }) => (
+          { icon: <Package size={16} />, label: t("analytics.products"), value: products.length, color: "#6366f1", bg: "rgba(99,102,241,0.1)", isLoading: false },
+          { icon: <Activity size={16} />, label: t("analytics.changes"), value: events.length, color: "#22d3ee", bg: "rgba(34,211,238,0.1)", isLoading: true },
+          { icon: <TrendingUp size={16} />, label: t("analytics.received"), value: totalIn, color: "var(--green)", bg: "var(--green-dim)", isLoading: true },
+          { icon: <TrendingDown size={16} />, label: t("analytics.issued"), value: totalOut, color: lowStock.length > 0 ? "var(--amber)" : "var(--red)", bg: lowStock.length > 0 ? "var(--amber-dim)" : "var(--red-dim)", isLoading: true },
+        ].map(({ icon, label, value, color, bg, isLoading }) => (
           <div key={label} className="glass" style={{ padding: "1.1rem 1.25rem", display: "flex", alignItems: "center", gap: "0.875rem" }}>
             <div style={{ width: 36, height: 36, background: bg, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0 }}>
               {icon}
             </div>
             <div>
-              <p style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0, color: "var(--text-1)", lineHeight: 1 }}>{value}</p>
+              <p style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0, color: "var(--text-1)", lineHeight: 1 }}>
+                {eventsLoading && isLoading ? "—" : value}
+              </p>
               <p style={{ fontSize: "0.72rem", color: "var(--text-2)", margin: "2px 0 0" }}>{label}</p>
             </div>
           </div>
@@ -179,6 +295,11 @@ export default function AnalyticsPage() {
         <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 1.25rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
           {t("analytics.activity")}
         </h2>
+        {eventsLoading ? (
+          <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "2rem 0", margin: 0 }}>{t("analytics.loading")}</p>
+        ) : activityData.every((day) => day.received === 0 && day.issued === 0) ? (
+          <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "2rem 0", margin: 0 }}>{t("analytics.noData")}</p>
+        ) : (
         <ResponsiveContainer width="100%" height={200}>
           <AreaChart data={activityData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
             <defs>
@@ -197,10 +318,11 @@ export default function AnalyticsPage() {
               contentStyle={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
               labelStyle={{ color: "var(--text-2)" }}
             />
-            <Area type="monotone" dataKey="dodano" name={t("analytics.chartIn")} stroke="#22c55e" strokeWidth={2} fill="url(#gIn)" />
-            <Area type="monotone" dataKey="skinuto" name={t("analytics.chartOut")} stroke="#6366f1" strokeWidth={2} fill="url(#gOut)" />
+            <Area type="monotone" dataKey="received" name={t("analytics.chartIn")} stroke="#22c55e" strokeWidth={2} fill="url(#gIn)" />
+            <Area type="monotone" dataKey="issued" name={t("analytics.chartOut")} stroke="#6366f1" strokeWidth={2} fill="url(#gOut)" />
           </AreaChart>
         </ResponsiveContainer>
+        )}
       </div>
 
       <div className="analytics-panels" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
@@ -210,7 +332,9 @@ export default function AnalyticsPage() {
           <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 1.25rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
             {t("analytics.topMovers")}
           </h2>
-          {topMovers.length === 0 ? (
+          {eventsLoading ? (
+            <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "2rem 0" }}>{t("analytics.loading")}</p>
+          ) : topMovers.length === 0 ? (
             <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "2rem 0" }}>{t("analytics.noData")}</p>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
