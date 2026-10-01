@@ -4,7 +4,16 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { translateError, useI18n } from "@/lib/i18n-context";
 import { saveCustomer } from "@/lib/actions";
-import { MAX_CUSTOMER_TAGS, MAX_TAG_LENGTH, parseTags, type CustomerInput } from "@/lib/customers";
+import {
+  MAX_CUSTOMER_CONTACT,
+  MAX_CUSTOMER_EMAIL,
+  MAX_CUSTOMER_NAME,
+  MAX_CUSTOMER_NOTE,
+  MAX_CUSTOMER_TAGS,
+  MAX_TAG_LENGTH,
+  parseTags,
+  type CustomerInput,
+} from "@/lib/customers";
 import type { Customer } from "@/lib/types";
 import { Check, Loader2, X } from "lucide-react";
 
@@ -85,6 +94,7 @@ export default function CustomerForm({ shopId, customer, onSaved, onClose }: Pro
             className="input"
             autoFocus
             required
+            maxLength={MAX_CUSTOMER_NAME}
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t("customers.namePlaceholder")}
@@ -97,6 +107,7 @@ export default function CustomerForm({ shopId, customer, onSaved, onClose }: Pro
           <input
             id="customer-contact"
             className="input"
+            maxLength={MAX_CUSTOMER_CONTACT}
             value={contact}
             onChange={(e) => setContact(e.target.value)}
             placeholder={t("customers.contactPlaceholder")}
@@ -111,6 +122,7 @@ export default function CustomerForm({ shopId, customer, onSaved, onClose }: Pro
             id="customer-email"
             className="input"
             type="email"
+            maxLength={MAX_CUSTOMER_EMAIL}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="ana@example.com"
@@ -153,6 +165,7 @@ export default function CustomerForm({ shopId, customer, onSaved, onClose }: Pro
             className="input"
             value={note}
             onChange={(e) => setNote(e.target.value)}
+            maxLength={MAX_CUSTOMER_NOTE}
             rows={3}
             placeholder={t("customers.notePlaceholder")}
             style={{ ...FIELD, resize: "vertical", fontFamily: "inherit" }}

@@ -4,45 +4,31 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Minus, Plus, Share2, ShoppingBag, X } from "lucide-react";
-import { INTL_LOCALES, Locale, useI18n } from "@/lib/i18n-context";
-import { buildOrderMessage, CatalogChannels } from "@/lib/catalog-channels";
+import { Locale, useI18n } from "@/lib/i18n-context";
 import type { PriceTools } from "@/lib/currency";
 import { CatalogItem, CatalogStatEvent } from "@/lib/types";
 import { catalogLink, MAX_QUANTITY } from "./catalog-store";
 import { fieldText, itemImages, saleDiscount } from "./catalog-card";
-import OrderChannels, { availableChannels } from "./order-channels";
 
-export default function CatalogDetail({ item, locale, prices, shopId, channels, onClose, onAdd, onNotify, onTrack }: {
+export default function CatalogDetail({ item, locale, prices, shopId, onClose, onAdd, onNotify, onTrack }: {
   item: CatalogItem;
   locale: Locale;
   prices: PriceTools;
   shopId: string;
-  channels: CatalogChannels;
   onClose: () => void;
-  onAdd: (variant: string, quantity: number) => void;
+  onAdd: (variant: string, quantity: number, variantId?: string) => void;
   onNotify: (message: string) => void;
   onTrack: (event: CatalogStatEvent) => void;
 }) {
   const { t } = useI18n();
   const [index, setIndex] = useState(0);
-  const [variant, setVariant] = useState(item.variants.length === 1 ? item.variants[0] : "");
+  const [variantIndex, setVariantIndex] = useState(item.variants.length === 1 ? 0 : -1);
+  const variant = item.variants[variantIndex] ?? "";
   const [quantity, setQuantity] = useState(1);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const images = itemImages(item);
   const discount = saleDiscount(item);
-  const intl = INTL_LOCALES[locale];
-  const needsVariant = item.variants.length > 0 && !variant;
-  const channelList = availableChannels(channels);
-  const copiesMessage = channelList.some((channel) => channel !== "whatsapp");
-  // The message quotes what the customer sees, so the price goes through the
-  // same conversion as the card rather than the stored base amount.
-  const message = buildOrderMessage(
-    [{ name: item.name, variant, quantity, unitPrice: item.salePrice === undefined ? undefined : prices.toCurrency(item.salePrice) }],
-    catalogLink(shopId, locale, item.id),
-    intl,
-    t,
-    prices.currency
-  );
+  const needsVariant = item.variants.length > 0 && variantIndex < 0;
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -153,9 +139,9 @@ export default function CatalogDetail({ item, locale, prices, shopId, channels, 
             <div className="cat-modal-group">
               <p className="cat-modal-section">{needsVariant ? t("catalog.chooseVariant") : t("catalog.variants")}</p>
               <div className="cat-variant-list" role="radiogroup" aria-label={t("catalog.variants")}>
-                {item.variants.map((label) => (
-                  <button key={label} type="button" role="radio" aria-checked={variant === label}
-                    className="cat-variant" data-active={variant === label || undefined} onClick={() => setVariant(label)}>
+                {item.variants.map((label, optionIndex) => (
+                  <button key={item.variantIds?.[optionIndex] ?? `${label}-${optionIndex}`} type="button" role="radio" aria-checked={variantIndex === optionIndex}
+                    className="cat-variant" data-active={variantIndex === optionIndex || undefined} onClick={() => setVariantIndex(optionIndex)}>
                     {label}
                   </button>
                 ))}
@@ -187,21 +173,12 @@ export default function CatalogDetail({ item, locale, prices, shopId, channels, 
                 <span aria-live="polite">{quantity}</span>
                 <button type="button" onClick={() => setQuantity((q) => Math.min(MAX_QUANTITY, q + 1))} disabled={quantity >= MAX_QUANTITY} aria-label={t("catalog.increase")}><Plus size={15} /></button>
               </div>
-              <button type="button" className="btn-primary cat-add-btn" disabled={needsVariant} onClick={() => { onAdd(variant, quantity); onClose(); }}>
+              <button type="button" className="btn-primary cat-add-btn" disabled={needsVariant} onClick={() => { onAdd(variant, quantity, item.variantIds?.[variantIndex]); onClose(); }}>
                 <ShoppingBag size={16} />
                 {t("catalog.addToCart")}
               </button>
             </div>
 
-            {channelList.length > 0 && (
-              <>
-                <p className="cat-modal-section" style={{ marginTop: "0.25rem" }}>{t("catalog.orderNow")}</p>
-                <OrderChannels channels={channels} message={message} disabled={needsVariant} onCopied={() => onNotify(t("catalog.messageCopied"))} onChannelClick={onTrack} />
-                {(needsVariant || copiesMessage) && (
-                  <p className="cat-hint">{needsVariant ? t("catalog.chooseVariant") : t("catalog.copyHint")}</p>
-                )}
-              </>
-            )}
           </div>
         </div>
       </div>

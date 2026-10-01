@@ -43,6 +43,8 @@ Prodaja i porudžbina se vežu za kupca preko polja `customerId`, ne preko imena
 
 Sve prodaje i porudžbine postojeće pre ovog dodatka ostaju bez veze; ne backfill-uju se automatski, jer bi pogrešno imenovanje trajno pripisalo prodaju pogrešnoj osobi.
 
+Porudžbina iz javnog kataloga traži ime, kontakt i cenu svake stavke. Radnja je prvo potvrđuje; pri isporuci se lager skida kroz stock ledger i kreira povezana prodaja u osnovnoj valuti. Delimična isporuka može da se nastavi bez duplog skidanja već obrađenih stavki. Poruke preko WhatsApp-a, Telegram-a i Instagrama su odvojene od submit-a porudžbine i služe za direktan kontakt.
+
 ## Google prijava
 
 U Firebase Console otvorite **Authentication → Sign-in method**, omogućite **Google** i dodajte domen aplikacije u **Authentication → Settings → Authorized domains**. Aplikacija koristi Google prijavu za sve naloge. Za kreiranje radnje izaberite **Nova radnja**, unesite naziv radnje i nastavite sa Google nalogom; za postojeću radnju izaberite **Pridruži se**, unesite Shop ID i nastavite sa Google nalogom.

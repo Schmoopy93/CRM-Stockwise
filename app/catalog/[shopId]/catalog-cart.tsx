@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 import { Check, Loader2, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
-import { INTL_LOCALES, Locale, useI18n } from "@/lib/i18n-context";
+import { INTL_LOCALES, Locale, translateError, useI18n } from "@/lib/i18n-context";
 import { buildOrderMessage, CatalogChannels } from "@/lib/catalog-channels";
 import type { PriceTools } from "@/lib/currency";
 import { CatalogItem, CatalogStatEvent } from "@/lib/types";
@@ -16,6 +16,7 @@ import OrderChannels, { availableChannels } from "./order-channels";
 export interface ResolvedCartLine {
   item: CatalogItem;
   variant: string;
+  variantId?: string;
   quantity: number;
 }
 
@@ -25,7 +26,7 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
   prices: PriceTools;
   shopId: string;
   channels: CatalogChannels;
-  onQuantity: (itemId: string, variant: string, quantity: number) => void;
+  onQuantity: (itemId: string, variant: string, quantity: number, variantId?: string) => void;
   onClear: () => void;
   onClose: () => void;
   onNotify: (message: string) => void;
@@ -37,7 +38,7 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
   const [contact, setContact] = useState("");
   const [placing, setPlacing] = useState(false);
   const [placedCode, setPlacedCode] = useState("");
-  const [placeError, setPlaceError] = useState(false);
+  const [placeError, setPlaceError] = useState("");
   const channelList = availableChannels(channels);
   const priced = lines.every((line) => line.item.salePrice !== undefined);
   const total = lines.reduce((sum, line) => sum + (line.item.salePrice ?? 0) * line.quantity, 0);
@@ -51,27 +52,34 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
   const message = placedCode ? `${baseMessage}\n${t("catalog.orderCodeLabel")}: ${placedCode}` : baseMessage;
 
   async function place() {
-    setPlacing(true); setPlaceError(false);
+    if (placing || !name.trim() || !contact.trim() || !priced || lines.length === 0) return;
+    setPlacing(true); setPlaceError("");
     try {
       // Sent in the currency the customer was quoted, and tagged with it, so the
       // shop reads back the same figure the customer agreed to.
       const code = await placeCatalogOrder(shopId, {
         lines: lines.map((line) => ({
           productId: line.item.id,
+          ...(line.variantId ? { variantId: line.variantId } : {}),
           productName: line.item.name,
           variantLabel: line.variant,
           quantity: line.quantity,
-          unitPrice: line.item.salePrice === undefined ? undefined : prices.toCurrency(line.item.salePrice),
+          ...(line.item.salePrice !== undefined
+            ? {
+                unitPrice: prices.toCurrency(line.item.salePrice),
+                baseUnitPrice: line.item.salePrice,
+              }
+            : {}),
         })),
         customerName: name,
         customerContact: contact,
         note: "",
-        channel: channelList[0] ?? "other",
+        channel: "catalog",
       }, prices.currency);
       setPlacedCode(code);
       onNotify(t("catalog.orderSaved", { code }));
-    } catch {
-      setPlaceError(true);
+    } catch (cause) {
+      setPlaceError(translateError(cause, t, "catalog.orderFailed"));
     } finally { setPlacing(false); }
   }
 
@@ -109,10 +117,10 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
         ) : (
           <>
             <ul className="cat-drawer-list">
-              {lines.map(({ item, variant, quantity }) => {
+              {lines.map(({ item, variant, variantId, quantity }) => {
                 const image = itemImages(item)[0];
                 return (
-                  <li key={`${item.id}-${variant}`} className="cat-line">
+                  <li key={`${item.id}-${variantId ?? variant}`} className="cat-line">
                     <div className="cat-line-media">
                       {image ? <Image src={image} alt="" fill sizes="64px" quality={90} style={{ objectFit: "cover" }} /> : <Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={64} height={64} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
                     </div>
@@ -121,14 +129,14 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
                       {variant && <p className="cat-line-variant">{variant}</p>}
                       <div className="cat-line-row">
                         <div className="cat-stepper" data-size="sm" role="group" aria-label={t("catalog.quantity")}>
-                          <button type="button" onClick={() => onQuantity(item.id, variant, quantity - 1)} aria-label={t("catalog.decrease")}><Minus size={13} /></button>
+                          <button type="button" onClick={() => onQuantity(item.id, variant, quantity - 1, variantId)} aria-label={t("catalog.decrease")}><Minus size={13} /></button>
                           <span>{quantity}</span>
-                          <button type="button" onClick={() => onQuantity(item.id, variant, quantity + 1)} disabled={quantity >= MAX_QUANTITY} aria-label={t("catalog.increase")}><Plus size={13} /></button>
+                          <button type="button" onClick={() => onQuantity(item.id, variant, quantity + 1, variantId)} disabled={quantity >= MAX_QUANTITY} aria-label={t("catalog.increase")}><Plus size={13} /></button>
                         </div>
                         {item.salePrice !== undefined && <span className="cat-line-price">{prices.money(item.salePrice * quantity)}</span>}
                       </div>
                     </div>
-                    <button type="button" className="cat-line-remove" onClick={() => onQuantity(item.id, variant, 0)} aria-label={`${t("catalog.remove")} — ${item.name}`}>
+                    <button type="button" className="cat-line-remove" onClick={() => onQuantity(item.id, variant, 0, variantId)} aria-label={`${t("catalog.remove")} — ${item.name}`}>
                       <Trash2 size={14} />
                     </button>
                   </li>
@@ -151,21 +159,24 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
                     className="input" type="text" autoComplete="name"
                     aria-label={t("catalog.orderName")} placeholder={t("catalog.orderName")}
                     value={name} onChange={(e) => setName(e.target.value)} maxLength={100}
+                    required
                   />
                   <input
                     className="input" type="text" autoComplete="tel"
                     aria-label={t("catalog.orderContact")} placeholder={t("catalog.orderContact")}
                     value={contact} onChange={(e) => setContact(e.target.value)} maxLength={100}
+                    required
                   />
                   <button
-                    type="button" className="btn-primary" onClick={place} disabled={placing}
+                    type="button" className="btn-primary" onClick={place} disabled={placing || !name.trim() || !contact.trim() || !priced}
                     style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
                   >
                     {placing ? <Loader2 size={15} className="cat-spin" /> : <Check size={15} />}
                     {placing ? t("catalog.orderPlacing") : t("catalog.orderPlace")}
                   </button>
                   <p className="cat-hint" style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-3)" }}>{t("catalog.orderHint")}</p>
-                  {placeError && <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--red)" }}>{t("catalog.orderFailed")}</p>}
+                  {!priced && <p className="cat-hint" style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-3)" }}>{t("catalog.orderPriceRequired")}</p>}
+                  {placeError && <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--red)" }}>{placeError}</p>}
                 </div>
               )}
 

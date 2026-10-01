@@ -26,6 +26,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/shops/$(shopId)/stockEvents/$(eventId);
     }
 
+    function salePath(shopId, saleId) {
+      return /databases/$(database)/documents/shops/$(shopId)/sales/$(saleId);
+    }
+
     function isMember(shopId) {
       return signedIn()
         && exists(userPath(request.auth.uid))
@@ -138,6 +142,29 @@ service cloud.firestore {
         && newVariant.lastStockEventId == eventId
         && newProduct.totalQuantity == oldProduct.totalQuantity + delta
         && newProduct.lastStockEventId == eventId;
+    }
+
+    function validOrderFulfillmentStep(shopId) {
+      let index = request.resource.data.lastFulfilledLineIndex;
+      let line = request.resource.data.lines[index];
+      let before = resource.data.get('fulfilledLineIndices', []);
+      let after = request.resource.data.fulfilledLineIndices;
+      let event = getAfter(stockEventPath(shopId, request.resource.data.lastFulfillmentEventId)).data;
+      return index is int
+        && index >= 0
+        && index < request.resource.data.lines.size()
+        && request.resource.data.lastFulfillmentEventId is string
+        && after is list
+        && after.size() == before.size() + 1
+        && after.hasAll(before)
+        && after.hasAny([index])
+        && !before.hasAny([index])
+        && event.productId == line.productId
+        && event.delta == -line.quantity
+        && event.reason == 'sale'
+        && event.actorUid == request.auth.uid
+        && (('variantId' in line && event.variantId == line.variantId)
+          || (!('variantId' in line) && event.variantLabel == line.variantLabel));
     }
 
     match /users/{uid} {
@@ -274,7 +301,7 @@ service cloud.firestore {
         allow read: if true;
         allow create, update: if isMember(shopId)
           && request.resource.data.keys().hasOnly([
-            'name', 'category', 'imageUrl', 'images', 'salePrice', 'compareAtPrice', 'variants', 'fields', 'hidden', 'createdAt', 'updatedAt'
+            'name', 'category', 'imageUrl', 'images', 'salePrice', 'compareAtPrice', 'variants', 'variantIds', 'fields', 'hidden', 'createdAt', 'updatedAt'
           ])
           && (!('compareAtPrice' in request.resource.data)
             || (request.resource.data.compareAtPrice is number && request.resource.data.compareAtPrice >= 0))
@@ -287,6 +314,10 @@ service cloud.firestore {
           && (!('salePrice' in request.resource.data)
             || (request.resource.data.salePrice is number && request.resource.data.salePrice >= 0))
           && request.resource.data.variants is list
+          && (!('variantIds' in request.resource.data)
+            || (request.resource.data.variantIds is list
+              && request.resource.data.variantIds.size() == request.resource.data.variants.size()
+              && request.resource.data.variantIds.size() <= 200))
           && request.resource.data.fields is list
           && request.resource.data.hidden is bool
           && request.resource.data.updatedAt == request.time;
@@ -304,8 +335,8 @@ service cloud.firestore {
 
       match /orders/{orderId} {
         // Customers are anonymous here, so creates are pinned to a fixed shape
-        // and only while the public catalog is actually on. The shop never
-        // trusts these values for stock — stock moves only through the ledger.
+        // and only while the public catalog is actually on. Only member-driven
+        // fulfillment moves stock through the ledger.
         allow read: if isMember(shopId);
         allow create: if get(shopPath(shopId)).data.catalogEnabled == true
           && request.resource.data.keys().hasOnly([
@@ -317,9 +348,11 @@ service cloud.firestore {
           && request.resource.data.lines.size() > 0
           && request.resource.data.lines.size() <= 50
           && request.resource.data.lines[0].keys().hasOnly([
-            'productId', 'productName', 'variantLabel', 'quantity', 'unitPrice'
+            'productId', 'variantId', 'productName', 'variantLabel', 'quantity', 'unitPrice', 'baseUnitPrice'
           ])
           && request.resource.data.lines[0].productId is string
+          && (!('variantId' in request.resource.data.lines[0])
+            || request.resource.data.lines[0].variantId is string)
           && request.resource.data.lines[0].productName is string
           && request.resource.data.lines[0].productName.size() <= 100
           && request.resource.data.lines[0].variantLabel is string
@@ -327,18 +360,25 @@ service cloud.firestore {
           && request.resource.data.lines[0].quantity is int
           && request.resource.data.lines[0].quantity > 0
           && request.resource.data.lines[0].quantity <= 999
+          && request.resource.data.lines[0].unitPrice is number
+          && request.resource.data.lines[0].unitPrice >= 0
+          && (!('baseUnitPrice' in request.resource.data.lines[0])
+            || (request.resource.data.lines[0].baseUnitPrice is number
+              && request.resource.data.lines[0].baseUnitPrice >= 0))
           && request.resource.data.total is number
           && request.resource.data.total >= 0
           && request.resource.data.total <= 100000000
           && request.resource.data.currency is string
           && request.resource.data.currency.matches('^[A-Z]{3}$')
           && request.resource.data.customerName is string
+          && request.resource.data.customerName.size() > 0
           && request.resource.data.customerName.size() <= 100
           && request.resource.data.customerContact is string
+          && request.resource.data.customerContact.size() > 0
           && request.resource.data.customerContact.size() <= 100
           && request.resource.data.note is string
           && request.resource.data.note.size() <= 500
-          && request.resource.data.channel in ['whatsapp', 'telegram', 'instagram', 'other']
+          && request.resource.data.channel in ['catalog', 'whatsapp', 'telegram', 'instagram', 'other']
           && request.resource.data.status == 'new'
           && request.resource.data.createdAt == request.time;
         // Members move an order through its lifecycle, attach the customer
@@ -348,14 +388,34 @@ service cloud.firestore {
         // quote the shop approved is still the quote on file.
         allow update: if isMember(shopId)
           && request.resource.data.keys().hasOnly([
-            'code', 'lines', 'total', 'currency', 'customerName', 'customerContact', 'customerId', 'note', 'channel', 'status', 'createdAt'
+            'code', 'lines', 'total', 'currency', 'customerName', 'customerContact', 'customerId', 'note', 'channel', 'status', 'fulfilledLineIndices', 'lastFulfilledLineIndex', 'lastFulfillmentEventId', 'saleId', 'createdAt'
           ])
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'customerName', 'customerContact', 'customerId'])
-          && request.resource.data.status in ['new', 'confirmed', 'fulfilled', 'cancelled']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'customerName', 'customerContact', 'customerId', 'fulfilledLineIndices', 'lastFulfilledLineIndex', 'lastFulfillmentEventId', 'saleId'])
+          && request.resource.data.status in ['new', 'confirmed', 'fulfilling', 'fulfilled', 'cancelled']
+          && (request.resource.data.status == resource.data.status
+            || (resource.data.status == 'new' && request.resource.data.status in ['confirmed', 'cancelled'])
+            || (resource.data.status == 'confirmed' && request.resource.data.status in ['fulfilling', 'cancelled'])
+            || (resource.data.status == 'fulfilling' && request.resource.data.status in ['fulfilling', 'fulfilled']))
           && request.resource.data.customerName is string
           && request.resource.data.customerName.size() <= 100
           && request.resource.data.customerContact is string
           && request.resource.data.customerContact.size() <= 100
+          && (request.resource.data.status != 'fulfilling'
+            || (resource.data.status == 'fulfilling'
+              && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+                'fulfilledLineIndices', 'lastFulfilledLineIndex', 'lastFulfillmentEventId'
+              ]))
+            || ('fulfilledLineIndices' in request.resource.data
+              && request.resource.data.fulfilledLineIndices.size() <= request.resource.data.lines.size()
+              && validOrderFulfillmentStep(shopId)))
+          && (request.resource.data.status != 'fulfilled'
+            || ('saleId' in request.resource.data
+              && request.resource.data.saleId is string
+              && request.resource.data.saleId.size() > 0
+              && 'fulfilledLineIndices' in request.resource.data
+              && request.resource.data.fulfilledLineIndices.size() == request.resource.data.lines.size()
+              && existsAfter(salePath(shopId, request.resource.data.saleId))
+              && getAfter(salePath(shopId, request.resource.data.saleId)).data.sourceOrderId == orderId))
           && validCustomerRef(request.resource.data);
         allow delete: if false;
       }
@@ -364,21 +424,34 @@ service cloud.firestore {
         allow read: if isMember(shopId);
         allow create: if isMember(shopId)
           && request.resource.data.keys().hasOnly([
-            'lines', 'total', 'channel', 'buyerName', 'buyerInstagram', 'customerId', 'note', 'actorUid', 'actorName', 'createdAt'
+            'lines', 'total', 'channel', 'buyerName', 'buyerContact', 'buyerInstagram', 'customerId', 'sourceOrderId', 'sourceOrderCode', 'note', 'actorUid', 'actorName', 'createdAt'
           ])
+          && request.resource.data.keys().hasAny(['buyerContact', 'buyerInstagram'])
+          && !request.resource.data.keys().hasAll(['buyerContact', 'buyerInstagram'])
           && request.resource.data.lines is list
           && request.resource.data.lines.size() > 0
           && request.resource.data.lines.size() <= 100
           && request.resource.data.total is number
           && request.resource.data.total >= 0
           && request.resource.data.total <= 100000000
-          && request.resource.data.channel in ['instagram', 'facebook', 'store', 'phone', 'other']
+          && request.resource.data.channel in ['instagram', 'facebook', 'store', 'phone', 'catalog', 'other']
           && request.resource.data.buyerName is string
           && request.resource.data.buyerName.size() <= 100
-          && request.resource.data.buyerInstagram is string
-          && request.resource.data.buyerInstagram.size() <= 100
+          && (
+            ('buyerContact' in request.resource.data
+              && request.resource.data.buyerContact is string
+              && request.resource.data.buyerContact.size() <= 100)
+            || ('buyerInstagram' in request.resource.data
+              && request.resource.data.buyerInstagram is string
+              && request.resource.data.buyerInstagram.size() <= 100)
+          )
           && request.resource.data.note is string
           && request.resource.data.note.size() <= 500
+          && (!('sourceOrderId' in request.resource.data)
+            || (request.resource.data.sourceOrderId is string
+              && request.resource.data.sourceOrderId.size() > 0
+              && request.resource.data.sourceOrderCode is string
+              && request.resource.data.sourceOrderCode.size() > 0))
           && validCustomerRef(request.resource.data)
           && request.resource.data.actorUid == request.auth.uid
           && request.resource.data.actorName is string

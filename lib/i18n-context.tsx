@@ -36,9 +36,18 @@ export function translateError(
   t: (key: string) => string,
   fallbackKey: string
 ): string {
-  const key = `errors.${error instanceof Error ? error.message : ""}`;
+  const errorCode = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+    ? error.code.split("/").pop() ?? ""
+    : "";
+  const key = `errors.${error instanceof Error ? error.message : errorCode}`;
   const translated = t(key);
-  return translated === key ? t(fallbackKey) : translated;
+  if (translated !== key) return translated;
+  if (errorCode) {
+    const codeKey = `errors.${errorCode}`;
+    const codeTranslation = t(codeKey);
+    if (codeTranslation !== codeKey) return codeTranslation;
+  }
+  return t(fallbackKey);
 }
 
 const STORAGE_KEY = "inventory-locale";

@@ -131,6 +131,7 @@ export function useCatalog(shopId: string | undefined) {
           compareAtPrice: typeof d.data().compareAtPrice === "number" ? d.data().compareAtPrice : undefined,
           isNew: (d.data().createdAt?.toMillis?.() ?? 0) >= newSince,
           variants: Array.isArray(d.data().variants) ? d.data().variants : [],
+          variantIds: Array.isArray(d.data().variantIds) ? d.data().variantIds : undefined,
           fields: Array.isArray(d.data().fields) ? d.data().fields : [],
           hidden: d.data().hidden === true,
         }))
@@ -323,7 +324,9 @@ export function useSales(shopId: string | undefined, count = 20) {
           total: d.data().total ?? 0,
           channel: d.data().channel ?? "other",
           buyerName: d.data().buyerName ?? "",
-          buyerInstagram: d.data().buyerInstagram ?? "",
+          buyerContact: d.data().buyerContact ?? d.data().buyerInstagram ?? "",
+          sourceOrderId: d.data().sourceOrderId ?? "",
+          sourceOrderCode: d.data().sourceOrderCode ?? "",
           customerId: d.data().customerId ?? "",
           note: d.data().note ?? "",
           actorUid: d.data().actorUid ?? "",
@@ -342,6 +345,7 @@ export function useSales(shopId: string | undefined, count = 20) {
 export function useOrders(shopId: string | undefined, count = 100) {
   const [orders, setOrders] = useState<CatalogOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     if (!shopId) return;
@@ -367,12 +371,16 @@ export function useOrders(shopId: string | undefined, count = 100) {
           createdAt: d.data().createdAt?.toDate() ?? null,
         }))
       );
+      setError(null);
       setLoading(false);
-    }, () => setLoading(false));
+    }, (cause) => {
+      setError(cause);
+      setLoading(false);
+    });
     return unsub;
   }, [shopId, count]);
 
-  return { orders, loading };
+  return { orders, loading, error };
 }
 
 export function useStockEvents(shopId: string | undefined, productId: string | undefined) {
@@ -493,7 +501,9 @@ export function useCustomerActivity(shopId: string | undefined, customerId: stri
         total: d.data().total ?? 0,
         channel: d.data().channel ?? "other",
         buyerName: d.data().buyerName ?? "",
-        buyerInstagram: d.data().buyerInstagram ?? "",
+        buyerContact: d.data().buyerContact ?? d.data().buyerInstagram ?? "",
+        sourceOrderId: d.data().sourceOrderId ?? "",
+        sourceOrderCode: d.data().sourceOrderCode ?? "",
         customerId: d.data().customerId ?? "",
         note: d.data().note ?? "",
         actorUid: d.data().actorUid ?? "",
@@ -514,6 +524,8 @@ export function useCustomerActivity(shopId: string | undefined, customerId: stri
         note: d.data().note ?? "",
         channel: d.data().channel ?? "other",
         status: d.data().status ?? "new",
+        fulfilledLineIndices: Array.isArray(d.data().fulfilledLineIndices) ? d.data().fulfilledLineIndices : [],
+        saleId: d.data().saleId ?? "",
         createdAt: d.data().createdAt?.toDate() ?? null,
       })));
     }, () => setOrders([]));

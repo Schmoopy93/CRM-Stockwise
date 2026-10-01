@@ -232,8 +232,8 @@ test("customers can place catalog orders but members own the lifecycle", async (
   const staffDb = firestoreFor("staff-a");
   // `currency` is part of the order shape: an order keeps the currency it was
   // quoted in, so it is in the fixture rather than added per assertion.
-  const order = { code: "K7M2QP", total: 25, currency: "EUR", customerName: "Ana", customerContact: "@ana", note: "", channel: "instagram", createdAt: serverTimestamp() };
-  const line = { productId: "p", productName: "X", variantLabel: "", quantity: 1 };
+  const order = { code: "K7M2QP", total: 20, currency: "EUR", customerName: "Ana", customerContact: "@ana", note: "", channel: "instagram", createdAt: serverTimestamp() };
+  const line = { productId, variantId, productName: "Jacket", variantLabel: "M", quantity: 1, unitPrice: 20, baseUnitPrice: 20 };
 
   await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o1"), { ...order, lines: [], status: "new" }));
   await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o2"), { ...order, lines: [line], status: "confirmed" }));
@@ -249,6 +249,12 @@ test("customers can place catalog orders but members own the lifecycle", async (
   // which is all it can check — whether a code is one the shop can pick lives in
   // the picker, not here. It is required so every order says what it was quoted in.
   await assertSucceeds(setDoc(doc(visitorDb, "shops", shopId, "orders", "o6"), { ...order, currency: "RSD", lines: [line], status: "new" }));
+  await assertSucceeds(setDoc(doc(visitorDb, "shops", shopId, "orders", "catalog-order"), {
+    ...order,
+    channel: "catalog",
+    lines: [{ ...line, variantId: "variant-a", baseUnitPrice: 20 }],
+    status: "new",
+  }));
   await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o7"), { ...order, currency: "rsd", lines: [line], status: "new" }));
   await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o8"), { ...order, currency: "RS", lines: [line], status: "new" }));
   await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o9"), { ...order, currency: 117, lines: [line], status: "new" }));
@@ -262,11 +268,68 @@ test("customers can place catalog orders but members own the lifecycle", async (
 
   // Members may move the lifecycle and attach contact details, nothing else.
   await assertSucceeds(updateDoc(doc(staffDb, "shops", shopId, "orders", "o5"), { status: "confirmed" }));
-  await assertFails(updateDoc(doc(staffDb, "shops", shopId, "orders", "o5"), { status: "shipped" }));
-  await assertFails(updateDoc(doc(staffDb, "shops", shopId, "orders", "o5"), { total: 0 }));
+  const orderRef = doc(staffDb, "shops", shopId, "orders", "o5");
+  await assertFails(updateDoc(orderRef, {
+    status: "fulfilling",
+    fulfilledLineIndices: [0],
+    lastFulfilledLineIndex: 0,
+    lastFulfillmentEventId: "missing-event",
+  }));
+  const productRef = doc(staffDb, "shops", shopId, "products", productId);
+  const variantRef = doc(productRef, "variants", variantId);
+  const eventRef = doc(collection(staffDb, "shops", shopId, "stockEvents"));
+  await assertSucceeds(runTransaction(staffDb, async (transaction) => {
+    const [currentOrder, productSnap, variantSnap] = await Promise.all([
+      transaction.get(orderRef),
+      transaction.get(productRef),
+      transaction.get(variantRef),
+    ]);
+    transaction.update(variantRef, { quantity: 4, lastStockEventId: eventRef.id });
+    transaction.update(productRef, { totalQuantity: 4, lastStockEventId: eventRef.id });
+    transaction.set(eventRef, {
+      productId,
+      variantId,
+      variantLabel: "M",
+      delta: -1,
+      reason: "sale",
+      actorUid: "staff-a",
+      actorName: "Staff",
+      createdAt: serverTimestamp(),
+    });
+    transaction.update(orderRef, {
+      status: "fulfilling",
+      fulfilledLineIndices: [0],
+      lastFulfilledLineIndex: 0,
+      lastFulfillmentEventId: eventRef.id,
+    });
+    assert.equal(currentOrder.data()?.status, "confirmed");
+    assert.equal(productSnap.data()?.totalQuantity, 5);
+    assert.equal(variantSnap.data()?.quantity, 5);
+  }));
+  const saleRef = doc(staffDb, "shops", shopId, "sales", "order-o5");
+  await assertSucceeds(runTransaction(staffDb, async (transaction) => {
+    const currentOrder = await transaction.get(orderRef);
+    transaction.set(saleRef, {
+      lines: [{ productId, productName: "Jacket", variantId, variantLabel: "M", quantity: 1, unitPrice: 20 }],
+      total: 20,
+      channel: "catalog",
+      buyerName: "Ana",
+      buyerContact: "@ana",
+      sourceOrderId: "o5",
+      sourceOrderCode: "K7M2QP",
+      note: "",
+      actorUid: "staff-a",
+      actorName: "Staff",
+      createdAt: serverTimestamp(),
+    });
+    transaction.update(orderRef, { status: "fulfilled", saleId: saleRef.id });
+    assert.equal(currentOrder.data()?.status, "fulfilling");
+  }));
+  await assertFails(updateDoc(orderRef, { status: "shipped" }));
+  await assertFails(updateDoc(orderRef, { total: 0 }));
   // Restating what the customer agreed to, or in what currency, is not allowed.
-  await assertFails(updateDoc(doc(staffDb, "shops", shopId, "orders", "o5"), { currency: "RSD" }));
-  await assertFails(deleteDoc(doc(staffDb, "shops", shopId, "orders", "o5")));
+  await assertFails(updateDoc(orderRef, { currency: "RSD" }));
+  await assertFails(deleteDoc(orderRef));
 });
 
 test("customer records are private to the shop and pinned to a validated shape", async () => {
@@ -331,17 +394,24 @@ test("sales can be attributed to a customer, but nothing else on them can change
     total: 10,
     channel: "store",
     buyerName: "Ana",
-    buyerInstagram: "",
     note: "",
     actorUid: "staff-a",
     actorName: "Staff",
   };
+  const newSale = { ...sale, buyerContact: "" };
 
   // An unattributed sale stays valid: a walk-in with no record is still a sale.
-  await assertSucceeds(setDoc(doc(db, "shops", shopId, "sales", "s1"), { ...sale, createdAt: serverTimestamp() }));
-  await assertSucceeds(setDoc(doc(db, "shops", shopId, "sales", "s2"), { ...sale, customerId: "c1", createdAt: serverTimestamp() }));
-  await assertFails(setDoc(doc(db, "shops", shopId, "sales", "s3"), { ...sale, customerId: "", createdAt: serverTimestamp() }));
-  await assertFails(setDoc(doc(db, "shops", shopId, "sales", "s4"), { ...sale, customerId: 42, createdAt: serverTimestamp() }));
+  await assertSucceeds(setDoc(doc(db, "shops", shopId, "sales", "s1"), { ...newSale, createdAt: serverTimestamp() }));
+  await assertSucceeds(setDoc(doc(db, "shops", shopId, "sales", "s2"), { ...newSale, customerId: "c1", createdAt: serverTimestamp() }));
+  const legacySale = { ...sale, buyerInstagram: "" };
+  await assertSucceeds(setDoc(doc(db, "shops", shopId, "sales", "legacy"), { ...legacySale, createdAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(db, "shops", shopId, "sales", "ambiguous"), {
+    ...newSale,
+    buyerInstagram: "",
+    createdAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(doc(db, "shops", shopId, "sales", "s3"), { ...newSale, customerId: "", createdAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(db, "shops", shopId, "sales", "s4"), { ...newSale, customerId: 42, createdAt: serverTimestamp() }));
 
   // Attributing a recorded sale is the one edit allowed after the fact, because
   // it records who it was to without touching what was sold or for how much.

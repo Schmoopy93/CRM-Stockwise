@@ -38,7 +38,7 @@ export default function SalesPage() {
   const [error, setError] = useState("");
   const [channel, setChannel] = useState<SaleChannel>("instagram");
   const [buyerName, setBuyerName] = useState("");
-  const [buyerInstagram, setBuyerInstagram] = useState("");
+  const [buyerContact, setBuyerContact] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [note, setNote] = useState("");
 
@@ -133,11 +133,11 @@ export default function SalesPage() {
           quantity: line.quantity,
           unitPrice: unitPrices[idx],
         })),
-        { channel, buyerName, buyerInstagram, customerId, note },
+        { channel, buyerName, buyerContact, customerId, note },
         profile.uid,
         profile.displayName
       );
-      setDone(true); setLines([]); setBuyerName(""); setBuyerInstagram(""); setCustomerId(""); setNote("");
+      setDone(true); setLines([]); setBuyerName(""); setBuyerContact(""); setCustomerId(""); setNote("");
     } catch (cause) {
       if (cause instanceof PartialReceiptError) {
         const completed = new Set(cause.completedLineKeys);
@@ -251,9 +251,9 @@ export default function SalesPage() {
             <input className="input" placeholder={t("sales.buyerNamePlaceholder")} maxLength={100} value={buyerName} onChange={(e) => setBuyerName(e.target.value)} disabled={saving} style={{ flex: 1, minWidth: 140, padding: "0.5rem 0.75rem", fontSize: "0.82rem" }} />
             <div style={{ position: "relative", flex: 1, minWidth: 160 }}>
               {channel === "instagram" && <AtSign size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)" }} />}
-              <input className="input" placeholder={channel === "instagram" ? t("sales.instagramPlaceholder") : t("sales.buyerInstagram")} maxLength={100}
-                value={buyerInstagram} onChange={(e) => setBuyerInstagram(e.target.value)} disabled={saving}
-                style={{ width: "100%", paddingLeft: channel === "instagram" ? "2rem" : "0.75rem", padding: "0.5rem 0.75rem", fontSize: "0.82rem" }} />
+              <input className="input" placeholder={channel === "instagram" ? t("sales.instagramPlaceholder") : t("sales.buyerContact")} maxLength={100}
+                value={buyerContact} onChange={(e) => setBuyerContact(e.target.value)} disabled={saving}
+                style={{ width: "100%", padding: `0.5rem 0.75rem 0.5rem ${channel === "instagram" ? "2rem" : "0.75rem"}`, fontSize: "0.82rem" }} />
             </div>
           </div>
           <input className="input" placeholder={t("sales.notePlaceholder")} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} disabled={saving} style={{ padding: "0.5rem 0.75rem", fontSize: "0.82rem" }} />
@@ -293,8 +293,9 @@ export default function SalesPage() {
                   </p>
                   <p style={{ margin: "2px 0 0", fontSize: "0.72rem", color: "var(--text-3)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     <span>{t(`sales.channel.${sale.channel}`)}</span>
+                    {sale.sourceOrderCode && <span>· {t("sales.catalogOrder", { code: sale.sourceOrderCode })}</span>}
                     {sale.buyerName && <span>· {sale.buyerName}</span>}
-                    {sale.buyerInstagram && <span>· @{sale.buyerInstagram}</span>}
+                    {sale.buyerContact && <span>· {sale.channel === "instagram" ? `@${sale.buyerContact}` : sale.buyerContact}</span>}
                     {sale.createdAt && <span>· {sale.createdAt.toLocaleString(intlLocale)}</span>}
                   </p>
                 </div>

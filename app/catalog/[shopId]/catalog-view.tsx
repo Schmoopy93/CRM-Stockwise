@@ -121,15 +121,20 @@ export default function CatalogView({ shopId }: { shopId: string }) {
   const selected = productId ? itemsById.get(productId) ?? null : null;
   const cartLines: ResolvedCartLine[] = cart.lines.flatMap((line) => {
     const item = itemsById.get(line.itemId);
-    return item ? [{ item, variant: line.variant, quantity: line.quantity }] : [];
+    return item ? [{
+      item,
+      variant: line.variant,
+      variantId: line.variantId ?? item.variantIds?.[item.variants.indexOf(line.variant)],
+      quantity: line.quantity,
+    }] : [];
   });
   const cartCount = cartLines.reduce((sum, line) => sum + line.quantity, 0);
   const cartPriced = cartLines.every((line) => line.item.salePrice !== undefined);
   const cartTotal = cartLines.reduce((sum, line) => sum + (line.item.salePrice ?? 0) * line.quantity, 0);
   const initials = name.trim().slice(0, 1).toUpperCase() || "•";
 
-  function addToCart(item: CatalogItem, variant: string, quantity: number) {
-    cart.add(item.id, variant, quantity);
+  function addToCart(item: CatalogItem, variant: string, quantity: number, variantId = item.variantIds?.[item.variants.indexOf(variant)]) {
+    cart.add(item.id, variant, quantity, variantId);
     notify(t("catalog.added"));
   }
 
@@ -265,9 +270,8 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           locale={locale}
           prices={prices}
           shopId={shopId}
-          channels={channels}
           onClose={closeDetail}
-          onAdd={(variant, quantity) => addToCart(selected, variant, quantity)}
+          onAdd={(variant, quantity, variantId) => addToCart(selected, variant, quantity, variantId)}
           onNotify={notify}
           onTrack={track}
         />
@@ -280,7 +284,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           prices={prices}
           shopId={shopId}
           channels={channels}
-          onQuantity={cart.setQuantity}
+          onQuantity={(itemId, variant, quantity, variantId) => cart.setQuantity(itemId, variant, quantity, variantId)}
           onClear={() => { cart.clear(); setCartOpen(false); }}
           onClose={closeCart}
           onNotify={notify}

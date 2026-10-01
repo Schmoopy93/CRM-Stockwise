@@ -28,12 +28,12 @@ import {
 import { auth, db } from "@/lib/firebase";
 import { uploadProductImage, uploadShopImage } from "@/lib/cloudinary";
 import { applyStockDelta } from "@/lib/stock-invariants";
-import { normalizeOrderInput, newOrderCode, orderTotal, ORDER_STATUSES, type OrderInput } from "@/lib/orders";
+import { normalizeOrderInput, newOrderCode, orderTotal, type OrderInput } from "@/lib/orders";
 import { normalizeCustomer, type CustomerInput } from "@/lib/customers";
 import { getLocalizedOptionValue } from "@/lib/product-field-options";
 import { CatalogChannels } from "@/lib/catalog-channels";
 import { BASE_CURRENCY, isSupportedCurrency, roundForCurrency } from "@/lib/currency";
-import { AppLocale, CatalogStatEvent, OrderStatus, Product, ProductCustomField, ProductVariant, SaleChannel, SaleLine } from "@/lib/types";
+import { AppLocale, CatalogOrder, CatalogStatEvent, OrderStatus, Product, ProductCustomField, ProductVariant, SaleChannel, SaleLine } from "@/lib/types";
 
 const BATCH_LIMIT = 450;
 const READ_CONCURRENCY = 24;
@@ -130,7 +130,7 @@ function buildCatalogDoc(
   images: string[],
   salePrice: number | undefined,
   compareAtPrice: number | undefined,
-  variantLabels: string[],
+  variants: { id: string; label: string }[],
   definitions: ProductCustomField[],
   values: Record<string, string | number | boolean>,
   hidden: boolean,
@@ -157,7 +157,8 @@ function buildCatalogDoc(
     images: images.length > 0 ? images : (imageUrl ? [imageUrl] : []),
     salePrice: salePrice !== undefined ? salePrice : deleteField(),
     compareAtPrice: salePrice !== undefined && compareAtPrice !== undefined && compareAtPrice > salePrice ? compareAtPrice : deleteField(),
-    variants: variantLabels,
+    variants: variants.map((variant) => variant.label),
+    variantIds: variants.map((variant) => variant.id),
     fields,
     hidden,
     ...(createdAt ? { createdAt } : {}),
@@ -197,11 +198,11 @@ export async function updateCatalogSettings(shopId: string, settings: CatalogSet
 
   const operations: BatchOperation[] = [];
   const productsSnap = await getDocs(collection(db, "shops", shopId, "products"));
-  const variantLabelsByProduct = await mapWithConcurrency(productsSnap.docs, (productDoc) =>
+  const variantsByProduct = await mapWithConcurrency(productsSnap.docs, (productDoc) =>
     getDocs(collection(productDoc.ref, "variants")).then((variantsSnap) =>
       variantsSnap.docs
-        .map((variantDoc) => (variantDoc.data().label ?? "").trim())
-        .filter(Boolean)
+        .map((variantDoc) => ({ id: variantDoc.id, label: (variantDoc.data().label ?? "").trim() }))
+        .filter((variant) => variant.label)
     )
   );
   productsSnap.docs.forEach((productDoc, index) => {
@@ -213,7 +214,7 @@ export async function updateCatalogSettings(shopId: string, settings: CatalogSet
       Array.isArray(data.images) ? data.images : [],
       typeof data.salePrice === "number" ? data.salePrice : undefined,
       typeof data.compareAtPrice === "number" ? data.compareAtPrice : undefined,
-      variantLabelsByProduct[index],
+      variantsByProduct[index],
       data.customFieldDefinitions ?? [],
       data.customFieldValues ?? {},
       data.catalogHidden === true,
@@ -246,10 +247,9 @@ export function trackCatalogEvent(shopId: string, event: CatalogStatEvent) {
   setDoc(doc(db, "shops", shopId, "catalogStats", day), { [event]: increment(1) }, { merge: true }).catch(() => undefined);
 }
 
-/** Records a catalog order so the shop can see what was asked for. Anonymous by
- * design — customers have no account — so this never touches stock: the shop
- * still records the sale explicitly, which keeps the ledger the only way stock
- * moves. Returns the human-quotable order code.
+/** Records a catalog order so the shop can confirm it and fulfill it. Anonymous
+ * by design — customers have no account — and stock moves only when a member
+ * fulfills the order through the stock ledger. Returns the human-quotable order code.
  *
  * `input` carries the prices the customer actually saw, already converted into
  * the shop's chosen currency, so the order is stored in the currency it was
@@ -259,40 +259,186 @@ export function trackCatalogEvent(shopId: string, event: CatalogStatEvent) {
 export async function placeCatalogOrder(shopId: string, input: OrderInput, currency: string = BASE_CURRENCY) {
   if (!await isCatalogEnabled(shopId)) throw new Error("CATALOG_DISABLED");
   const order = normalizeOrderInput(input);
-  if (order.lines.length === 0) throw new Error("ORDER_EMPTY");
   const quotedIn = isSupportedCurrency(currency) ? currency : BASE_CURRENCY;
 
   const total = roundForCurrency(orderTotal(order.lines), quotedIn);
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const code = newOrderCode();
-    const ref = doc(collection(db, "shops", shopId, "orders"));
-    try {
-      await setDoc(ref, {
-        code,
-        lines: order.lines,
-        total,
-        currency: quotedIn,
-        customerName: order.customerName,
-        customerContact: order.customerContact,
-        note: order.note,
-        channel: order.channel,
-        status: "new",
-        createdAt: serverTimestamp(),
-      });
-      trackCatalogEvent(shopId, "orders");
-      return code;
-    } catch (cause) {
-      if (attempt === 4) throw cause;
-    }
-  }
-  throw new Error("ORDER_FAILED");
+  if (!Number.isFinite(total) || total > 100_000_000) throw new Error("VALUE_OUT_OF_RANGE");
+  const code = newOrderCode();
+  const ref = doc(collection(db, "shops", shopId, "orders"));
+  await setDoc(ref, {
+    code,
+    lines: order.lines,
+    total,
+    currency: quotedIn,
+    customerName: order.customerName,
+    customerContact: order.customerContact,
+    note: order.note,
+    channel: order.channel,
+    status: "new",
+    createdAt: serverTimestamp(),
+  });
+  trackCatalogEvent(shopId, "orders");
+  return code;
 }
 
-/** Moves an order through its lifecycle. Stock is deliberately untouched here —
- * fulfilling an order and recording the sale are separate, deliberate steps. */
+/** Confirms or cancels a catalog order; fulfillment is handled by the
+ * idempotent `fulfillCatalogOrder` flow. */
 export async function updateOrderStatus(shopId: string, orderId: string, status: OrderStatus) {
-  if (!ORDER_STATUSES.includes(status)) throw new Error("ORDER_STATUS_INVALID");
+  if (status !== "confirmed" && status !== "cancelled") throw new Error("ORDER_STATUS_INVALID");
   await updateDoc(doc(db, "shops", shopId, "orders", orderId), { status });
+}
+
+function isOrderLine(value: unknown): value is CatalogOrder["lines"][number] {
+  if (!value || typeof value !== "object") return false;
+  const line = value as Record<string, unknown>;
+  return typeof line.productId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(line.productId) &&
+    typeof line.productName === "string" && line.productName.length > 0 && line.productName.length <= 100 &&
+    typeof line.variantLabel === "string" && line.variantLabel.length <= 100 &&
+    typeof line.quantity === "number" && Number.isSafeInteger(line.quantity) && line.quantity > 0 && line.quantity <= 999 &&
+    (line.variantId === undefined || (typeof line.variantId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(line.variantId))) &&
+    typeof line.unitPrice === "number" && Number.isFinite(line.unitPrice) && line.unitPrice >= 0 &&
+    (line.baseUnitPrice === undefined ||
+      (typeof line.baseUnitPrice === "number" && Number.isFinite(line.baseUnitPrice) && line.baseUnitPrice >= 0));
+}
+
+/** Completes a confirmed catalog order, resuming any stock lines already
+ * applied. Each line's stock event and progress marker share a transaction, so
+ * retrying after a network failure never deducts the same line twice. */
+export async function fulfillCatalogOrder(
+  shopId: string,
+  orderId: string,
+  actorUid: string,
+  actorName: string
+) {
+  const orderRef = doc(db, "shops", shopId, "orders", orderId);
+  const initialSnap = await getDoc(orderRef);
+  if (!initialSnap.exists()) throw new Error("ORDER_NOT_FOUND");
+  const initialData = initialSnap.data();
+  if (initialData.status === "fulfilled") return initialData.saleId as string | undefined;
+  if (initialData.status !== "confirmed" && initialData.status !== "fulfilling") {
+    throw new Error("ORDER_STATUS_INVALID");
+  }
+  if (!Array.isArray(initialData.lines) || initialData.lines.length === 0 || initialData.lines.length > 50 ||
+    !initialData.lines.every(isOrderLine)) {
+    throw new Error("ORDER_LINES_INVALID");
+  }
+  const lines: CatalogOrder["lines"] = initialData.lines;
+
+  const variantIds = await Promise.all(lines.map(async (line) => {
+    if (line.variantId) return line.variantId;
+    const variants = await getDocs(collection(db, "shops", shopId, "products", line.productId, "variants"));
+    const matching = variants.docs.filter((variant) => (variant.data().label ?? "").trim() === line.variantLabel);
+    if (matching.length !== 1) throw new Error(matching.length ? "ORDER_VARIANT_AMBIGUOUS" : "ORDER_VARIANT_NOT_FOUND");
+    return matching[0].id;
+  }));
+
+  const saleLines: SaleLine[] = lines.map((line, index) => {
+    const unitPrice = line.baseUnitPrice ??
+      (initialData.currency === BASE_CURRENCY ? line.unitPrice : undefined);
+    if (typeof unitPrice !== "number" || !Number.isFinite(unitPrice) || unitPrice < 0) {
+      throw new Error("ORDER_BASE_PRICE_MISSING");
+    }
+    return {
+      productId: line.productId,
+      productName: line.productName,
+      variantId: variantIds[index],
+      variantLabel: line.variantLabel,
+      quantity: line.quantity,
+      unitPrice,
+    };
+  });
+  const total = Math.round(saleLines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0) * 100) / 100;
+  if (!Number.isSafeInteger(Math.round(total * 100)) || total > 100_000_000) {
+    throw new Error("VALUE_OUT_OF_RANGE");
+  }
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    await runTransaction(db, async (tx) => {
+      const currentOrder = await tx.get(orderRef);
+      if (!currentOrder.exists()) throw new Error("ORDER_NOT_FOUND");
+      const currentData = currentOrder.data();
+      if (currentData.status === "fulfilled") return;
+      if (currentData.status !== "confirmed" && currentData.status !== "fulfilling") {
+        throw new Error("ORDER_STATUS_INVALID");
+      }
+      const currentLine = Array.isArray(currentData.lines) ? currentData.lines[index] : undefined;
+      if (!isOrderLine(currentLine) || currentLine.productId !== line.productId ||
+        currentLine.variantLabel !== line.variantLabel || currentLine.quantity !== line.quantity) {
+        throw new Error("ORDER_CHANGED");
+      }
+      const completed = Array.isArray(currentData.fulfilledLineIndices)
+        ? currentData.fulfilledLineIndices.filter((completedIndex: unknown): completedIndex is number => Number.isSafeInteger(completedIndex))
+        : [];
+      if (completed.includes(index)) return;
+
+      const productRef = doc(db, "shops", shopId, "products", line.productId);
+      const variantRef = doc(productRef, "variants", variantIds[index]);
+      const [productSnap, variantSnap] = await Promise.all([tx.get(productRef), tx.get(variantRef)]);
+      if (!productSnap.exists() || !variantSnap.exists()) throw new Error("ORDER_VARIANT_NOT_FOUND");
+      const product = productSnap.data();
+      const variant = variantSnap.data();
+      if (variant.quantity < line.quantity || product.totalQuantity < line.quantity) {
+        throw new Error("ORDER_STOCK_INSUFFICIENT");
+      }
+      const totals = applyStockDelta(variant.quantity, product.totalQuantity, -line.quantity);
+      const eventRef = doc(collection(db, "shops", shopId, "stockEvents"));
+      tx.update(variantRef, { quantity: totals.variantQuantity, lastStockEventId: eventRef.id });
+      tx.update(productRef, { totalQuantity: totals.productQuantity, lastStockEventId: eventRef.id });
+      tx.set(eventRef, {
+        productId: line.productId,
+        variantId: variantIds[index],
+        variantLabel: variant.label ?? line.variantLabel,
+        delta: -line.quantity,
+        reason: "sale",
+        actorUid,
+        actorName: actorName.trim().slice(0, 100),
+        createdAt: serverTimestamp(),
+      });
+      tx.update(orderRef, {
+        status: "fulfilling",
+        fulfilledLineIndices: [...completed, index],
+        lastFulfilledLineIndex: index,
+        lastFulfillmentEventId: eventRef.id,
+      });
+    });
+  }
+
+  const saleRef = doc(db, "shops", shopId, "sales", `order-${orderId}`);
+  await runTransaction(db, async (tx) => {
+    const [currentOrder, existingSale] = await Promise.all([tx.get(orderRef), tx.get(saleRef)]);
+    if (!currentOrder.exists()) throw new Error("ORDER_NOT_FOUND");
+    const currentData = currentOrder.data();
+    if (currentData.status === "fulfilled") return;
+    if (currentData.status !== "fulfilling") throw new Error("ORDER_STATUS_INVALID");
+    const completed = Array.isArray(currentData.fulfilledLineIndices)
+      ? currentData.fulfilledLineIndices.filter((index: unknown): index is number => Number.isSafeInteger(index))
+      : [];
+    if (lines.some((_, index) => !completed.includes(index))) {
+      throw new Error("ORDER_FULFILLMENT_INCOMPLETE");
+    }
+    if (existingSale.exists() && existingSale.data().sourceOrderId !== orderId) {
+      throw new Error("ORDER_SALE_CONFLICT");
+    }
+    if (!existingSale.exists()) {
+      tx.set(saleRef, {
+        lines: saleLines,
+        total,
+        channel: "catalog",
+        buyerName: (initialData.customerName ?? "").trim().slice(0, 100),
+        buyerContact: (initialData.customerContact ?? "").trim().slice(0, 100),
+        ...(typeof currentData.customerId === "string" ? { customerId: currentData.customerId } : {}),
+        sourceOrderId: orderId,
+        sourceOrderCode: initialData.code,
+        note: (initialData.note ?? "").trim().slice(0, 500),
+        actorUid,
+        actorName: actorName.trim().slice(0, 100),
+        createdAt: serverTimestamp(),
+      });
+    }
+    tx.update(orderRef, { status: "fulfilled", saleId: saleRef.id });
+  });
+  return saleRef.id;
 }
 
 // ─── Customers ───────────────────────────────────────────────────────────────
@@ -399,6 +545,7 @@ export async function saveProduct(
   const imageUrl = imageUrls[0] ?? "";
 
   const variantsCol = collection(docRef, "variants");
+  const variantIds = variants.map((variant) => variant.id || doc(variantsCol).id);
   const total = variants.reduce((sum, variant) => sum + variant.quantity, 0);
   if (!Number.isSafeInteger(total)) throw new Error("VALUE_OUT_OF_RANGE");
   const incomingIds = new Set(variants.map((variant) => variant.id).filter(Boolean));
@@ -457,8 +604,9 @@ export async function saveProduct(
     for (const previous of existingSnap.docs) {
       if (!incomingIds.has(previous.id)) tx.delete(previous.ref);
     }
-    for (const variant of variants) {
-      const variantRef = variant.id ? doc(variantsCol, variant.id) : doc(variantsCol);
+    for (let index = 0; index < variants.length; index += 1) {
+      const variant = variants[index];
+      const variantRef = doc(variantsCol, variantIds[index]);
       tx.set(variantRef, {
         label: variant.label.trim(),
         sku: variant.sku.trim(),
@@ -470,7 +618,19 @@ export async function saveProduct(
   if (await isCatalogEnabled(shopId)) {
     await setDoc(
       doc(db, "shops", shopId, "catalog", id),
-      buildCatalogDoc(name, category, imageUrl, imageUrls, salePrice, compareAtPrice, variants.map((variant) => variant.label.trim()).filter(Boolean), customFieldDefinitions, customFieldValues, catalogHidden, isNewProduct ? serverTimestamp() : undefined),
+      buildCatalogDoc(
+        name,
+        category,
+        imageUrl,
+        imageUrls,
+        salePrice,
+        compareAtPrice,
+        variants.map((variant, index) => ({ id: variantIds[index], label: variant.label.trim() })).filter((variant) => variant.label),
+        customFieldDefinitions,
+        customFieldValues,
+        catalogHidden,
+        isNewProduct ? serverTimestamp() : undefined
+      ),
       { merge: true }
     );
   }
@@ -647,7 +807,7 @@ export async function receiveStock(
 export interface SaleBuyer {
   channel: SaleChannel;
   buyerName: string;
-  buyerInstagram: string;
+  buyerContact: string;
   /** Customer this sale is attributed to, when one was picked at the till. */
   customerId?: string;
   note?: string;
@@ -703,7 +863,9 @@ export async function recordSale(
       total: Math.round(total * 100) / 100,
       channel: buyer.channel,
       buyerName: buyer.buyerName.trim().slice(0, 100),
-      buyerInstagram: buyer.buyerInstagram.trim().replace(/^@/, "").slice(0, 100),
+      buyerContact: (buyer.channel === "instagram"
+        ? buyer.buyerContact.trim().replace(/^@/, "")
+        : buyer.buyerContact.trim()).slice(0, 100),
       ...(buyer.customerId ? { customerId: buyer.customerId.slice(0, 100) } : {}),
       note: (buyer.note ?? "").trim().slice(0, 500),
       actorUid,

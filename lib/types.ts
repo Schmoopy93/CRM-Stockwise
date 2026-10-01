@@ -70,7 +70,7 @@ export interface ProductVariant {
   quantity: number;
 }
 
-export type SaleChannel = "instagram" | "facebook" | "store" | "phone" | "other";
+export type SaleChannel = "instagram" | "facebook" | "store" | "phone" | "catalog" | "other";
 
 export interface CatalogField {
   label: string;
@@ -90,6 +90,7 @@ export interface CatalogItem {
   compareAtPrice?: number;
   isNew: boolean;
   variants: string[];
+  variantIds?: string[];
   fields: CatalogField[];
   hidden: boolean;
 }
@@ -109,18 +110,19 @@ export type CatalogStatEvent = "views" | "whatsapp" | "telegram" | "instagram" |
 
 export type CatalogStatsDay = { day: string } & Record<CatalogStatEvent, number>;
 
-/** Lifecycle of a catalog order. `new` means the customer asked and nobody has
- * looked at it yet; the shop confirms, fulfils, or cancels. Recording an order
- * never touches stock — the shop still records the sale explicitly, which keeps
- * the immutable stock ledger the only way stock can move. */
-export type OrderStatus = "new" | "confirmed" | "fulfilled" | "cancelled";
+/** Lifecycle of a catalog order. Fulfillment may be resumed after a partial
+ * stock update; its progress markers make every stock event idempotent. */
+export type OrderStatus = "new" | "confirmed" | "fulfilling" | "fulfilled" | "cancelled";
 
 export interface OrderLine {
   productId: string;
+  variantId?: string;
   productName: string;
   variantLabel: string;
   quantity: number;
   unitPrice?: number;
+  /** Price in the shop's base currency, preserved separately from the quote. */
+  baseUnitPrice?: number;
 }
 
 export interface CatalogOrder {
@@ -139,6 +141,10 @@ export interface CatalogOrder {
   note: string;
   channel: string;
   status: OrderStatus;
+  fulfilledLineIndices?: number[];
+  lastFulfilledLineIndex?: number;
+  lastFulfillmentEventId?: string;
+  saleId?: string;
   createdAt: Date | null;
 }
 
@@ -157,7 +163,9 @@ export interface Sale {
   total: number;
   channel: SaleChannel;
   buyerName: string;
-  buyerInstagram: string;
+  buyerContact: string;
+  sourceOrderId?: string;
+  sourceOrderCode?: string;
   /** The customer this sale was attributed to, when one was picked. */
   customerId?: string;
   note: string;

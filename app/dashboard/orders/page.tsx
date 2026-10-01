@@ -2,29 +2,40 @@
 
 import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useOrders } from "@/lib/hooks";
+import { useCustomers, useOrders } from "@/lib/hooks";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
-import { updateOrderStatus, linkOrderToCustomer } from "@/lib/actions";
-import { CustomerLinkChip } from "@/components/CustomerPicker";
+import { fulfillCatalogOrder, updateOrderStatus, linkOrderToCustomer } from "@/lib/actions";
 import { formatCatalogPrice } from "@/lib/catalog-channels";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { OrderStatus } from "@/lib/types";
-import { CheckCircle2, ClipboardList, PackageCheck, ShoppingBag, XCircle } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  PackageCheck,
+  Search,
+  ShoppingBag,
+  XCircle,
+} from "lucide-react";
 
 type Filter = "open" | OrderStatus | "all";
 
-const FILTERS: Filter[] = ["open", "new", "confirmed", "fulfilled", "cancelled", "all"];
+const FILTERS: Filter[] = ["open", "new", "confirmed", "fulfilling", "fulfilled", "cancelled", "all"];
+const OPEN_STATUSES = new Set<OrderStatus>(["new", "confirmed", "fulfilling"]);
 
 const NEXT_STATUS: Record<OrderStatus, { status: OrderStatus; key: string } | null> = {
   new: { status: "confirmed", key: "orders.confirm" },
   confirmed: { status: "fulfilled", key: "orders.fulfill" },
+  fulfilling: { status: "fulfilled", key: "orders.resumeFulfill" },
   fulfilled: null,
   cancelled: null,
 };
 
 const STATUS_COLOR: Record<OrderStatus, string> = {
   new: "var(--accent-2)",
-  confirmed: "#d97706",
+  confirmed: "var(--amber)",
+  fulfilling: "var(--amber)",
   fulfilled: "var(--green)",
   cancelled: "var(--text-3)",
 };
@@ -33,142 +44,385 @@ export default function OrdersPage() {
   const { profile } = useAuth();
   const { locale, t } = useI18n();
   const intl = INTL_LOCALES[locale];
-  const { orders, loading } = useOrders(profile?.shopId);
+  const shopId = profile?.shopId;
+  const { orders, loading, error: ordersError } = useOrders(shopId);
+  const { customers, loading: customersLoading } = useCustomers(shopId);
   const [filter, setFilter] = useState<Filter>("open");
-  const [busyId, setBusyId] = useState("");
-  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set());
+  const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
 
-  const filtered = useMemo(() => {
-    if (filter === "all") return orders;
-    if (filter === "open") return orders.filter((order) => order.status === "new" || order.status === "confirmed");
-    return orders.filter((order) => order.status === filter);
-  }, [orders, filter]);
+  const counts = useMemo(() => {
+    const result: Record<Filter, number> = {
+      open: 0,
+      new: 0,
+      confirmed: 0,
+      fulfilling: 0,
+      fulfilled: 0,
+      cancelled: 0,
+      all: orders.length,
+    };
+    for (const order of orders) {
+      result[order.status] += 1;
+      if (OPEN_STATUSES.has(order.status)) result.open += 1;
+    }
+    return result;
+  }, [orders]);
 
-  const openCount = orders.filter((order) => order.status === "new" || order.status === "confirmed").length;
+  const filteredOrders = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase(locale);
+    return orders.filter((order) => {
+      const matchesFilter =
+        filter === "all" ||
+        (filter === "open" ? OPEN_STATUSES.has(order.status) : order.status === filter);
+      if (!matchesFilter) return false;
+      if (!query) return true;
+      return [
+        order.code,
+        order.customerName,
+        order.customerContact,
+        order.note,
+        ...order.lines.flatMap((line) => [line.productName, line.variantLabel]),
+      ].some((value) => value.toLocaleLowerCase(locale).includes(query));
+    });
+  }, [orders, filter, search, locale]);
 
-  async function setStatus(orderId: string, status: OrderStatus) {
+  async function changeStatus(orderId: string, status: OrderStatus) {
     if (!profile) return;
-    setBusyId(orderId); setError("");
+    if (status === "cancelled" && !window.confirm(t("orders.cancelConfirmation"))) return;
+
+    setBusyIds((current) => new Set(current).add(orderId));
+    setActionErrors((current) => {
+      const next = { ...current };
+      delete next[orderId];
+      return next;
+    });
     try {
-      await updateOrderStatus(profile.shopId, orderId, status);
+      if (status === "fulfilled") {
+        await fulfillCatalogOrder(profile.shopId, orderId, profile.uid, profile.displayName);
+      } else {
+        await updateOrderStatus(profile.shopId, orderId, status);
+      }
     } catch (cause) {
-      setError(translateError(cause, t, "orders.updateFailed"));
-    } finally { setBusyId(""); }
+      setActionErrors((current) => ({
+        ...current,
+        [orderId]: translateError(cause, t, "orders.updateFailed"),
+      }));
+    } finally {
+      setBusyIds((current) => {
+        const next = new Set(current);
+        next.delete(orderId);
+        return next;
+      });
+    }
   }
 
-  /** Visitors place orders anonymously, so claiming one for a customer is an
-   * action only the shop can take — and it is the only way an order ever becomes
-   * part of a customer's history. */
-  async function setCustomer(orderId: string, customerId: string) {
+  async function changeCustomer(orderId: string, customerId: string) {
     if (!profile) return;
-    setBusyId(orderId); setError("");
+    setBusyIds((current) => new Set(current).add(orderId));
+    setActionErrors((current) => {
+      const next = { ...current };
+      delete next[orderId];
+      return next;
+    });
     try {
       await linkOrderToCustomer(profile.shopId, orderId, customerId || null);
     } catch (cause) {
-      setError(translateError(cause, t, "orders.updateFailed"));
-    } finally { setBusyId(""); }
+      setActionErrors((current) => ({
+        ...current,
+        [orderId]: translateError(cause, t, "orders.updateFailed"),
+      }));
+    } finally {
+      setBusyIds((current) => {
+        const next = new Set(current);
+        next.delete(orderId);
+        return next;
+      });
+    }
   }
 
+  if (!shopId) return null;
+
+  const summary = [
+    { key: "orders.filterOpen", count: counts.open, icon: <ShoppingBag size={16} />, tone: "var(--accent-2)" },
+    { key: "orders.status.new", count: counts.new, icon: <Clock3 size={16} />, tone: "var(--accent-2)" },
+    { key: "orders.status.fulfilling", count: counts.fulfilling, icon: <PackageCheck size={16} />, tone: "var(--amber)" },
+    { key: "orders.status.fulfilled", count: counts.fulfilled, icon: <CheckCircle2 size={16} />, tone: "var(--green)" },
+  ];
+
   return (
-    <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-      <div>
-        <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{t("orders.title")}</h1>
-        <p style={{ fontSize: "0.82rem", color: "var(--text-2)", marginTop: 4 }}>{t("orders.subtitle")}</p>
-      </div>
+    <main className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.25rem", minWidth: 0 }}>
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
+        <div>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 750, margin: 0, color: "var(--text-1)", letterSpacing: "-0.025em" }}>
+            {t("orders.title")}
+          </h1>
+          <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "var(--text-2)", margin: "0.35rem 0 0", maxWidth: 620 }}>
+            {t("orders.subtitle")}
+          </p>
+        </div>
+      </header>
 
-      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-        {FILTERS.map((value) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={filter === value}
-            onClick={() => setFilter(value)}
-            style={{
-              padding: "0.35rem 0.75rem", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer",
-              borderRadius: 99, background: filter === value ? "var(--accent-glow)" : "transparent",
-              border: `1px solid ${filter === value ? "rgba(99,102,241,0.3)" : "var(--border)"}`,
-              color: filter === value ? "var(--accent-2)" : "var(--text-3)",
-            }}
-          >
-            {value === "open" ? t("orders.filterOpen") : t(`orders.status.${value}`)}
-            {value === "open" && openCount > 0 && <span style={{ opacity: 0.7 }}> · {openCount}</span>}
-          </button>
+      <section aria-label={t("orders.title")} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: "0.75rem" }}>
+        {summary.map((tile) => (
+          <div key={tile.key} className="glass" style={{ padding: "0.85rem 1rem", borderRadius: 13, minWidth: 0 }}>
+            <p style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.72rem", fontWeight: 650, color: "var(--text-3)", margin: 0 }}>
+              <span style={{ display: "inline-flex", color: tile.tone }}>{tile.icon}</span>
+              {t(tile.key)}
+            </p>
+            <p style={{ fontSize: "1.45rem", fontWeight: 750, lineHeight: 1.15, color: "var(--text-1)", margin: "0.45rem 0 0" }}>
+              {loading ? "—" : tile.count.toLocaleString(intl)}
+            </p>
+          </div>
         ))}
-      </div>
+      </section>
 
-      {error && <div style={{ background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, padding: "0.75rem 1rem", fontSize: "0.82rem", color: "var(--red)" }}>{error}</div>}
+      <section style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        <div style={{ position: "relative", maxWidth: 520 }}>
+          <Search size={16} aria-hidden="true" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)", pointerEvents: "none" }} />
+          <input
+            className="input"
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={t("orders.searchPlaceholder")}
+            aria-label={t("orders.searchPlaceholder")}
+            style={{ width: "100%", paddingLeft: 38 }}
+          />
+        </div>
 
-      {loading ? null : filtered.length === 0 ? (
-        <div style={{ height: 180, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "1px dashed var(--border)", borderRadius: 16, gap: "0.5rem", color: "var(--text-3)" }}>
-          <ShoppingBag size={28} />
-          <span style={{ fontSize: "0.875rem" }}>{t("orders.empty")}</span>
+        <div role="group" aria-label={t("orders.title")} style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+          {FILTERS.map((value) => {
+            const active = filter === value;
+            const label = value === "open"
+              ? t("orders.filterOpen")
+              : value === "all"
+                ? t("all")
+                : t(`orders.status.${value}`);
+            return (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setFilter(value)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "0.4rem 0.72rem",
+                  fontSize: "0.78rem",
+                  fontWeight: 650,
+                  cursor: "pointer",
+                  borderRadius: 999,
+                  background: active ? "var(--accent-glow)" : "var(--bg-2)",
+                  border: `1px solid ${active ? "rgba(99,102,241,0.3)" : "var(--border)"}`,
+                  color: active ? "var(--accent-2)" : "var(--text-2)",
+                }}
+              >
+                {label}
+                <span style={{ fontSize: "0.7rem", opacity: active ? 0.8 : 0.65 }}>
+                  {loading ? "—" : counts[value].toLocaleString(intl)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {ordersError && (
+        <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 11, padding: "0.8rem 0.95rem", fontSize: "0.82rem", color: "var(--red)" }}>
+          <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+          {translateError(ordersError, t, "orders.loadFailed")}
+        </div>
+      )}
+
+      {loading ? (
+        <div aria-label={t("loading")} aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
+          {[0, 1, 2].map((index) => (
+            <div key={index} className="glass" style={{ height: 150, borderRadius: 14, opacity: 1 - index * 0.18 }} />
+          ))}
+        </div>
+      ) : filteredOrders.length === 0 ? (
+        <div style={{ minHeight: 220, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "1px dashed var(--border)", borderRadius: 16, gap: "0.55rem", padding: "1.5rem", textAlign: "center", color: "var(--text-3)" }}>
+          <ShoppingBag size={30} strokeWidth={1.6} />
+          <span style={{ fontSize: "0.9rem", color: "var(--text-2)" }}>
+            {orders.length === 0 && !search ? t("orders.empty") : t("dashboard.noResults")}
+          </span>
+          {(search || filter !== "open") && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => { setSearch(""); setFilter("open"); }}
+              style={{ padding: "0.4rem 0.75rem", fontSize: "0.78rem" }}
+            >
+              {t("orders.filterOpen")}
+            </button>
+          )}
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-          {filtered.map((order) => {
+        <section aria-label={t("orders.title")} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          {filteredOrders.map((order) => {
             const next = NEXT_STATUS[order.status];
-            const busy = busyId === order.id;
+            const busy = busyIds.has(order.id);
+            const completedLines = Math.min(order.fulfilledLineIndices?.length ?? 0, order.lines.length);
+            const progress = order.lines.length > 0 ? Math.round((completedLines / order.lines.length) * 100) : 0;
+            const channelLabel = order.channel === "catalog"
+              ? t("orders.source.catalog")
+              : t(`catalog.${order.channel === "other" ? "cart" : order.channel}`);
+
             return (
-              <div key={order.id} className="glass" style={{ padding: "1rem 1.125rem", borderRadius: 12, display: "flex", gap: "0.875rem", flexWrap: "wrap", alignItems: "flex-start" }}>
-                <div style={{ flex: 1, minWidth: 200 }}>
-                  <p style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                    <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontWeight: 700, fontSize: "0.85rem", color: "var(--accent-2)" }}>{order.code}</span>
-                    <span style={{ padding: "0.15rem 0.5rem", borderRadius: 99, fontSize: "0.68rem", fontWeight: 700, background: "var(--bg-3)", color: STATUS_COLOR[order.status] }}>{t(`orders.status.${order.status}`)}</span>
-                  </p>
-                  <p style={{ margin: "0.4rem 0 0", fontSize: "0.85rem", color: "var(--text-1)" }}>
-                    {order.lines.map((line) => `${line.productName}${line.variantLabel ? ` — ${line.variantLabel}` : ""} ×${line.quantity}`).join(", ")}
-                  </p>
-                  <p style={{ margin: "0.3rem 0 0", fontSize: "0.72rem", color: "var(--text-3)", display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    <span>{t(`catalog.${order.channel === "other" ? "cart" : order.channel}`)}</span>
-                    {order.customerName && <span>· {order.customerName}</span>}
-                    {order.customerContact && <span>· {order.customerContact}</span>}
-                    {order.createdAt && <span>· {order.createdAt.toLocaleString(intl)}</span>}
-                  </p>
-                  {order.note && <p style={{ margin: "0.3rem 0 0", fontSize: "0.78rem", color: "var(--text-2)" }}>{order.note}</p>}
-                  {profile && (
-                    <div style={{ marginTop: "0.5rem" }}>
-                      <CustomerLinkChip
-                        shopId={profile.shopId}
-                        value={order.customerId ?? ""}
-                        onChange={(customerId) => setCustomer(order.id, customerId)}
-                      />
+              <article key={order.id} className="glass" style={{ padding: "1rem", borderRadius: 14, minWidth: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.8rem", flexWrap: "wrap" }}>
+                  <div style={{ minWidth: 0, flex: "1 1 260px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontWeight: 750, fontSize: "0.9rem", color: "var(--accent-2)" }}>
+                        {order.code || "—"}
+                      </span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "0.2rem 0.55rem", borderRadius: 999, fontSize: "0.7rem", fontWeight: 700, background: "var(--bg-3)", color: STATUS_COLOR[order.status] }}>
+                        <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: STATUS_COLOR[order.status] }} />
+                        {t(`orders.status.${order.status}`)}
+                      </span>
                     </div>
-                  )}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap", marginTop: "0.55rem", fontSize: "0.76rem", color: "var(--text-3)" }}>
+                      <span>{channelLabel}</span>
+                      {order.createdAt && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <time dateTime={order.createdAt.toISOString()}>{order.createdAt.toLocaleString(intl)}</time>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ flex: "0 0 auto", textAlign: "right" }}>
+                    <span style={{ display: "block", fontSize: "1.05rem", fontWeight: 750, color: "var(--text-1)" }}>
+                      {formatCatalogPrice(order.total, intl, order.currency ?? BASE_CURRENCY)}
+                    </span>
+                    <span style={{ fontSize: "0.72rem", color: "var(--text-3)" }}>
+                      {t("orders.itemCount", { n: order.lines.reduce((sum, line) => sum + line.quantity, 0) })}
+                    </span>
+                  </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>
-                  <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-1)" }}>
-                    {/* The total was stored already converted, in the currency the
-                        customer was quoted in, so it is formatted but never
-                        converted again here. */}
-                    {formatCatalogPrice(order.total, intl, order.currency ?? BASE_CURRENCY)}
-                  </span>
-                  <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 250px), 1fr))", gap: "1rem", marginTop: "0.9rem", paddingTop: "0.85rem", borderTop: "1px solid var(--border)" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <h2 style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-1)", margin: "0 0 0.5rem" }}>
+                      {order.customerName || order.customerContact || "—"}
+                    </h2>
+                    {order.customerName && order.customerContact && (
+                      <p style={{ fontSize: "0.76rem", color: "var(--text-2)", margin: "0 0 0.55rem", overflowWrap: "anywhere" }}>
+                        {order.customerContact}
+                      </p>
+                    )}
+                    {order.note && (
+                      <p style={{ fontSize: "0.76rem", color: "var(--text-2)", lineHeight: 1.5, whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: "0.55rem 0 0" }}>
+                        {order.note}
+                      </p>
+                    )}
+                    <div style={{ marginTop: "0.7rem" }}>
+                      <select
+                        className="input"
+                        value={order.customerId ?? ""}
+                        onChange={(event) => void changeCustomer(order.id, event.target.value)}
+                        disabled={busy || customersLoading}
+                        aria-label={t("customers.attach")}
+                        style={{ width: "100%", maxWidth: 300, padding: "0.4rem 0.6rem", fontSize: "0.75rem", opacity: busy || customersLoading ? 0.65 : 1 }}
+                      >
+                        <option value="">{t("customers.attach")}</option>
+                        {customers.map((customer) => (
+                          <option key={customer.id} value={customer.id}>
+                            {customer.name}{customer.contact ? ` · ${customer.contact}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <h2 style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 0.45rem" }}>
+                      {t("orders.items")}
+                    </h2>
+                    <ul style={{ display: "flex", flexDirection: "column", gap: "0.45rem", listStyle: "none", margin: 0, padding: 0 }}>
+                      {order.lines.map((line, index) => (
+                        <li key={`${line.productId}-${line.variantId ?? line.variantLabel}-${index}`} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.79rem" }}>
+                          <span style={{ minWidth: 0, color: "var(--text-1)", overflowWrap: "anywhere" }}>
+                            {line.productName}
+                            {line.variantLabel && <span style={{ color: "var(--text-3)" }}> · {line.variantLabel}</span>}
+                            <span style={{ color: "var(--text-3)" }}> × {line.quantity}</span>
+                          </span>
+                          {typeof line.unitPrice === "number" && (
+                            <span style={{ flexShrink: 0, color: "var(--text-2)", fontVariantNumeric: "tabular-nums" }}>
+                              {formatCatalogPrice(line.unitPrice * line.quantity, intl, order.currency ?? BASE_CURRENCY)}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                {order.status === "fulfilling" && (
+                  <div style={{ marginTop: "0.9rem", padding: "0.7rem 0.75rem", background: "var(--amber-dim)", borderRadius: 9 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.74rem", color: "var(--amber)" }}>
+                      <span>{t("orders.fulfillmentProgress", { done: completedLines, total: order.lines.length })}</span>
+                      <span>{progress}%</span>
+                    </div>
+                    <div
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={progress}
+                      style={{ height: 4, borderRadius: 99, overflow: "hidden", background: "var(--bg-2)", marginTop: 7 }}
+                    >
+                      <div style={{ width: `${progress}%`, height: "100%", background: "var(--amber)", transition: "width 0.2s" }} />
+                    </div>
+                  </div>
+                )}
+
+                {actionErrors[order.id] && (
+                  <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 7, marginTop: "0.8rem", color: "var(--red)", fontSize: "0.77rem" }}>
+                    <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                    {actionErrors[order.id]}
+                  </div>
+                )}
+
+                {(next || order.status === "new" || order.status === "confirmed") && (
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.9rem", paddingTop: "0.8rem", borderTop: "1px solid var(--border)" }}>
                     {next && (
-                      <button className="btn-primary" type="button" disabled={busy} onClick={() => setStatus(order.id, next.status)}
-                        style={{ display: "flex", alignItems: "center", gap: 5, padding: "0.4rem 0.75rem", fontSize: "0.75rem" }}>
-                        {next.status === "fulfilled" ? <PackageCheck size={13} /> : <CheckCircle2 size={13} />}
+                      <button
+                        className="btn-primary"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void changeStatus(order.id, next.status)}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 36, padding: "0.45rem 0.8rem", fontSize: "0.78rem", opacity: busy ? 0.65 : 1 }}
+                      >
+                        {busy ? <span className="spinner" aria-hidden="true" /> : next.status === "fulfilled" ? <PackageCheck size={14} /> : <CheckCircle2 size={14} />}
                         {t(next.key)}
                       </button>
                     )}
-                    {order.status !== "cancelled" && order.status !== "fulfilled" && (
-                      <button type="button" disabled={busy} onClick={() => setStatus(order.id, "cancelled")}
-                        style={{ display: "flex", alignItems: "center", gap: 5, padding: "0.4rem 0.75rem", fontSize: "0.75rem", background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 9, color: "var(--red)", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}>
-                        <XCircle size={13} />
+                    {(order.status === "new" || order.status === "confirmed") && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void changeStatus(order.id, "cancelled")}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 36, padding: "0.4rem 0.75rem", fontSize: "0.78rem", fontWeight: 650, background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 9, color: "var(--red)", cursor: busy ? "default" : "pointer", opacity: busy ? 0.55 : 1 }}
+                      >
+                        <XCircle size={14} />
                         {t("orders.cancel")}
                       </button>
                     )}
                   </div>
-                </div>
-              </div>
+                )}
+              </article>
             );
           })}
-        </div>
+        </section>
       )}
 
-      <p style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: "0.75rem", color: "var(--text-3)", margin: 0 }}>
+      <p style={{ display: "flex", alignItems: "flex-start", gap: 7, fontSize: "0.75rem", lineHeight: 1.5, color: "var(--text-3)", margin: 0 }}>
         <ClipboardList size={14} style={{ flexShrink: 0, marginTop: 1 }} />
         {t("orders.stockNote")}
       </p>
-    </div>
+    </main>
   );
 }
