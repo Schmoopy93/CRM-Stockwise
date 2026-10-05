@@ -388,7 +388,15 @@ export default function AnalyticsPage() {
               <Tooltip
                 contentStyle={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
                 labelStyle={{ color: "var(--text-2)" }}
-                formatter={(value: number) => [money(value, { minimumFractionDigits: 2 }), t("analytics.revenue")]}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  return (
+                    <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "0.5rem 0.75rem", fontSize: 12 }}>
+                      <p style={{ margin: "0 0 4px", color: "var(--text-2)" }}>{label}</p>
+                      <p style={{ margin: 0, color: "#a855f7", fontWeight: 600 }}>{money(Number(payload[0].value), { minimumFractionDigits: 2 })}</p>
+                    </div>
+                  );
+                }}
               />
               <Line type="monotone" dataKey="revenue" stroke="#a855f7" strokeWidth={2} dot={false} />
             </LineChart>
