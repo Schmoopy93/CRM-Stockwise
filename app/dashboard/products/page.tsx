@@ -9,7 +9,7 @@ import { useProducts, useShopMoney } from "@/lib/hooks";
 import { usePagination } from "@/lib/use-pagination";
 import ListPagination from "@/components/ListPagination";
 import CategoriesManager from "@/components/CategoriesManager";
-import { Plus, Search, AlertTriangle, ArrowRight, Package, X, Tags } from "lucide-react";
+import { Plus, Search, AlertTriangle, ArrowRight, Package, X, Tags, Boxes, Layers3, CircleAlert, LayoutGrid, List as ListIcon } from "lucide-react";
 
 type SortKey = "name" | "qty" | "priceAsc" | "priceDesc";
 
@@ -29,6 +29,7 @@ export default function ProductsListPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [sort, setSort] = useState<SortKey>("name");
+  const [view, setView] = useState<"grid" | "list">("list");
   const [manageOpen, setManageOpen] = useState(false);
 
   const categories = useMemo(
@@ -36,6 +37,8 @@ export default function ProductsListPage() {
     [products]
   );
   const categoryNames = categories.filter((c) => c !== "all");
+  const totalUnits = products.reduce((sum, product) => sum + product.totalQuantity, 0);
+  const lowStockCount = products.filter((product) => product.minStock > 0 && product.totalQuantity <= product.minStock).length;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -80,9 +83,9 @@ export default function ProductsListPage() {
           <h1 className="products-title">{t("products.title")}</h1>
           <p className="products-subtitle">{t("products.count", { n: products.length })}</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        <div className="products-head-actions">
           {categoryNames.length > 0 && (
-            <button onClick={() => setManageOpen(true)} title={t("categories.manage")} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.82rem", fontWeight: 600, padding: "0.55rem 0.9rem", borderRadius: 10, cursor: "pointer", background: "var(--bg-3)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
+            <button type="button" onClick={() => setManageOpen(true)} title={t("categories.manage")} className="products-manage-btn">
               <Tags size={14} />
               <span>{t("categories.manage")}</span>
             </button>
@@ -94,39 +97,76 @@ export default function ProductsListPage() {
         </div>
       </header>
 
-      {/* Sticky filters */}
-      <div className="products-filters">
-        <div className="products-search">
-          <Search size={15} className="products-search-icon" />
-          <input
-            className="input products-search-input"
-            placeholder={t("search")}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label={t("search")}
-          />
-          {search && (
-            <button className="products-search-clear" onClick={() => setSearch("")} aria-label="Clear search">
-              <X size={13} />
-            </button>
-          )}
+      <section className="products-overview" aria-label={t("products.title")}>
+        <div className="products-stat">
+          <span className="products-stat-icon" data-tone="green"><Boxes size={17} /></span>
+          <span className="products-stat-copy">
+            <span className="products-stat-label">{t("products.columnStock")}</span>
+            <strong className="products-stat-value">{totalUnits.toLocaleString(INTL_LOCALES[locale])}</strong>
+          </span>
         </div>
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as SortKey)}
-          className="input products-sort"
-          aria-label={t("products.sortLabel")}
-        >
-          <option value="name">{t("products.sortName")}</option>
-          <option value="qty">{t("products.sortQuantity")}</option>
-          <option value="priceAsc">{t("products.sortPriceAsc")}</option>
-          <option value="priceDesc">{t("products.sortPriceDesc")}</option>
-        </select>
+        <div className="products-stat">
+          <span className="products-stat-icon" data-tone="blue"><Layers3 size={17} /></span>
+          <span className="products-stat-copy">
+            <span className="products-stat-label">{t("products.columnCategory")}</span>
+            <strong className="products-stat-value">{categoryNames.length}</strong>
+          </span>
+        </div>
+        <div className="products-stat" data-alert={lowStockCount > 0 || undefined}>
+          <span className="products-stat-icon" data-tone="amber"><CircleAlert size={17} /></span>
+          <span className="products-stat-copy">
+            <span className="products-stat-label">{t("analytics.lowStock")}</span>
+            <strong className="products-stat-value">{lowStockCount}</strong>
+          </span>
+        </div>
+      </section>
+
+      {/* Filters */}
+      <div className="products-filters">
+        <div className="products-filter-row">
+          <div className="products-search">
+            <Search size={16} className="products-search-icon" />
+            <input
+              className="input products-search-input"
+              placeholder={t("search")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label={t("search")}
+            />
+            {search && (
+              <button type="button" className="products-search-clear" onClick={() => setSearch("")} aria-label={t("catalog.close")}>
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          <label className="products-sort-wrap">
+            <span>{t("products.sortLabel")}</span>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              className="input products-sort"
+              aria-label={t("products.sortLabel")}
+            >
+              <option value="name">{t("products.sortName")}</option>
+              <option value="qty">{t("products.sortQuantity")}</option>
+              <option value="priceAsc">{t("products.sortPriceAsc")}</option>
+              <option value="priceDesc">{t("products.sortPriceDesc")}</option>
+            </select>
+          </label>
+          <div className="products-view-toggle" role="group" aria-label={t("products.viewLabel")}>
+            <button type="button" onClick={() => setView("grid")} aria-label={t("products.viewGrid")} title={t("products.viewGrid")} aria-pressed={view === "grid"}>
+              <LayoutGrid size={17} />
+            </button>
+            <button type="button" onClick={() => setView("list")} aria-label={t("products.viewList")} title={t("products.viewList")} aria-pressed={view === "list"}>
+              <ListIcon size={18} />
+            </button>
+          </div>
+        </div>
 
         {categoryNames.length > 0 && (
-          <div className="products-chips">
+          <div className="products-chips" role="tablist" aria-label={t("products.allCategories")}>
             {categories.map((cat) => (
-              <button key={cat} onClick={() => setCategory(cat)} className="products-chip" data-active={category === cat}>
+              <button key={cat} type="button" role="tab" aria-selected={category === cat} onClick={() => setCategory(cat)} className="products-chip" data-active={category === cat}>
                 {cat === "all" ? t("products.allCategories") : cat}
               </button>
             ))}
@@ -150,7 +190,7 @@ export default function ProductsListPage() {
           <span>{t("products.empty")}</span>
         </div>
       ) : (
-        <div className="products-list">
+        <div className="products-list" data-view={view}>
           <div className="products-list-head" aria-hidden="true">
             <span>{t("products.columnProduct")}</span>
             <span>{t("products.columnCategory")}</span>
@@ -162,6 +202,43 @@ export default function ProductsListPage() {
 
           {paging.visible.map((p, i) => {
             const isLow = p.minStock > 0 && p.totalQuantity <= p.minStock;
+            if (view === "grid") {
+              return (
+                <Link key={p.id} href={`/dashboard/products/${p.id}`} className="products-card" data-low={isLow || undefined}>
+                  <div className="products-card-media">
+                    {p.imageUrl ? (
+                      <Image src={p.imageUrl} alt={p.name} fill sizes="(max-width: 760px) 50vw, 320px" className="products-card-img" />
+                    ) : (
+                      <div className="products-card-placeholder"><Package size={30} strokeWidth={1.4} /></div>
+                    )}
+                    {p.category && <span className="products-card-category">{p.category}</span>}
+                  </div>
+                  <div className="products-card-body">
+                    {isLow && (
+                      <span className="products-card-alert">
+                        <AlertTriangle size={12} />
+                        {t("analytics.lowStock")}
+                      </span>
+                    )}
+                    <h2 className="products-card-name">{p.name}</h2>
+                    <div className="products-card-sku">
+                      {p.sku && <><span>{t("products.columnSku")}</span><code>{p.sku}</code></>}
+                    </div>
+                    <div className="products-card-footer">
+                      <div className="products-card-price">
+                        <span>{t("products.columnPrice")}</span>
+                        <strong>{p.salePrice !== undefined ? money(p.salePrice) : "—"}</strong>
+                      </div>
+                      <div className="products-card-stock" data-low={isLow || undefined}>
+                        <span>{t("products.columnStock")}</span>
+                        <strong>{p.totalQuantity}</strong>
+                      </div>
+                      <span className="products-card-arrow" aria-hidden="true"><ArrowRight size={16} /></span>
+                    </div>
+                  </div>
+                </Link>
+              );
+            }
             return (
               <Link
                 key={p.id}
