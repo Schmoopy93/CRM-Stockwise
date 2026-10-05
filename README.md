@@ -29,7 +29,7 @@ Dodatna polja artikla uvek se mogu dodati ručno. Dugme za AI predlog polja i ka
 
 ## Uvoz tabela i audit dnevnik
 
-Uvoz artikala prihvata `.csv`, stari Excel `.xls` i `.xlsx` fajlove do 10 MB. Pre uvoza prikazuje pregled i blokira neispravne redove; više redova sa istim SKU-om artikla postaju njegove varijante. CSV separator može biti zarez, tačka-zarez ili tabulator. Primeri CSV i XLSX šablona mogu se preuzeti sa stranice Uvoz artikala. Audit dnevnik prikazuje kretanja zaliha za poslednjih 90 dana (najviše 500 događaja) i omogućava filter po zaposlenom, tipu, artiklu i periodu.
+Uvoz artikala prihvata `.csv`, stari Excel `.xls` i `.xlsx` fajlove do 10 MB. Pre uvoza prikazuje pregled i blokira neispravne redove; više redova sa istim SKU-om artikla postaju njegove varijante. CSV separator može biti zarez, tačka-zarez ili tabulator. Ako zaglavlja kolona nisu prepoznata, prijavljeni korisnik može opcionalno da zatraži AI predlog mapiranja. AI-u se šalju samo nazivi kolona, a ne podaci artikala, količine ili cene; predlog se prikazuje u pregledu i ne uvozi se bez korisničke potvrde. Primeri CSV i XLSX šablona mogu se preuzeti sa stranice Uvoz artikala. Audit dnevnik prikazuje kretanja zaliha za poslednjih 90 dana (najviše 500 događaja) i omogućava filter po zaposlenom, tipu, artiklu i periodu.
 
 ## Kupci (CRM)
 

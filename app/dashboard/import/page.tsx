@@ -6,8 +6,14 @@ import { useAuth } from "@/lib/auth-context";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { useProducts } from "@/lib/hooks";
 import { saveProduct } from "@/lib/actions";
-import { parseProductImportFile, ParsedProductImportRow } from "@/lib/product-import";
-import { CheckCircle2, ChevronDown, ChevronUp, Download, FileSpreadsheet, FileText, Upload, XCircle } from "lucide-react";
+import {
+  applyImportColumnMapping,
+  isAIImportColumnMapping,
+  parseProductImportFile,
+  parseProductImportRows,
+  ParsedProductImportRow,
+} from "@/lib/product-import";
+import { CheckCircle2, ChevronDown, ChevronUp, Download, FileSpreadsheet, FileText, Sparkles, Upload, XCircle } from "lucide-react";
 
 interface ImportResult {
   rowNumber: number;
@@ -51,11 +57,12 @@ function downloadTemplate(format: "csv" | "xlsx") {
 }
 
 export default function ImportPage() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { locale, t } = useI18n();
   const { products, loading: productsLoading } = useProducts(profile?.shopId);
   const fileRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<ParsedProductImportRow[]>([]);
+  const [sourceMatrix, setSourceMatrix] = useState<unknown[][] | null>(null);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [fileName, setFileName] = useState("");
   const [results, setResults] = useState<ImportResult[]>([]);
@@ -64,6 +71,9 @@ export default function ImportPage() {
   const [done, setDone] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
   const [dragOver, setDragOver] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiApplied, setAiApplied] = useState(false);
 
   const productGroups = useMemo(() => groupRows(rows), [rows]);
   const validationErrors = useMemo(() => {
@@ -107,12 +117,56 @@ export default function ImportPage() {
     setResults([]);
     setRows([]);
     setParseErrors([]);
+    setSourceMatrix(null);
+    setAiError("");
+    setAiApplied(false);
     setReading(true);
     const parsed = await parseProductImportFile(file);
     setRows(parsed.rows);
     setParseErrors(parsed.errors);
+    setSourceMatrix(parsed.matrix ?? null);
     setReading(false);
   }, []);
+
+  async function suggestColumnMapping() {
+    if (!user || !sourceMatrix?.[0]) return;
+    setSuggesting(true);
+    setAiError("");
+    setAiApplied(false);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch("/api/ai/import-mapping", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          "x-app-locale": locale,
+        },
+        body: JSON.stringify({ headers: sourceMatrix[0], locale }),
+        cache: "no-store",
+      });
+      const result: unknown = await response.json();
+      if (!response.ok) {
+        const message = result && typeof result === "object" && "error" in result && typeof result.error === "string"
+          ? result.error
+          : t("import.aiError");
+        throw new Error(message);
+      }
+      if (!result || typeof result !== "object" || !("mapping" in result) ||
+        !isAIImportColumnMapping(result.mapping, sourceMatrix[0].length)) {
+        throw new Error(t("import.aiError"));
+      }
+      const mappedMatrix = applyImportColumnMapping(sourceMatrix, result.mapping);
+      const parsed = parseProductImportRows(mappedMatrix);
+      setRows(parsed.rows);
+      setParseErrors(parsed.errors);
+      setAiApplied(parsed.errors.length === 0);
+    } catch (cause) {
+      setAiError(cause instanceof Error ? cause.message : t("import.aiError"));
+    } finally {
+      setSuggesting(false);
+    }
+  }
 
   function onDrop(event: React.DragEvent) {
     event.preventDefault();
@@ -219,6 +273,27 @@ export default function ImportPage() {
       {parseErrors.length > 0 && (
         <div role="alert" className="glass" style={{ padding: "1rem 1.25rem", color: "var(--red)", fontSize: "0.82rem" }}>
           {parseErrors.map((error) => <p key={error} style={{ margin: "0.2rem 0" }}>{t(`import.parseError.${error}`)}</p>)}
+        </div>
+      )}
+
+      {sourceMatrix && !done && (
+        <div className="glass" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem", padding: "0.9rem 1rem" }}>
+          <div style={{ minWidth: 220, flex: "1 1 300px" }}>
+            <p style={{ fontSize: "0.82rem", fontWeight: 650, color: "var(--text-1)", margin: 0 }}>{t("import.aiTitle")}</p>
+            <p style={{ fontSize: "0.74rem", lineHeight: 1.5, color: "var(--text-3)", margin: "0.25rem 0 0" }}>{t("import.aiPrivacy")}</p>
+            {aiApplied && <p role="status" style={{ fontSize: "0.75rem", color: "var(--green)", margin: "0.3rem 0 0" }}>{t("import.aiApplied")}</p>}
+            {aiError && <p role="alert" style={{ fontSize: "0.75rem", color: "var(--red)", margin: "0.3rem 0 0" }}>{aiError}</p>}
+          </div>
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={suggesting || reading || importing || !user}
+            onClick={() => void suggestColumnMapping()}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "0.5rem 0.8rem", fontSize: "0.78rem", opacity: suggesting ? 0.65 : 1 }}
+          >
+            {suggesting ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <Sparkles size={15} />}
+            {suggesting ? t("import.aiWorking") : t("import.aiButton")}
+          </button>
         </div>
       )}
 

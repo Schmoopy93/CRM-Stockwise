@@ -18,7 +18,24 @@ export interface ParsedProductImportRow {
 export interface ProductImportParseResult {
   rows: ParsedProductImportRow[];
   errors: string[];
+  matrix?: unknown[][];
 }
+
+export const IMPORT_COLUMNS = [
+  "name",
+  "sku",
+  "category",
+  "min_stock",
+  "cost_price",
+  "sale_price",
+  "supplier_name",
+  "variant_label",
+  "variant_sku",
+  "quantity",
+] as const;
+
+export type ImportColumn = typeof IMPORT_COLUMNS[number];
+export type AIImportColumnMapping = Record<ImportColumn, number | null>;
 
 const MAX_IMPORT_ROWS = 5_000;
 
@@ -59,10 +76,10 @@ export function parseProductImportRows(matrix: unknown[][]): ProductImportParseR
   const headers = matrix[0].map((cell) => HEADER_LOOKUP.get(normalizeHeader(String(cell ?? ""))) ?? "");
   const required = ["name", "variant_label", "quantity"];
   const missing = required.filter((header) => !headers.includes(header));
-  if (missing.length > 0) return { rows: [], errors: ["missingHeaders", ...missing] };
+  if (missing.length > 0) return { rows: [], errors: ["missingHeaders", ...missing], matrix };
 
   const duplicateHeaders = headers.filter((header, index) => header && headers.indexOf(header) !== index);
-  if (duplicateHeaders.length > 0) return { rows: [], errors: ["duplicateHeaders"] };
+  if (duplicateHeaders.length > 0) return { rows: [], errors: ["duplicateHeaders"], matrix };
 
   const rows = matrix.slice(1).map((cells, index): ParsedProductImportRow => {
     const value = (key: string) => {
@@ -122,8 +139,36 @@ export function parseProductImportRows(matrix: unknown[][]): ProductImportParseR
     }
   }
 
-  if (rows.length === 0) return { rows: [], errors: ["noRows"] };
-  return { rows, errors: [] };
+  if (rows.length === 0) return { rows: [], errors: ["noRows"], matrix };
+  return { rows, errors: [], matrix };
+}
+
+export function isAIImportColumnMapping(value: unknown, columnCount: number): value is AIImportColumnMapping {
+  if (!value || typeof value !== "object") return false;
+  const mapping = value as Record<string, unknown>;
+  const usedColumns = new Set<number>();
+  for (const column of IMPORT_COLUMNS) {
+    const index = mapping[column];
+    if (index === null) continue;
+    if (!Number.isSafeInteger(index) || (index as number) < 0 || (index as number) >= columnCount || usedColumns.has(index as number)) {
+      return false;
+    }
+    usedColumns.add(index as number);
+  }
+  return mapping.name !== null && mapping.name !== undefined &&
+    mapping.variant_label !== null && mapping.variant_label !== undefined &&
+    mapping.quantity !== null && mapping.quantity !== undefined;
+}
+
+export function applyImportColumnMapping(matrix: unknown[][], mapping: AIImportColumnMapping): unknown[][] {
+  if (matrix.length < 2) throw new Error("IMPORT_MATRIX_INVALID");
+  if (!isAIImportColumnMapping(mapping, matrix[0].length)) throw new Error("IMPORT_MAPPING_INVALID");
+
+  const canonicalHeaders = matrix[0].map((_, index) => {
+    const mappedColumn = IMPORT_COLUMNS.find((column) => mapping[column] === index);
+    return mappedColumn ?? "";
+  });
+  return [canonicalHeaders, ...matrix.slice(1)];
 }
 
 export async function parseProductImportFile(file: File): Promise<ProductImportParseResult> {

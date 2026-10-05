@@ -2,18 +2,18 @@
 
 
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
-import { useProducts } from "@/lib/hooks";
+import { useProducts, useOrders } from "@/lib/hooks";
 import { useLowStockNotifications } from "@/lib/notifications";
 import { signOut } from "@/lib/actions";
 import { useI18n } from "@/lib/i18n-context";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
-import { LayoutGrid, Package, PackagePlus, BarChart2, Download, LogOut, ChevronRight, Upload, ClipboardList, Menu, X, ShoppingBag, AlertTriangle, Receipt, Users } from "lucide-react";
+import { LayoutGrid, Package, PackagePlus, BarChart2, Download, LogOut, ChevronRight, Upload, ClipboardList, Menu, X, ShoppingBag, AlertTriangle, Receipt, Users, Bell } from "lucide-react";
 
 function NotificationWidget({ shopId }: { shopId: string | undefined }) {
   const { products } = useProducts(shopId);
@@ -46,6 +46,81 @@ function NotificationWidget({ shopId }: { shopId: string | undefined }) {
         </div>
       )}
     </div>
+  );
+}
+
+function NewOrderToast({ shopId }: { shopId: string }) {
+  const { orders, loading } = useOrders(shopId, 50);
+  const { t } = useI18n();
+  const seenRef = useRef<Set<string>>(new Set());
+  const initializedRef = useRef(false);
+  const [toasts, setToasts] = useState<{ id: string; text: string }[]>([]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (!initializedRef.current) {
+      for (const o of orders) seenRef.current.add(o.id);
+      initializedRef.current = true;
+      return;
+    }
+    const fresh = orders.filter((o) => o.status === "new" && !seenRef.current.has(o.id));
+    if (fresh.length === 0) return;
+    for (const o of fresh) seenRef.current.add(o.id);
+    setToasts((prev) => [
+      ...prev,
+      ...fresh.map((o) => ({ id: o.id, text: t("notify.newOrderToast", { code: o.code, name: o.customerName }) })),
+    ]);
+  }, [orders, loading, t]);
+
+  useEffect(() => {
+    if (toasts.length === 0) return;
+    const timer = setTimeout(() => setToasts((prev) => prev.slice(1)), 5000);
+    return () => clearTimeout(timer);
+  }, [toasts]);
+
+  if (toasts.length === 0) return null;
+  return (
+    <div style={{ position: "fixed", bottom: "1.5rem", right: "1.5rem", zIndex: 999, display: "flex", flexDirection: "column", gap: "0.5rem", pointerEvents: "none" }}>
+      {toasts.map((toast) => (
+        <div key={toast.id} className="fade-up" style={{ background: "var(--bg-2)", border: "1px solid rgba(99,102,241,0.35)", borderRadius: 12, padding: "0.75rem 1rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-1)", boxShadow: "0 8px 32px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", gap: 8, maxWidth: 320 }}>
+          <Bell size={15} color="var(--accent-2)" style={{ flexShrink: 0 }} />
+          {toast.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type NavItem = { href: string; icon: React.ElementType; label: string; exact: boolean; badge?: boolean };
+
+function NewOrderBadgeNav({ shopId, nav, pathname, onNavigate }: {
+  shopId: string;
+  nav: NavItem[];
+  pathname: string;
+  onNavigate: () => void;
+}) {
+  const { orders, loading } = useOrders(shopId, 50);
+  const newCount = loading ? 0 : orders.filter((o) => o.status === "new").length;
+
+  return (
+    <>
+      {nav.map(({ href, icon: Icon, label, exact, badge }) => {
+        const active = exact ? pathname === href : pathname.startsWith(href);
+        const count = badge ? newCount : 0;
+        return (
+          <Link key={href} href={href} onClick={onNavigate} style={{ display: "flex", alignItems: "center", gap: 10, padding: "0.55rem 0.75rem", borderRadius: 10, fontSize: "0.875rem", fontWeight: 500, textDecoration: "none", transition: "all 0.15s", background: active ? "var(--accent-glow)" : "transparent", color: active ? "var(--accent-2)" : "var(--text-2)", border: active ? "1px solid rgba(99,102,241,0.2)" : "1px solid transparent" }}>
+            <Icon size={16} />
+            {label}
+            {count > 0 && (
+              <span style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 99, background: "var(--accent)", color: "white", fontSize: "0.65rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>
+                {count}
+              </span>
+            )}
+            {count === 0 && active && <ChevronRight size={14} style={{ marginLeft: "auto", opacity: 0.5 }} />}
+          </Link>
+        );
+      })}
+    </>
   );
 }
 
@@ -87,7 +162,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     { href: "/dashboard/analytics", icon: BarChart2, label: t("nav.analytics"), exact: false },
     { href: "/dashboard/receive", icon: PackagePlus, label: t("nav.receive"), exact: false },
     { href: "/dashboard/sales", icon: ShoppingBag, label: t("nav.sales"), exact: false },
-    { href: "/dashboard/orders", icon: Receipt, label: t("nav.orders"), exact: false },
+    { href: "/dashboard/orders", icon: Receipt, label: t("nav.orders"), exact: false, badge: true },
     { href: "/dashboard/customers", icon: Users, label: t("nav.customers"), exact: false },
     { href: "/dashboard/import", icon: Upload, label: t("nav.import"), exact: false },
     { href: "/dashboard/audit", icon: ClipboardList, label: t("nav.audit"), exact: false },
@@ -120,16 +195,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         {/* Nav */}
         <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-          {NAV.map(({ href, icon: Icon, label, exact }) => {
-            const active = exact ? pathname === href : pathname.startsWith(href);
-            return (
-              <Link key={href} href={href} onClick={() => setMobileNavOpen(false)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "0.55rem 0.75rem", borderRadius: 10, fontSize: "0.875rem", fontWeight: 500, textDecoration: "none", transition: "all 0.15s", background: active ? "var(--accent-glow)" : "transparent", color: active ? "var(--accent-2)" : "var(--text-2)", border: active ? "1px solid rgba(99,102,241,0.2)" : "1px solid transparent" }}>
-                <Icon size={16} />
-                {label}
-                {active && <ChevronRight size={14} style={{ marginLeft: "auto", opacity: 0.5 }} />}
-              </Link>
-            );
-          })}
+          <NewOrderBadgeNav shopId={profile.shopId} nav={NAV} pathname={pathname} onNavigate={() => setMobileNavOpen(false)} />
         </div>
 
         <div style={{ flex: 1 }} />
@@ -175,6 +241,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <main className="app-main">
         {children}
       </main>
+      <NewOrderToast shopId={profile.shopId} />
     </div>
   );
 }

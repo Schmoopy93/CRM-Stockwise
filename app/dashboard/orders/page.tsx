@@ -8,6 +8,7 @@ import { fulfillCatalogOrder, updateOrderStatus, linkOrderToCustomer } from "@/l
 import { formatCatalogPrice } from "@/lib/catalog-channels";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { OrderStatus } from "@/lib/types";
+import { useNewOrderNotifications } from "@/lib/notifications";
 import {
   AlertCircle,
   CheckCircle2,
@@ -18,6 +19,7 @@ import {
   ShoppingBag,
   XCircle,
 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type Filter = "open" | OrderStatus | "all";
 
@@ -47,10 +49,12 @@ export default function OrdersPage() {
   const shopId = profile?.shopId;
   const { orders, loading, error: ordersError } = useOrders(shopId);
   const { customers, loading: customersLoading } = useCustomers(shopId);
+  useNewOrderNotifications(orders, loading);
   const [filter, setFilter] = useState<Filter>("open");
   const [search, setSearch] = useState("");
   const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set());
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
+  const [confirmCancelOrder, setConfirmCancelOrder] = useState<string | null>(null);
 
   const counts = useMemo(() => {
     const result: Record<Filter, number> = {
@@ -87,9 +91,8 @@ export default function OrdersPage() {
     });
   }, [orders, filter, search, locale]);
 
-  async function changeStatus(orderId: string, status: OrderStatus) {
+  async function executeStatusChange(orderId: string, status: OrderStatus) {
     if (!profile) return;
-    if (status === "cancelled" && !window.confirm(t("orders.cancelConfirmation"))) return;
 
     setBusyIds((current) => new Set(current).add(orderId));
     setActionErrors((current) => {
@@ -115,6 +118,15 @@ export default function OrdersPage() {
         return next;
       });
     }
+  }
+
+  async function changeStatus(orderId: string, status: OrderStatus) {
+    if (status === "cancelled") {
+      setConfirmCancelOrder(orderId);
+      return;
+    }
+
+    await executeStatusChange(orderId, status);
   }
 
   async function changeCustomer(orderId: string, customerId: string) {
@@ -152,6 +164,21 @@ export default function OrdersPage() {
 
   return (
     <main className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.25rem", minWidth: 0 }}>
+      <ConfirmDialog
+        open={confirmCancelOrder !== null}
+        title={t("orders.cancelTitle")}
+        description={t("orders.cancelConfirmation")}
+        confirmText={t("orders.cancelAction")}
+        cancelText={t("cancel")}
+        destructive
+        onConfirm={async () => {
+          if (!confirmCancelOrder) return;
+          setConfirmCancelOrder(null);
+          await executeStatusChange(confirmCancelOrder, "cancelled");
+        }}
+        onCancel={() => setConfirmCancelOrder(null)}
+      />
+
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 750, margin: 0, color: "var(--text-1)", letterSpacing: "-0.025em" }}>

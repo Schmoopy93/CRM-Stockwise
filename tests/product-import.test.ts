@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as XLSX from "xlsx";
-import { parseProductImportFile, parseProductImportRows } from "../lib/product-import.ts";
+import {
+  applyImportColumnMapping,
+  isAIImportColumnMapping,
+  parseProductImportFile,
+  parseProductImportRows,
+  type AIImportColumnMapping,
+} from "../lib/product-import.ts";
 
 test("parses multiple variants and numeric fields from spreadsheet rows", () => {
   const result = parseProductImportRows([
@@ -40,6 +46,63 @@ test("requires mandatory columns and reports invalid quantities", () => {
     ["Phone", "White", "1.5"],
   ]);
   assert.ok(invalid.rows.every((row) => row.errors.includes("quantityInvalid")));
+});
+
+test("retains the source matrix when headers need AI assistance", () => {
+  const matrix = [
+    ["Artikl", "Boja", "Stanje"],
+    ["Majica", "Crvena", "5"],
+  ];
+  const result = parseProductImportRows(matrix);
+  assert.deepEqual(result.errors, ["missingHeaders", "name", "variant_label", "quantity"]);
+  assert.deepEqual(result.matrix, matrix);
+});
+
+test("applies an AI column mapping without changing cell values", () => {
+  const mapping: AIImportColumnMapping = {
+    name: 0,
+    sku: null,
+    category: null,
+    min_stock: null,
+    cost_price: null,
+    sale_price: 3,
+    supplier_name: null,
+    variant_label: 1,
+    variant_sku: null,
+    quantity: 2,
+  };
+  const original = [
+    ["Artikl", "Boja", "Stanje", "Cena"],
+    ["Majica", "Crvena", "5", "12.50"],
+  ];
+  const mapped = applyImportColumnMapping(original, mapping);
+  const parsed = parseProductImportRows(mapped);
+
+  assert.deepEqual(mapped[0], ["name", "variant_label", "quantity", "sale_price"]);
+  assert.equal(mapped[1][0], original[1][0]);
+  assert.equal(mapped[1][2], original[1][2]);
+  assert.deepEqual(parsed.errors, []);
+  assert.equal(parsed.rows[0].name, "Majica");
+  assert.equal(parsed.rows[0].variantLabel, "Crvena");
+  assert.equal(parsed.rows[0].quantity, 5);
+  assert.equal(parsed.rows[0].salePrice, 12.5);
+});
+
+test("rejects invalid or conflicting AI column mappings", () => {
+  const invalid = {
+    name: 0,
+    sku: null,
+    category: null,
+    min_stock: null,
+    cost_price: null,
+    sale_price: null,
+    supplier_name: null,
+    variant_label: 1,
+    variant_sku: null,
+    quantity: 1,
+  };
+  assert.equal(isAIImportColumnMapping(invalid, 3), false);
+  assert.throws(() => applyImportColumnMapping([["Name", "Variant", "Qty"], ["Top", "Red", 1]], invalid as AIImportColumnMapping), /IMPORT_MAPPING_INVALID/);
 });
 
 test("rejects duplicate recognized headers", () => {

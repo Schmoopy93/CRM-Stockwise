@@ -4,7 +4,7 @@ import { useState, lazy, Suspense } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useProducts, useSales, useShopMoney } from "@/lib/hooks";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
-import { findProductByCode, PartialReceiptError, recordSale } from "@/lib/actions";
+import { findProductByCode, PartialReceiptError, recordSale, linkSaleToCustomer } from "@/lib/actions";
 import CustomerPicker from "@/components/CustomerPicker";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
@@ -298,6 +298,15 @@ export default function SalesPage() {
                     {sale.buyerContact && <span>· {sale.channel === "instagram" ? `@${sale.buyerContact}` : sale.buyerContact}</span>}
                     {sale.createdAt && <span>· {sale.createdAt.toLocaleString(intlLocale)}</span>}
                   </p>
+                  {profile && !sale.sourceOrderId && (
+                    <div style={{ marginTop: "0.4rem" }}>
+                      <CustomerPicker
+                        shopId={profile.shopId}
+                        value={sale.customerId ?? ""}
+                        onChange={(cid) => void linkSaleToCustomer(profile.shopId, sale.id, cid || null)}
+                      />
+                    </div>
+                  )}
                 </div>
                 <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--green)" }}>{money(sale.total, { minimumFractionDigits: 2 })}</span>
               </div>

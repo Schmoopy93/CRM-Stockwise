@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useProducts, useStockEventsInRange, useCatalogStats } from "@/lib/hooks";
+import { useProducts, useStockEventsInRange, useCatalogStats, useSales, useShopMoney } from "@/lib/hooks";
 import { INTL_LOCALES, Locale, useI18n } from "@/lib/i18n-context";
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell,
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, LineChart, Line,
 } from "recharts";
-import { TrendingDown, TrendingUp, Activity, AlertCircle, Package, Eye, MessageCircle, Send, AtSign, Share2, Percent, ShoppingBag } from "lucide-react";
+import { TrendingDown, TrendingUp, Activity, AlertCircle, Package, Eye, MessageCircle, Send, AtSign, Share2, Percent, ShoppingBag, DollarSign } from "lucide-react";
 
 function formatDay(date: Date, locale: Locale) {
   return date.toLocaleDateString(INTL_LOCALES[locale], { day: "2-digit", month: "2-digit" });
@@ -140,6 +140,47 @@ export default function AnalyticsPage() {
     dateRange.to
   );
   const { products } = useProducts(profile?.shopId);
+  const { sales } = useSales(profile?.shopId, 500);
+  const { money } = useShopMoney(profile?.shopId, INTL_LOCALES[locale]);
+
+  // Revenue data filtered to selected date range
+  const revenueData = useMemo(() => {
+    const buckets = new Map<string, { date: string; revenue: number }>();
+    const cursor = new Date(dateRange.from);
+    if (activityGroup === "week") cursor.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
+    else if (activityGroup === "month") cursor.setDate(1);
+    while (cursor <= dateRange.to) {
+      const key = activityGroup === "month"
+        ? `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`
+        : activityGroup === "week" ? dateKey(cursor) : dateKey(cursor);
+      const label = activityGroup === "month"
+        ? cursor.toLocaleDateString(INTL_LOCALES[locale], { month: "short" })
+        : formatDay(cursor, locale);
+      buckets.set(key, { date: label, revenue: 0 });
+      if (activityGroup === "month") cursor.setMonth(cursor.getMonth() + 1);
+      else if (activityGroup === "week") cursor.setDate(cursor.getDate() + 7);
+      else cursor.setDate(cursor.getDate() + 1);
+    }
+    for (const sale of sales) {
+      if (!sale.createdAt) continue;
+      const d = sale.createdAt;
+      if (d < dateRange.from || d > dateRange.to) continue;
+      const key = activityGroup === "month"
+        ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+        : activityGroup === "week"
+          ? (() => { const m = new Date(d); m.setHours(0,0,0,0); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return dateKey(m); })()
+          : dateKey(d);
+      const bucket = buckets.get(key);
+      if (bucket) bucket.revenue = Math.round((bucket.revenue + sale.total) * 100) / 100;
+    }
+    return [...buckets.values()];
+  }, [sales, dateRange, activityGroup, locale]);
+
+  const totalRevenue = useMemo(
+    () => sales.filter((s) => s.createdAt && s.createdAt >= dateRange.from && s.createdAt <= dateRange.to)
+      .reduce((sum, s) => sum + s.total, 0),
+    [sales, dateRange]
+  );
 
   // Use daily, weekly, and monthly buckets as the selected period grows.
   const activityData = useMemo(() => {
@@ -269,12 +310,13 @@ export default function AnalyticsPage() {
       )}
 
       {/* Stats row */}
-      <div className="analytics-stats" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem" }}>
+      <div className="analytics-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "1rem" }}>
         {[
           { icon: <Package size={16} />, label: t("analytics.products"), value: products.length, color: "#6366f1", bg: "rgba(99,102,241,0.1)", isLoading: false },
           { icon: <Activity size={16} />, label: t("analytics.changes"), value: events.length, color: "#22d3ee", bg: "rgba(34,211,238,0.1)", isLoading: true },
           { icon: <TrendingUp size={16} />, label: t("analytics.received"), value: totalIn, color: "var(--green)", bg: "var(--green-dim)", isLoading: true },
           { icon: <TrendingDown size={16} />, label: t("analytics.issued"), value: totalOut, color: lowStock.length > 0 ? "var(--amber)" : "var(--red)", bg: lowStock.length > 0 ? "var(--amber-dim)" : "var(--red-dim)", isLoading: true },
+          { icon: <DollarSign size={16} />, label: t("analytics.revenue"), value: money(totalRevenue, { minimumFractionDigits: 2 }), color: "#a855f7", bg: "rgba(168,85,247,0.1)", isLoading: false },
         ].map(({ icon, label, value, color, bg, isLoading }) => (
           <div key={label} className="glass" style={{ padding: "1.1rem 1.25rem", display: "flex", alignItems: "center", gap: "0.875rem" }}>
             <div style={{ width: 36, height: 36, background: bg, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0 }}>
@@ -322,6 +364,35 @@ export default function AnalyticsPage() {
             <Area type="monotone" dataKey="issued" name={t("analytics.chartOut")} stroke="#6366f1" strokeWidth={2} fill="url(#gOut)" />
           </AreaChart>
         </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Revenue chart */}
+      <div className="glass" style={{ padding: "1.5rem" }}>
+        <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 1.25rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          {t("analytics.revenueTitle")}
+        </h2>
+        {revenueData.every((d) => d.revenue === 0) ? (
+          <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "2rem 0", margin: 0 }}>{t("analytics.revenueEmpty")}</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={revenueData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gRev" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
+              <Tooltip
+                contentStyle={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                labelStyle={{ color: "var(--text-2)" }}
+                formatter={(value: number) => [money(value, { minimumFractionDigits: 2 }), t("analytics.revenue")]}
+              />
+              <Line type="monotone" dataKey="revenue" stroke="#a855f7" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
         )}
       </div>
 

@@ -11,6 +11,7 @@ import { useProduct, useVariants, useStockEvents, useShopMoney } from "@/lib/hoo
 import { usePagination } from "@/lib/use-pagination";
 import ListPagination from "@/components/ListPagination";
 import { adjustStock, deleteProduct } from "@/lib/actions";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ArrowLeft, Pencil, Trash2, Minus, Plus, Clock, TrendingUp, TrendingDown } from "lucide-react";
 
 export default function ProductDetailPage() {
@@ -27,6 +28,11 @@ export default function ProductDetailPage() {
   const [customDelta, setCustomDelta] = useState<Record<string, string>>({});
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const [confirmAction, setConfirmAction] = useState<
+    | { type: "delete" }
+    | { type: "stock"; variantId: string; delta: number }
+    | null
+  >(null);
 
   const pagingLabels = {
     loadMore: t("paging.loadMore"),
@@ -45,7 +51,6 @@ export default function ProductDetailPage() {
     if (!profile) return;
     const variant = variants.find((v) => v.id === variantId);
     if (!variant) return;
-    if (Math.abs(delta) >= 10 && !confirm(t("product.confirmLarge", { delta: `${delta > 0 ? "+" : ""}${delta}` }))) return;
     setAdjusting(variantId);
     setError("");
     try {
@@ -57,15 +62,23 @@ export default function ProductDetailPage() {
     }
   }
 
+  async function requestAdjust(variantId: string, delta: number) {
+    if (Math.abs(delta) >= 10) {
+      setConfirmAction({ type: "stock", variantId, delta });
+      return;
+    }
+    await handleAdjust(variantId, delta);
+  }
+
   async function handleCustomAdjust(variantId: string, positive: boolean) {
     const val = parseInt(customDelta[variantId] ?? "0", 10);
     if (!val || isNaN(val)) return;
-    await handleAdjust(variantId, positive ? val : -val);
+    await requestAdjust(variantId, positive ? val : -val);
     setCustomDelta((p) => ({ ...p, [variantId]: "" }));
   }
 
   async function handleDelete() {
-    if (!profile || !confirm(t("product.deleteConfirm"))) return;
+    if (!profile) return;
     setDeleting(true);
     try {
       await deleteProduct(profile.shopId, id);
@@ -91,6 +104,28 @@ export default function ProductDetailPage() {
 
   return (
     <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.25rem", maxWidth: 720 }}>
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title={confirmAction?.type === "delete" ? t("product.deleteConfirmTitle") : t("product.confirmLargeTitle")}
+        description={
+          confirmAction?.type === "delete"
+            ? t("product.deleteConfirm")
+            : t("product.confirmLarge", { delta: `${confirmAction && confirmAction.delta > 0 ? "+" : ""}${confirmAction?.delta ?? 0}` })
+        }
+        confirmText={confirmAction?.type === "delete" ? t("delete") : t("confirm")}
+        cancelText={t("cancel")}
+        destructive={confirmAction?.type === "delete"}
+        onConfirm={async () => {
+          if (!confirmAction) return;
+          setConfirmAction(null);
+          if (confirmAction.type === "delete") {
+            await handleDelete();
+            return;
+          }
+          await handleAdjust(confirmAction.variantId, confirmAction.delta);
+        }}
+        onCancel={() => setConfirmAction(null)}
+      />
 
       {/* Breadcrumb + actions */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -105,7 +140,7 @@ export default function ProductDetailPage() {
             <Pencil size={13} /> {t("product.edit")}
           </Link>
           <button
-            onClick={handleDelete}
+            onClick={() => setConfirmAction({ type: "delete" })}
             disabled={deleting}
             style={{ display: "flex", alignItems: "center", gap: 6, padding: "0.45rem 0.875rem", background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, fontSize: "0.8rem", color: "var(--red)", cursor: "pointer", transition: "all 0.15s" }}
           >
@@ -249,7 +284,7 @@ export default function ProductDetailPage() {
               {/* Controls */}
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                 <button
-                  onClick={() => handleAdjust(variant.id, -1)}
+                  onClick={() => requestAdjust(variant.id, -1)}
                   disabled={adjusting === variant.id || variant.quantity <= 0}
                   aria-label="-1"
                   style={{ width: 36, height: 36, background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 9, color: "var(--red)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: adjusting === variant.id || variant.quantity <= 0 ? 0.4 : 1 }}
@@ -267,7 +302,7 @@ export default function ProductDetailPage() {
                 />
 
                 <button
-                  onClick={() => handleAdjust(variant.id, 1)}
+                  onClick={() => requestAdjust(variant.id, 1)}
                   disabled={adjusting === variant.id}
                   aria-label="+1"
                   style={{ width: 36, height: 36, background: "var(--green-dim)", border: "1px solid rgba(34,197,94,0.15)", borderRadius: 9, color: "var(--green)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: adjusting === variant.id ? 0.4 : 1 }}
