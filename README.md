@@ -47,11 +47,38 @@ Porudžbina iz javnog kataloga traži ime, kontakt i cenu svake stavke. Radnja j
 
 ## Google prijava
 
-U Firebase Console otvorite **Authentication → Sign-in method**, omogućite **Google** i dodajte domen aplikacije u **Authentication → Settings → Authorized domains**. Aplikacija koristi Google prijavu za sve naloge. Za kreiranje radnje izaberite **Nova radnja**, unesite naziv radnje i nastavite sa Google nalogom; za postojeću radnju izaberite **Pridruži se**, unesite Shop ID i nastavite sa Google nalogom.
+U Firebase Console otvorite **Authentication → Sign-in method**, omogućite **Google** i dodajte domen aplikacije u **Authentication → Settings → Authorized domains**. Zaposleni koriste Google prijavu. Za kreiranje radnje izaberite **Nova radnja**, unesite naziv radnje i nastavite sa Google nalogom; za postojeću radnju izaberite **Pridruži se**, unesite Shop ID i nastavite sa Google nalogom.
+
+## Kupci i poruke
+
+Kupac može da poruči bez naloga. Za privatne razgovore kupac se prijavljuje potvrđenim email linkom; katalog nudi **Pitaj prodavnicu pre kupovine**, a na detaljima artikla **Pitaj za ovaj artikal** otvara razgovor sa oznakom izabranog proizvoda. Kupac može da piše prodavnici i bez postojeće porudžbine. Sa potvrde porudžbine kupac može opciono da otvori **Porudžbine i razgovori** i vidi istoriju porudžbina i pre-porudžbinske razgovore. U Firebase Console uključite **Authentication → Sign-in method → Email/Password → Email link (passwordless sign-in)**. Dodajte domen aplikacije u **Authentication → Settings → Authorized domains**. Poruka koristi jezik izabran u aplikaciji; Firebase klijentski predložak može da se ograničeno prilagodi kroz **Authentication → Templates → Email link sign-in**.
+
+Predloženi naslov: `Prijava na Stockwise — link za vaše porudžbine`
+
+Predloženi tekst email-a (sačuvajte `%LINK%` kao Firebase placeholder):
+
+```text
+Zdravo,
+
+Zatražili ste prijavu na Stockwise kako biste pratili porudžbine i razmenjivali poruke sa prodavnicom.
+
+Kliknite na link ispod da biste se prijavili:
+%LINK%
+
+Link je jednokratan. Otvorite ga na uređaju na kojem ste zatražili prijavu. Ako ste email otvorili na drugom uređaju, unesite istu email adresu da biste završili prijavu.
+
+Ako niste vi zatražili prijavu, zanemarite ovu poruku. Niko neće dobiti pristup vašim porudžbinama.
+
+Stockwise
+```
+
+Kupac se vraća na `/catalog/{shopId}/account`; potvrđena email adresa omogućava pristup samo sopstvenim porudžbinama i razgovorima. Prodavnica odgovara na poruke sa stranice **Porudžbine**, u odeljku **Razgovori sa kupcima**. Za potpuno prilagođen HTML izgled i isporuku svojim servisom, Firebase zahteva generisanje linka preko Admin SDK-a i poseban email servis.
+
+Razgovori vezani za porudžbinu se čuvaju u `shops/{shopId}/orders/{orderId}/messages`, a razgovori pre porudžbine u `shops/{shopId}/conversations/{conversationId}/messages`. Firebase pravila ograničavaju razgovore na članove prodavnice i kupca sa potvrđenom email adresom. Prodavac vidi nepročitane poruke kao broj uz **Porudžbine** i dobija obaveštenje dok je aplikacija otvorena; otvaranjem razgovora poruke se označavaju pročitanim u tom pregledaču. Browser obaveštenje se prikazuje samo ako je pregledač već odobrio dozvolu. Push/email obaveštenja kada je aplikacija zatvorena nisu uključena.
 
 ## Firebase bezbednosna pravila i testovi
 
-Repozitorijum sadrži `firestore.rules`, `firestore.indexes.json`, `storage.rules` i `firebase.json`. Pravila ograničavaju čitanje na članove prodavnice, sprečavaju promenu članstva/uloge sa klijenta, štite fotografije, ne dozvoljavaju direktno menjanje lagera mimo stock događaja i sprečavaju brisanje artikla/varijante sa zalihom. Kompozitni indeksi su potrebni za `stockEvents(productId, createdAt desc)`, `sales(customerId, createdAt desc)` i `orders(customerId, createdAt desc)`.
+Repozitorijum sadrži `firestore.rules`, `firestore.indexes.json`, `storage.rules` i `firebase.json`. Pravila ograničavaju čitanje na članove prodavnice, sprečavaju promenu članstva/uloge sa klijenta, štite fotografije, ne dozvoljavaju direktno menjanje lagera mimo stock događaja i sprečavaju brisanje artikla/varijante sa zalihom. Kompozitni indeksi su potrebni za `stockEvents(productId, createdAt desc)`, `sales(customerId, createdAt desc)`, `orders(customerId, createdAt desc)` i `conversations(customerUid, createdAt desc)`.
 
 Pokrenite `npm test` (Node.js 22+) za lager unit testove i Firestore/Storage Emulator pravila. Za emulator testove je potrebna Java. Emulator se pokreće pod demo project ID-jem i testovi ne koriste produkcioni Firebase projekat.
 

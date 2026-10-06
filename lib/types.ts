@@ -153,6 +153,17 @@ export interface CatalogOrder {
   createdAt: Date | null;
 }
 
+export interface ShopConversation {
+  id: string;
+  customerUid: string;
+  customerEmail: string;
+  customerName: string;
+  productId?: string;
+  productName?: string;
+  hiddenByShop?: boolean;
+  createdAt: Date | null;
+}
+
 export interface SaleLine {
   productId: string;
   productName: string;

@@ -14,7 +14,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Product, ProductVariant, Sale, ShopCatalogSettings, StockEvent, Customer } from "@/lib/types";
-import { CatalogItem, CatalogOrder, CatalogStatsDay } from "@/lib/types";
+import { CatalogItem, CatalogOrder, CatalogStatsDay, ShopConversation } from "@/lib/types";
 import { channelsFromShop, EMPTY_CHANNELS } from "@/lib/catalog-channels";
 import {
   BASE_CURRENCY,
@@ -444,6 +444,40 @@ export function useOrders(shopId: string | undefined, count = 100) {
   }, [shopId, count]);
 
   return { orders, loading, error };
+}
+
+export function useShopConversations(shopId: string | undefined) {
+  const [conversations, setConversations] = useState<ShopConversation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!shopId) return;
+    const conversationsQuery = query(
+      collection(db, "shops", shopId, "conversations"),
+      orderBy("createdAt", "desc"),
+      limit(100)
+    );
+    return onSnapshot(conversationsQuery, (snapshot) => {
+      setConversations(snapshot.docs.map((conversation) => ({
+        id: conversation.id,
+        customerUid: conversation.data().customerUid ?? "",
+        customerEmail: conversation.data().customerEmail ?? "",
+        customerName: conversation.data().customerName ?? "",
+        productId: conversation.data().productId,
+        productName: conversation.data().productName,
+        hiddenByShop: conversation.data().hiddenByShop === true,
+        createdAt: conversation.data().createdAt?.toDate() ?? null,
+      })));
+      setLoading(false);
+      setError(null);
+    }, (cause) => {
+      setError(cause);
+      setLoading(false);
+    });
+  }, [shopId]);
+
+  return { conversations, loading, error };
 }
 
 export function useStockEvents(shopId: string | undefined, productId: string | undefined) {

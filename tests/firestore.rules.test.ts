@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 import { readFile } from "node:fs/promises";
 import {
+  addDoc,
   collection,
   deleteDoc,
   deleteField,
@@ -9,11 +10,14 @@ import {
   getDoc,
   getDocs,
   increment,
+  orderBy,
+  query,
   runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
+  where,
   writeBatch,
 } from "firebase/firestore";
 import { ref, uploadBytes } from "firebase/storage";
@@ -341,6 +345,207 @@ test("customers can place catalog orders but members own the lifecycle", async (
   // Restating what the customer agreed to, or in what currency, is not allowed.
   await assertFails(updateDoc(orderRef, { currency: "RSD" }));
   await assertFails(deleteDoc(orderRef));
+});
+
+test("verified order customers and shop members can exchange immutable private messages", async () => {
+  const customerDb = env.authenticatedContext("buyer-a", {
+    email: "ana@example.com",
+    email_verified: true,
+  }).firestore();
+  const unverifiedDb = env.authenticatedContext("buyer-unverified", {
+    email: "ana@example.com",
+    email_verified: false,
+  }).firestore();
+  const otherCustomerDb = env.authenticatedContext("buyer-b", {
+    email: "other@example.com",
+    email_verified: true,
+  }).firestore();
+  const staffDb = firestoreFor("staff-a");
+  const orderId = "chat-order";
+  const orderRef = doc(customerDb, "shops", shopId, "orders", orderId);
+  const messagesRef = collection(orderRef, "messages");
+
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "shops", shopId, "orders", orderId), {
+      code: "A2B3C4",
+      customerEmail: "ana@example.com",
+      status: "new",
+    });
+  });
+
+  await assertSucceeds(getDoc(orderRef));
+  await assertSucceeds(getDocs(query(
+    collection(customerDb, "shops", shopId, "orders"),
+    where("customerEmail", "==", "ana@example.com")
+  )));
+  await assertFails(getDoc(doc(unverifiedDb, "shops", shopId, "orders", orderId)));
+  await assertFails(getDoc(doc(otherCustomerDb, "shops", shopId, "orders", orderId)));
+  await assertFails(getDoc(doc(firestoreFor(), "shops", shopId, "orders", orderId)));
+
+  const customerMessage = {
+    authorUid: "buyer-a",
+    authorRole: "customer",
+    authorName: "Ana",
+    text: "Da li je dostupna plava boja?",
+    createdAt: serverTimestamp(),
+  };
+  await assertSucceeds(addDoc(messagesRef, customerMessage));
+  await assertSucceeds(getDocs(messagesRef));
+  await assertSucceeds(addDoc(collection(staffDb, "shops", shopId, "orders", orderId, "messages"), {
+    authorUid: "staff-a",
+    authorRole: "shop",
+    authorName: "Staff",
+    text: "Jeste, dostupna je.",
+    createdAt: serverTimestamp(),
+  }));
+  await assertSucceeds(getDocs(collection(staffDb, "shops", shopId, "orders", orderId, "messages")));
+  await assertFails(getDocs(collection(otherCustomerDb, "shops", shopId, "orders", orderId, "messages")));
+  await assertFails(addDoc(collection(otherCustomerDb, "shops", shopId, "orders", orderId, "messages"), {
+    ...customerMessage,
+    authorUid: "buyer-b",
+  }));
+  await assertFails(addDoc(collection(customerDb, "shops", shopId, "orders", orderId, "messages"), {
+    ...customerMessage,
+    authorRole: "shop",
+  }));
+  await assertFails(addDoc(collection(customerDb, "shops", shopId, "orders", orderId, "messages"), {
+    ...customerMessage,
+    text: "x".repeat(2001),
+  }));
+  await assertFails(updateDoc(doc(messagesRef, "message-id"), { text: "edited" }));
+  await assertFails(deleteDoc(doc(messagesRef, "message-id")));
+});
+
+test("verified customers can start private conversations with the shop before ordering", async () => {
+  const customerDb = env.authenticatedContext("buyer-a", {
+    email: "ana@example.com",
+    email_verified: true,
+  }).firestore();
+  const unverifiedDb = env.authenticatedContext("buyer-unverified", {
+    email: "ana@example.com",
+    email_verified: false,
+  }).firestore();
+  const otherCustomerDb = env.authenticatedContext("buyer-b", {
+    email: "other@example.com",
+    email_verified: true,
+  }).firestore();
+  const staffDb = firestoreFor("staff-a");
+  const conversationId = "pre-order-chat";
+  const customerConversation = doc(customerDb, "shops", shopId, "conversations", conversationId);
+  const customerMessages = collection(customerConversation, "messages");
+
+  const conversationData = {
+    customerUid: "buyer-a",
+    customerEmail: "ana@example.com",
+    customerName: "ana@example.com",
+    createdAt: serverTimestamp(),
+  };
+  await assertFails(setDoc(doc(customerDb, "shops", shopId, "conversations", "catalog-disabled"), conversationData));
+  await env.withSecurityRulesDisabled(async (context) => {
+    const disabled = context.firestore();
+    await updateDoc(doc(disabled, "shops", shopId), { catalogEnabled: true });
+    await setDoc(doc(disabled, "shops", shopId, "catalog", "product-a"), { name: "Jacket", hidden: false });
+    await setDoc(doc(disabled, "shops", shopId, "catalog", "hidden-product"), { name: "Hidden", hidden: true });
+  });
+
+  await assertSucceeds(setDoc(customerConversation, conversationData));
+  await assertSucceeds(setDoc(doc(customerDb, "shops", shopId, "conversations", "tagged"), {
+    ...conversationData,
+    productId: "product-a",
+    productName: "Jacket",
+  }));
+  await assertFails(setDoc(doc(customerDb, "shops", shopId, "conversations", "wrong-product-name"), {
+    ...conversationData,
+    productId: "product-a",
+    productName: "Different product",
+  }));
+  await assertFails(setDoc(doc(customerDb, "shops", shopId, "conversations", "hidden-product"), {
+    ...conversationData,
+    productId: "hidden-product",
+    productName: "Hidden",
+  }));
+  await assertSucceeds(getDoc(customerConversation));
+  await assertSucceeds(getDocs(query(
+    collection(customerDb, "shops", shopId, "conversations"),
+    where("customerUid", "==", "buyer-a"),
+    orderBy("createdAt", "desc")
+  )));
+  await assertFails(getDocs(query(
+    collection(otherCustomerDb, "shops", shopId, "conversations"),
+    where("customerUid", "==", "buyer-a")
+  )));
+  await assertSucceeds(getDocs(collection(staffDb, "shops", shopId, "conversations")));
+  await assertFails(getDoc(doc(otherCustomerDb, "shops", shopId, "conversations", conversationId)));
+  await assertFails(getDocs(collection(unverifiedDb, "shops", shopId, "conversations", conversationId, "messages")));
+  await assertFails(setDoc(doc(unverifiedDb, "shops", shopId, "conversations", "unverified"), {
+    customerUid: "buyer-unverified",
+    customerEmail: "ana@example.com",
+    customerName: "ana@example.com",
+    createdAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(customerConversation, { customerEmail: "other@example.com" }));
+
+  await assertSucceeds(addDoc(customerMessages, {
+    authorUid: "buyer-a",
+    authorRole: "customer",
+    authorName: "ana@example.com",
+    text: "Da li je dostupan ovaj artikal?",
+    createdAt: serverTimestamp(),
+  }));
+  await assertSucceeds(getDocs(customerMessages));
+  await assertSucceeds(addDoc(collection(staffDb, "shops", shopId, "conversations", conversationId, "messages"), {
+    authorUid: "staff-a",
+    authorRole: "shop",
+    authorName: "Prodavnica",
+    text: "Jeste, dostupan je.",
+    createdAt: serverTimestamp(),
+  }));
+  await assertFails(addDoc(customerMessages, {
+    authorUid: "buyer-a",
+    authorRole: "shop",
+    authorName: "ana@example.com",
+    text: "Neispravna uloga.",
+    createdAt: serverTimestamp(),
+  }));
+  await assertFails(addDoc(collection(otherCustomerDb, "shops", shopId, "conversations", conversationId, "messages"), {
+    authorUid: "buyer-b",
+    authorRole: "customer",
+    authorName: "other@example.com",
+    text: "Nedozvoljena poruka.",
+    createdAt: serverTimestamp(),
+  }));
+});
+
+test("customers and shop members can hide a conversation only from their own view", async () => {
+  const customerDb = env.authenticatedContext("buyer-a", {
+    email: "ana@example.com",
+    email_verified: true,
+  }).firestore();
+  const staffDb = firestoreFor("staff-a");
+  const conversationId = "hide-per-participant";
+  const customerConversation = doc(customerDb, "shops", shopId, "conversations", conversationId);
+  const staffConversation = doc(staffDb, "shops", shopId, "conversations", conversationId);
+
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "shops", shopId, "conversations", conversationId), {
+      customerUid: "buyer-a",
+      customerEmail: "ana@example.com",
+      customerName: "ana@example.com",
+      createdAt: Timestamp.now(),
+    });
+  });
+
+  await assertSucceeds(updateDoc(customerConversation, { hiddenByCustomer: true }));
+  await assertFails(updateDoc(customerConversation, { hiddenByShop: true }));
+  await assertFails(updateDoc(customerConversation, { productName: "Changed content" }));
+  await assertFails(updateDoc(customerConversation, { hiddenByCustomer: false }));
+  assert.equal((await getDoc(staffConversation)).data()?.hiddenByCustomer, true);
+
+  await assertSucceeds(updateDoc(staffConversation, { hiddenByShop: true }));
+  await assertFails(updateDoc(staffConversation, { hiddenByCustomer: true }));
+  await assertFails(updateDoc(staffConversation, { customerEmail: "changed@example.com" }));
+  await assertFails(updateDoc(staffConversation, { hiddenByShop: false }));
+  assert.equal((await getDoc(customerConversation)).data()?.hiddenByShop, true);
 });
 
 test("customer records are private to the shop and pinned to a validated shape", async () => {

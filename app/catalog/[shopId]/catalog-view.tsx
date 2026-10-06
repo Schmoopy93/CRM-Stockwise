@@ -11,12 +11,13 @@ import { channelsFromShop, EMPTY_CHANNELS } from "@/lib/catalog-channels";
 import { BASE_CURRENCY, isSupportedCurrency } from "@/lib/currency";
 import { trackCatalogEvent } from "@/lib/actions";
 import { CatalogItem, CatalogStatEvent, ShopCatalogSettings } from "@/lib/types";
-import { ArrowUpDown, Package, Search, ShoppingBag, Sparkles, X } from "lucide-react";
+import { ArrowUpDown, MessageCircle, Package, Search, ShoppingBag, Sparkles, X } from "lucide-react";
 import { setProductParam, useCart, useProductParam } from "./catalog-store";
 import CatalogCard, { catalogStockForVariant, fieldText } from "./catalog-card";
 import CatalogDetail from "./catalog-detail";
 import CatalogCart, { ResolvedCartLine } from "./catalog-cart";
 import OrderChannels, { availableChannels } from "./order-channels";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 type SortKey = "name" | "priceAsc" | "priceDesc";
 
@@ -200,10 +201,21 @@ export default function CatalogView({ shopId }: { shopId: string }) {
                 )}
               </div>
             </div>
-            {!shopLoading && catalogEnabled && hasChannels && (
+            {!shopLoading && catalogEnabled && (
               <div className="cat-hero-contact">
-                <p className="cat-hero-caption">{t("catalog.orderVia")}</p>
-                <OrderChannels channels={channels} onChannelClick={track} />
+                <div className="cat-hero-tools">
+                  <ThemeSwitcher className="cat-theme-toggle" lightLabel={t("theme.switchToLight")} darkLabel={t("theme.switchToDark")} />
+                </div>
+                <Link href={`/catalog/${shopId}/account#shop-chat`} className="cat-ask-shop">
+                  <MessageCircle size={15} />
+                  {t("chat.askBeforeOrder")}
+                </Link>
+                {hasChannels && (
+                  <div className="cat-hero-order-via">
+                    <p className="cat-hero-caption">{t("catalog.orderVia")}</p>
+                    <OrderChannels channels={channels} onChannelClick={track} />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -292,6 +304,10 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         )}
 
         <footer className="cat-footer">
+          <Link href={`/catalog/${shopId}/account`} className="cat-account-link">
+            <MessageCircle size={14} />
+            {t("chat.myOrders")}
+          </Link>
           <Link href="/" className="cat-footer-cta">
             <Sparkles size={14} />
             {t("catalog.createOwn")}
@@ -378,7 +394,31 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         }
         .cat-hero-sub { display: flex; align-items: center; gap: 7px; font-size: 0.8rem; font-weight: 600; color: var(--text-3); margin: 8px 0 0; }
         .cat-hero-dot { width: 7px; height: 7px; border-radius: 99px; background: var(--green); }
-        .cat-hero-contact { display: flex; flex-direction: column; gap: 0.5rem; }
+        .cat-hero-contact {
+          display: flex; align-items: center; justify-content: flex-end; gap: 0.55rem;
+          flex-wrap: wrap; padding: 0.45rem; border: 1px solid var(--border);
+          border-radius: 13px; background: color-mix(in srgb, var(--bg-2) 88%, transparent);
+          box-shadow: 0 5px 18px rgba(0,0,0,0.08);
+          backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+        }
+        .cat-hero-tools { display: flex; align-items: center; padding-right: 0.45rem; border-right: 1px solid var(--border); }
+        .cat-theme-toggle { width: 38px !important; height: 38px !important; border-radius: 10px !important; }
+        .cat-theme-toggle:hover { border-color: #7664ed !important; transform: translateY(-1px); }
+        .cat-hero[data-cover] .cat-hero-contact { background: rgba(20, 20, 29, 0.68); border-color: rgba(255,255,255,0.25); }
+        .cat-hero[data-cover] .cat-hero-tools { border-color: rgba(255,255,255,0.22); }
+        .cat-hero[data-cover] .cat-theme-toggle { background: rgba(255,255,255,0.94) !important; border-color: rgba(255,255,255,0.65) !important; color: #18231d !important; }
+        .cat-hero[data-cover] .cat-theme-toggle:hover { background: #fff !important; }
+        .cat-hero-order-via { display: inline-flex; align-items: center; gap: 0.5rem; padding-left: 0.2rem; }
+        .cat-ask-shop {
+          display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px;
+          width: fit-content; padding: 0.5rem 0.8rem; border: 1px solid #6551dc;
+          border-radius: 9px; background: linear-gradient(135deg, #8069f2, #624bdc); color: #fff;
+          box-shadow: 0 4px 13px rgba(99, 77, 220, 0.32);
+          font-size: 0.78rem; font-weight: 750; text-decoration: none; white-space: nowrap;
+          transition: background 0.16s, border-color 0.16s, transform 0.16s, box-shadow 0.16s;
+        }
+        .cat-ask-shop:hover { background: linear-gradient(135deg, #907fff, #7159ed); border-color: #8e7cf5; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(99, 77, 220, 0.44); }
+        .cat-ask-shop:focus-visible { outline: 2px solid #918aff; outline-offset: 3px; }
         .cat-hero-caption { font-size: 0.68rem; font-weight: 650; color: var(--text-3); margin: 0; }
         .cat-hero[data-cover] .cat-hero-title { color: #fff; }
         .cat-hero[data-cover] .cat-hero-sub, .cat-hero[data-cover] .cat-hero-caption { color: rgba(255, 255, 255, 0.78); }
@@ -400,7 +440,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-channel[data-channel="whatsapp"] svg { color: #168b55; }
         .cat-channel[data-channel="telegram"] svg { color: #2184ad; }
         .cat-channel[data-channel="instagram"] svg { color: #bf4279; }
-        .cat-hero[data-cover] .cat-channel { border-color: rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.94); color: #18231d; }
+        .cat-hero[data-cover] .cat-channel { border-color: rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.94); color: #18231d; }
         .cat-hint { font-size: 0.72rem; color: var(--text-3); margin: 0; line-height: 1.45; }
 
         /* ── Category navigation and toolbar ── */
@@ -566,6 +606,13 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         }
         .cat-footer-cta:hover { background: color-mix(in srgb, var(--shop-accent) 18%, var(--bg-2)); }
         .cat-footer-cta { color: var(--shop-accent); }
+        .cat-account-link {
+          display: inline-flex; align-items: center; gap: 7px; padding: 0.5rem 0.75rem;
+          border: 1px solid var(--border); border-radius: 8px; background: var(--bg-2);
+          color: var(--text-2); font-size: 0.76rem; font-weight: 700; text-decoration: none;
+          transition: color 0.16s, border-color 0.16s, background 0.16s;
+        }
+        .cat-account-link:hover { color: var(--shop-accent); border-color: var(--shop-accent); background: var(--bg-3); }
         .cat-cookie-link { color: var(--text-3); text-decoration: none; }
         .cat-cookie-link:hover { color: var(--text-1); }
 
@@ -622,6 +669,10 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           transition: background 0.15s, border-color 0.15s;
         }
         .cat-modal-close:hover { background: var(--bg-3); border-color: var(--border-hover); }
+        .cat-modal-close:focus-visible, .cat-modal-share:focus-visible, .cat-modal-ask:focus-visible,
+        .cat-variant:focus-visible, .cat-stepper button:focus-visible, .cat-add-btn:focus-visible {
+          outline: 2px solid var(--shop-accent); outline-offset: 3px;
+        }
         .cat-drawer-close { position: static; flex: 0 0 auto; }
         .cat-modal-slider { position: relative; width: 100%; aspect-ratio: 1 / 1; background: var(--bg-3); flex-shrink: 0; }
         .cat-modal-placeholder { display: grid; place-items: center; color: var(--text-3); }
@@ -662,9 +713,9 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-modal-share {
           display: inline-flex; align-items: center; gap: 6px; padding: 0.45rem 0.7rem; border-radius: 7px;
           font-size: 0.76rem; font-weight: 700; cursor: pointer; color: var(--text-2);
-          background: var(--bg-3); border: 1px solid var(--border); transition: color 0.15s, border-color 0.15s;
+          background: var(--bg-3); border: 1px solid var(--border); transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.15s;
         }
-        .cat-modal-share:hover { color: var(--shop-accent); border-color: var(--shop-accent); }
+        .cat-modal-share:hover { color: var(--shop-accent); border-color: var(--shop-accent); background: var(--shop-accent-soft); transform: translateY(-1px); }
         .cat-modal-title { font-size: 1.5rem; font-weight: 750; color: var(--text-1); margin: 0.85rem 0 0; line-height: 1.2; }
         .cat-modal-price { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; font-size: 1.7rem; font-weight: 750; color: var(--shop-accent); margin: 0.45rem 0 0; font-variant-numeric: tabular-nums; }
         .cat-modal-old { font-size: 1rem; font-weight: 600; color: var(--text-3); letter-spacing: 0; }
@@ -684,11 +735,25 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-modal-field { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; font-size: 0.82rem; padding: 0.6rem 0.7rem; border-radius: 6px; background: var(--bg-3); }
         .cat-modal-field span:first-child { color: var(--text-3); font-weight: 600; flex-shrink: 0; }
         .cat-modal-field span:last-child { color: var(--text-1); text-align: right; }
-        .cat-modal-actions { margin-top: auto; padding-top: 1.5rem; display: flex; flex-direction: column; gap: 0.65rem; }
+        .cat-modal-actions { margin-top: auto; padding-top: 1.5rem; display: flex; flex-direction: column; gap: 0.7rem; }
+        .cat-modal-ask {
+          display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+          width: 100%; min-height: 52px; padding: 0.8rem 1rem; border: 2px solid #6a54df;
+          border-radius: 12px; color: #fff; background: linear-gradient(135deg, #8069f2, #624bdc);
+          text-decoration: none; font-size: 0.9rem; font-weight: 800; letter-spacing: 0.005em;
+          box-shadow: 0 5px 17px rgba(99, 77, 220, 0.28), inset 0 1px rgba(255,255,255,0.2);
+          transition: transform 0.16s, border-color 0.16s, background 0.16s, box-shadow 0.16s;
+        }
+        .cat-modal-ask:hover {
+          transform: translateY(-2px); border-color: #8e7cf5;
+          background: linear-gradient(135deg, #907fff, #7159ed);
+          box-shadow: 0 8px 22px rgba(99, 77, 220, 0.4);
+        }
+        .cat-modal-ask:active { transform: translateY(0) scale(0.99); }
         .cat-buy-row { display: flex; gap: 0.6rem; }
         .cat-stepper {
           display: inline-flex; align-items: center; flex-shrink: 0; border-radius: 8px;
-          background: var(--bg-3); border: 1px solid var(--border); padding: 3px;
+          background: var(--bg-3); border: 1px solid var(--border); padding: 3px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.06);
         }
         .cat-stepper button {
           width: 38px; height: 40px; border-radius: 6px; border: none; cursor: pointer;
@@ -702,12 +767,16 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-stepper[data-size="sm"] span { min-width: 24px; font-size: 0.82rem; }
         .cat-add-btn {
           flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
-          min-height: 48px; padding: 0.75rem 1rem; font-size: 0.9rem; border-radius: 8px;
-          background: var(--shop-accent); box-shadow: none;
-          transition: transform 0.15s, background 0.15s;
+          min-height: 54px; padding: 0.8rem 1rem; font-size: 0.96rem; font-weight: 800; border-radius: 12px;
+          color: #fff; background: linear-gradient(135deg, #8069f2, #624bdc);
+          border: 1px solid #735ee8;
+          box-shadow: 0 7px 22px rgba(99, 77, 220, 0.38), inset 0 1px rgba(255,255,255,0.22);
+          text-shadow: 0 1px 1px rgba(0,0,0,0.14);
+          transition: transform 0.15s, background 0.15s, box-shadow 0.15s, filter 0.15s;
         }
-        .cat-add-btn:hover:not(:disabled) { transform: translateY(-1px); background: var(--shop-accent-hover); box-shadow: none; filter: none; }
-        .cat-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .cat-add-btn:hover:not(:disabled) { transform: translateY(-2px); background: linear-gradient(135deg, #907fff, #7159ed); box-shadow: 0 10px 28px rgba(99, 77, 220, 0.48), inset 0 1px rgba(255,255,255,0.25); filter: saturate(1.12); }
+        .cat-add-btn:active:not(:disabled) { transform: translateY(0) scale(0.99); }
+        .cat-add-btn:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; filter: grayscale(0.15); }
 
         /* ── Cart drawer ── */
         .cat-drawer-overlay { justify-content: flex-end; align-items: stretch; padding: 0; }
@@ -773,6 +842,13 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-order-confirmation { flex: 1; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 0.9rem; padding: 1.25rem; }
         .cat-order-success-mark { align-self: center; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--green); background: var(--green-dim); }
         .cat-order-confirmation > .cat-order-success { text-align: center; font-size: 0.9rem; font-weight: 650; }
+        .cat-order-chat-link {
+          display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px;
+          padding: 0.55rem 0.8rem; border: 1px solid color-mix(in srgb, var(--shop-accent) 30%, transparent);
+          border-radius: 8px; background: var(--shop-accent-soft); color: var(--shop-accent);
+          text-decoration: none; font-size: 0.8rem; font-weight: 750; transition: background 0.16s, transform 0.16s;
+        }
+        .cat-order-chat-link:hover { background: color-mix(in srgb, var(--shop-accent) 18%, var(--bg-2)); transform: translateY(-1px); }
 
         /* ── Toast ── */
         .cat-toast {
@@ -814,7 +890,11 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           .cat-hero-content { padding: 1.1rem; gap: 1rem; }
           .cat-hero-logo { width: 56px; height: 56px; border-radius: 9px; font-size: 1.35rem; }
           .cat-hero-title { font-size: 1.55rem; }
-          .cat-hero-contact { width: 100%; }
+          .cat-hero-contact { width: fit-content; max-width: 100%; justify-content: flex-start; gap: 0.45rem; }
+          .cat-hero-order-via { flex-wrap: wrap; }
+          .cat-modal-actions { padding-top: 1rem; }
+          .cat-buy-row { gap: 0.5rem; }
+          .cat-stepper button { width: 34px; }
           .cat-browse { grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
           .cat-sidebar { position: static; padding: 0.65rem; }
           .cat-sidebar-heading { padding: 0.1rem 0.35rem 0.55rem; }

@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import Image from "next/image";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Minus, Package, Plus, Share2, ShoppingBag, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, MessageCircle, Minus, Package, Plus, Share2, ShoppingBag, X } from "lucide-react";
 import { Locale, useI18n } from "@/lib/i18n-context";
 import type { PriceTools } from "@/lib/currency";
 import { CatalogItem, CatalogStatEvent } from "@/lib/types";
@@ -175,6 +176,13 @@ export default function CatalogDetail({ item, locale, prices, shopId, onClose, o
           )}
 
           <div className="cat-modal-actions">
+            <Link
+              className="cat-modal-ask"
+              href={`/catalog/${shopId}/account?productId=${encodeURIComponent(item.id)}#shop-chat`}
+            >
+              <MessageCircle size={15} />
+              {t("chat.askAboutProduct")}
+            </Link>
             <div className="cat-buy-row">
               <div className="cat-stepper" role="group" aria-label={t("catalog.quantity")}>
                 <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} disabled={quantity <= 1} aria-label={t("catalog.decrease")}><Minus size={15} /></button>

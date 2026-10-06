@@ -1,25 +1,31 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useCustomers, useOrders } from "@/lib/hooks";
+import { useCustomers, useOrders, useShopConversations } from "@/lib/hooks";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { fulfillCatalogOrder, updateOrderStatus, linkOrderToCustomer } from "@/lib/actions";
 import { formatCatalogPrice } from "@/lib/catalog-channels";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { OrderStatus } from "@/lib/types";
 import { useNewOrderNotifications } from "@/lib/notifications";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import {
   AlertCircle,
   CheckCircle2,
   ClipboardList,
+  ChevronDown,
   Clock3,
+  MessageCircle,
   PackageCheck,
   Search,
   ShoppingBag,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import OrderConversation from "@/components/OrderConversation";
 
 type Filter = "open" | OrderStatus | "all";
 
@@ -48,13 +54,38 @@ export default function OrdersPage() {
   const intl = INTL_LOCALES[locale];
   const shopId = profile?.shopId;
   const { orders, loading, error: ordersError } = useOrders(shopId);
+  const { conversations, loading: conversationsLoading, error: conversationsError } = useShopConversations(shopId);
   const { customers, loading: customersLoading } = useCustomers(shopId);
   useNewOrderNotifications(orders, loading);
   const [filter, setFilter] = useState<Filter>("open");
   const [search, setSearch] = useState("");
   const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set());
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
+  const [openConversations, setOpenConversations] = useState<Set<string>>(() => new Set());
   const [confirmCancelOrder, setConfirmCancelOrder] = useState<string | null>(null);
+  const [confirmHideConversation, setConfirmHideConversation] = useState<string | null>(null);
+  const [hidingConversation, setHidingConversation] = useState(false);
+  const [conversationActionError, setConversationActionError] = useState("");
+  const visibleConversations = conversations.filter((conversation) => !conversation.hiddenByShop);
+
+  useEffect(() => {
+    const openConversationFromHash = () => {
+      const conversationMatch = window.location.hash.match(/^#conversation-(.+)$/);
+      const orderMatch = window.location.hash.match(/^#order-chat-(.+)$/);
+      if (!conversationMatch && !orderMatch) return;
+      setFilter("all");
+      setSearch("");
+      const threadKey = conversationMatch
+        ? `conversation-${conversationMatch[1]}`
+        : orderMatch?.[1];
+      if (threadKey) {
+        setOpenConversations((current) => new Set(current).add(threadKey));
+      }
+    };
+    openConversationFromHash();
+    window.addEventListener("hashchange", openConversationFromHash);
+    return () => window.removeEventListener("hashchange", openConversationFromHash);
+  }, []);
 
   const counts = useMemo(() => {
     const result: Record<Filter, number> = {
@@ -91,6 +122,20 @@ export default function OrdersPage() {
     });
   }, [orders, filter, search, locale]);
 
+  useEffect(() => {
+    const hash = window.location.hash;
+    const conversationId = hash.startsWith("#conversation-") ? hash.slice("#conversation-".length) : "";
+    const orderId = hash.startsWith("#order-chat-") ? hash.slice("#order-chat-".length) : "";
+    const targetId = conversationId
+      ? conversations.some((conversation) => conversation.id === conversationId) ? hash.slice(1) : ""
+      : orderId && filteredOrders.some((order) => order.id === orderId) ? hash.slice(1) : "";
+    if (!targetId) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [conversations, filteredOrders, openConversations]);
+
   async function executeStatusChange(orderId: string, status: OrderStatus) {
     if (!profile) return;
 
@@ -117,6 +162,29 @@ export default function OrdersPage() {
         next.delete(orderId);
         return next;
       });
+    }
+  }
+
+  async function hideShopConversation() {
+    if (!shopId || !confirmHideConversation || hidingConversation) return;
+    setHidingConversation(true);
+    setConversationActionError("");
+    try {
+      await updateDoc(doc(db, "shops", shopId, "conversations", confirmHideConversation), {
+        hiddenByShop: true,
+      });
+      setOpenConversations((current) => {
+        const next = new Set(current);
+        next.delete(`conversation-${confirmHideConversation}`);
+        return next;
+      });
+      setConfirmHideConversation(null);
+    } catch (cause) {
+      console.error("Failed to hide shop conversation", { shopId, conversationId: confirmHideConversation, cause });
+      setConversationActionError(translateError(cause, t, "chat.hideConversationFailed"));
+      setConfirmHideConversation(null);
+    } finally {
+      setHidingConversation(false);
     }
   }
 
@@ -153,6 +221,15 @@ export default function OrdersPage() {
     }
   }
 
+  function toggleConversation(orderId: string) {
+    setOpenConversations((current) => {
+      const next = new Set(current);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  }
+
   if (!shopId) return null;
 
   const summary = [
@@ -178,6 +255,17 @@ export default function OrdersPage() {
         }}
         onCancel={() => setConfirmCancelOrder(null)}
       />
+      <ConfirmDialog
+        open={confirmHideConversation !== null}
+        title={t("chat.hideConversationTitle")}
+        description={t("chat.hideConversationDescription")}
+        confirmText={t("chat.deleteConversation")}
+        cancelText={t("cancel")}
+        destructive
+        confirmDisabled={hidingConversation}
+        onConfirm={() => void hideShopConversation()}
+        onCancel={() => setConfirmHideConversation(null)}
+      />
 
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
         <div>
@@ -202,6 +290,65 @@ export default function OrdersPage() {
             </p>
           </div>
         ))}
+      </section>
+
+      <section aria-label={t("chat.shopConversations")} className="glass" style={{ display: "flex", flexDirection: "column", gap: "0.75rem", padding: "1rem", borderRadius: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+          <div>
+            <h2 style={{ display: "flex", alignItems: "center", gap: 8, margin: 0, color: "var(--text-1)", fontSize: "0.96rem", fontWeight: 750 }}>
+              <MessageCircle size={17} color="var(--accent-2)" /> {t("chat.shopConversations")}
+            </h2>
+            <p style={{ margin: "0.3rem 0 0", color: "var(--text-3)", fontSize: "0.76rem" }}>{t("chat.shopConversationsDescription")}</p>
+          </div>
+          <span style={{ borderRadius: 999, padding: "0.25rem 0.55rem", background: "var(--bg-3)", color: "var(--text-2)", fontSize: "0.72rem", fontWeight: 700 }}>
+            {conversationsLoading ? "—" : visibleConversations.length.toLocaleString(intl)}
+          </span>
+        </div>
+        {conversationsError && <p role="alert" style={{ margin: 0, color: "var(--red)", fontSize: "0.78rem" }}>{translateError(conversationsError, t, "orders.loadFailed")}</p>}
+        {conversationActionError && <p role="alert" style={{ margin: 0, color: "var(--red)", fontSize: "0.78rem" }}>{conversationActionError}</p>}
+        {!conversationsLoading && visibleConversations.length === 0 ? (
+          <p style={{ margin: 0, color: "var(--text-3)", fontSize: "0.78rem" }}>{t("chat.noShopConversations")}</p>
+        ) : visibleConversations.map((conversation) => {
+          const isOpen = openConversations.has(`conversation-${conversation.id}`);
+          return (
+            <article key={conversation.id} id={`conversation-${conversation.id}`} style={{ display: "flex", flexDirection: "column", gap: "0.65rem", borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ margin: 0, color: "var(--text-1)", fontSize: "0.8rem", fontWeight: 700, overflowWrap: "anywhere" }}>{conversation.customerEmail}</p>
+                  {conversation.productName && (
+                    <p style={{ display: "flex", alignItems: "center", gap: 5, margin: "0.25rem 0 0", color: "var(--text-2)", fontSize: "0.72rem" }}>
+                      <PackageCheck size={13} /> {t("chat.productInQuestion")}: {conversation.productName}
+                    </p>
+                  )}
+                  <time dateTime={conversation.createdAt?.toISOString()} style={{ display: "block", marginTop: 3, color: "var(--text-3)", fontSize: "0.68rem" }}>
+                    {conversation.createdAt?.toLocaleString(intl) ?? "—"}
+                  </time>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button type="button" className={isOpen ? "btn-secondary" : "btn-primary"} onClick={() => toggleConversation(`conversation-${conversation.id}`)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "0.4rem 0.65rem", fontSize: "0.74rem" }}>
+                    <MessageCircle size={14} /> {t(isOpen ? "chat.closeConversation" : "chat.openConversation")}
+                  </button>
+                  <button type="button" onClick={() => setConfirmHideConversation(conversation.id)}
+                    aria-label={t("chat.deleteConversation")} title={t("chat.deleteConversation")}
+                    style={{ display: "grid", placeItems: "center", width: 34, height: 34, border: "1px solid var(--border)", borderRadius: 9, background: "var(--bg-2)", color: "var(--text-3)", cursor: "pointer" }}>
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+              {isOpen && (
+                <OrderConversation
+                  shopId={shopId}
+                  conversationId={conversation.id}
+                  authorRole="shop"
+                  authorName={profile?.displayName ?? ""}
+                  customerEmail={conversation.customerEmail}
+                  locale={locale}
+                />
+              )}
+            </article>
+          );
+        })}
       </section>
 
       <section style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
@@ -298,7 +445,7 @@ export default function OrdersPage() {
               : t(`catalog.${order.channel === "other" ? "cart" : order.channel}`);
 
             return (
-              <article key={order.id} className="glass" style={{ padding: "1rem", borderRadius: 14, minWidth: 0 }}>
+              <article key={order.id} id={`order-${order.id}`} className="glass" style={{ padding: "1rem", borderRadius: 14, minWidth: 0 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.8rem", flexWrap: "wrap" }}>
                   <div style={{ minWidth: 0, flex: "1 1 260px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -395,6 +542,34 @@ export default function OrdersPage() {
                     </ul>
                   </div>
                 </div>
+
+                {order.channel === "catalog" && order.customerEmail && (
+                  <div style={{ marginTop: "0.85rem", paddingTop: "0.75rem", borderTop: "1px solid var(--border)" }}>
+                    <button
+                      type="button"
+                      aria-expanded={openConversations.has(order.id)}
+                      onClick={() => toggleConversation(order.id)}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "0.4rem 0.55rem", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-2)", color: "var(--text-1)", cursor: "pointer", fontSize: "0.78rem", fontWeight: 700 }}
+                    >
+                      <MessageCircle size={15} />
+                      {t("chat.title")}
+                      <ChevronDown size={14} style={{ transform: openConversations.has(order.id) ? "rotate(180deg)" : undefined, transition: "transform 0.16s" }} />
+                    </button>
+                    {openConversations.has(order.id) && (
+                      <div id={`order-chat-${order.id}`} style={{ marginTop: "0.7rem" }}>
+                        <OrderConversation
+                          key={order.id}
+                          shopId={shopId}
+                          orderId={order.id}
+                          authorRole="shop"
+                          authorName={profile?.displayName ?? ""}
+                          customerEmail={order.customerEmail}
+                          locale={locale}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {order.status === "fulfilling" && (
                   <div style={{ marginTop: "0.9rem", padding: "0.7rem 0.75rem", background: "var(--amber-dim)", borderRadius: 9 }}>

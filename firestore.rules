@@ -18,6 +18,33 @@ service cloud.firestore {
       return /databases/$(database)/documents/shops/$(shopId)/products/$(productId);
     }
 
+    function orderPath(shopId, orderId) {
+      return /databases/$(database)/documents/shops/$(shopId)/orders/$(orderId);
+    }
+
+    function conversationPath(shopId, conversationId) {
+      return /databases/$(database)/documents/shops/$(shopId)/conversations/$(conversationId);
+    }
+
+    function catalogItemPath(shopId, productId) {
+      return /databases/$(database)/documents/shops/$(shopId)/catalog/$(productId);
+    }
+
+    function isVerifiedOrderCustomer(shopId, orderId) {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string
+        && get(orderPath(shopId, orderId)).data.customerEmail == request.auth.token.email;
+    }
+
+    function isVerifiedConversationCustomer(shopId, conversationId) {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string
+        && get(conversationPath(shopId, conversationId)).data.customerUid == request.auth.uid
+        && get(conversationPath(shopId, conversationId)).data.customerEmail == request.auth.token.email;
+    }
+
     function variantPath(shopId, productId, variantId) {
       return /databases/$(database)/documents/shops/$(shopId)/products/$(productId)/variants/$(variantId);
     }
@@ -337,11 +364,84 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /conversations/{conversationId} {
+        allow get: if isMember(shopId) || isVerifiedConversationCustomer(shopId, conversationId);
+        allow list: if isMember(shopId)
+          || (signedIn()
+            && request.auth.token.email_verified == true
+            && resource.data.customerUid == request.auth.uid);
+        allow create: if signedIn()
+          && request.auth.token.email_verified == true
+          && request.resource.data.keys().hasOnly([
+            'customerUid', 'customerEmail', 'customerName', 'productId', 'productName', 'createdAt'
+          ])
+          && request.resource.data.customerUid == request.auth.uid
+          && request.resource.data.customerEmail == request.auth.token.email
+          && request.resource.data.customerName is string
+          && request.resource.data.customerName.size() > 0
+          && request.resource.data.customerName.size() <= 100
+          && (
+            (!('productId' in request.resource.data) && !('productName' in request.resource.data))
+            || ('productId' in request.resource.data
+              && 'productName' in request.resource.data
+              && request.resource.data.productId is string
+              && request.resource.data.productId.size() > 0
+              && request.resource.data.productId.size() <= 150
+              && request.resource.data.productName is string
+              && request.resource.data.productName.size() > 0
+              && request.resource.data.productName.size() <= 200
+              && get(catalogItemPath(shopId, request.resource.data.productId)).data.name == request.resource.data.productName
+              && get(catalogItemPath(shopId, request.resource.data.productId)).data.hidden != true)
+          )
+          && request.resource.data.createdAt == request.time
+          && get(shopPath(shopId)).data.catalogEnabled == true;
+        allow update: if (
+            isVerifiedConversationCustomer(shopId, conversationId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hiddenByCustomer'])
+            && request.resource.data.hiddenByCustomer == true
+            && resource.data.get('hiddenByCustomer', false) != true
+          ) || (
+            isMember(shopId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hiddenByShop'])
+            && request.resource.data.hiddenByShop == true
+            && resource.data.get('hiddenByShop', false) != true
+          );
+        allow delete: if false;
+
+        match /messages/{messageId} {
+          allow read: if isMember(shopId) || isVerifiedConversationCustomer(shopId, conversationId);
+          allow create: if signedIn()
+            && request.resource.data.keys().hasOnly([
+              'authorUid', 'authorRole', 'authorName', 'text', 'createdAt'
+            ])
+            && request.resource.data.authorUid == request.auth.uid
+            && request.resource.data.authorName is string
+            && request.resource.data.authorName.size() > 0
+            && request.resource.data.authorName.size() <= 100
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() <= 2000
+            && request.resource.data.createdAt == request.time
+            && (
+              (isMember(shopId)
+                && exists(conversationPath(shopId, conversationId))
+                && request.resource.data.authorRole == 'shop')
+              || (isVerifiedConversationCustomer(shopId, conversationId)
+                && request.resource.data.authorRole == 'customer')
+            );
+          allow update, delete: if false;
+        }
+      }
+
       match /orders/{orderId} {
         // Customers are anonymous here, so creates are pinned to a fixed shape
         // and only while the public catalog is actually on. Only member-driven
         // fulfillment moves stock through the ledger.
-        allow read: if isMember(shopId);
+        allow read: if isMember(shopId)
+          || (signedIn()
+            && request.auth.token.email_verified == true
+            && request.auth.token.email is string
+            && resource.data.customerEmail == request.auth.token.email);
         allow create: if get(shopPath(shopId)).data.catalogEnabled == true
           && request.resource.data.keys().hasOnly([
             'code', 'lines', 'total', 'currency', 'customerName', 'customerContact', 'customerEmail', 'customerAddress', 'customerCity', 'note', 'channel', 'status', 'createdAt'
@@ -431,6 +531,30 @@ service cloud.firestore {
               && getAfter(salePath(shopId, request.resource.data.saleId)).data.sourceOrderId == orderId))
           && validCustomerRef(request.resource.data);
         allow delete: if false;
+
+        match /messages/{messageId} {
+          allow read: if isMember(shopId) || isVerifiedOrderCustomer(shopId, orderId);
+          allow create: if signedIn()
+            && request.resource.data.keys().hasOnly([
+              'authorUid', 'authorRole', 'authorName', 'text', 'createdAt'
+            ])
+            && request.resource.data.authorUid == request.auth.uid
+            && request.resource.data.authorName is string
+            && request.resource.data.authorName.size() > 0
+            && request.resource.data.authorName.size() <= 100
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() <= 2000
+            && request.resource.data.createdAt == request.time
+            && (
+              (isMember(shopId)
+                && exists(orderPath(shopId, orderId))
+                && request.resource.data.authorRole == 'shop')
+              || (isVerifiedOrderCustomer(shopId, orderId)
+                && request.resource.data.authorRole == 'customer')
+            );
+          allow update, delete: if false;
+        }
       }
 
       match /sales/{saleId} {

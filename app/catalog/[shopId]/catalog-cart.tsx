@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { createPortal } from "react-dom";
-import { Check, Loader2, Minus, Package, Plus, ShoppingBag, Trash2, X } from "lucide-react";
+import { Check, Loader2, MessageCircle, Minus, Package, Plus, ShoppingBag, Trash2, X } from "lucide-react";
 import { INTL_LOCALES, Locale, translateError, useI18n } from "@/lib/i18n-context";
 import { buildOrderMessage, CatalogChannels } from "@/lib/catalog-channels";
 import type { PriceTools } from "@/lib/currency";
@@ -138,6 +139,10 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
           <div className="cat-order-confirmation">
             <div className="cat-order-success-mark"><Check size={22} /></div>
             <p className="cat-order-success">{t("catalog.orderSaved", { code: placedCode })}</p>
+            <Link href={`/catalog/${shopId}/account`} className="cat-order-chat-link">
+              <MessageCircle size={16} />
+              {t("chat.trackAndMessage")}
+            </Link>
             {channelList.length > 0 && (
               <>
                 <p className="cat-modal-section">{t("catalog.cartSend")}</p>

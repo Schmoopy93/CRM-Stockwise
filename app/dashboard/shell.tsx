@@ -3,17 +3,18 @@
 
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import { useProducts, useOrders } from "@/lib/hooks";
-import { useLowStockNotifications } from "@/lib/notifications";
+import { useCustomerMessageNotifications, useLowStockNotifications } from "@/lib/notifications";
 import { signOut } from "@/lib/actions";
 import { useI18n } from "@/lib/i18n-context";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
-import { LayoutGrid, Package, PackagePlus, BarChart2, Download, LogOut, ChevronRight, Upload, ClipboardList, Menu, X, ShoppingBag, AlertTriangle, Receipt, Users, Bell } from "lucide-react";
+import { LayoutGrid, Package, PackagePlus, BarChart2, Download, LogOut, ChevronRight, Upload, ClipboardList, Menu, X, ShoppingBag, AlertTriangle, Receipt, Users, Bell, MessageCircle } from "lucide-react";
 
 function NotificationWidget({ shopId }: { shopId: string | undefined }) {
   const { products } = useProducts(shopId);
@@ -100,15 +101,20 @@ function NewOrderBadgeNav({ shopId, nav, pathname, onNavigate }: {
   onNavigate: () => void;
 }) {
   const { orders, loading } = useOrders(shopId, 50);
+  const { t } = useI18n();
   const newCount = loading ? 0 : orders.filter((o) => o.status === "new").length;
+  const { unreadOrderIds, unreadConversationIds, toasts, dismissToast } = useCustomerMessageNotifications(shopId, orders, loading);
+  const unreadMessageCount = unreadOrderIds.size + unreadConversationIds.size;
+  const badgeCount = newCount + unreadMessageCount;
 
   return (
     <>
       {nav.map(({ href, icon: Icon, label, exact, badge }) => {
         const active = exact ? pathname === href : pathname.startsWith(href);
-        const count = badge ? newCount : 0;
+        const count = badge ? badgeCount : 0;
         return (
-          <Link key={href} href={href} onClick={onNavigate} style={{ display: "flex", alignItems: "center", gap: 10, padding: "0.55rem 0.75rem", borderRadius: 10, fontSize: "0.875rem", fontWeight: 500, textDecoration: "none", transition: "all 0.15s", background: active ? "var(--accent-glow)" : "transparent", color: active ? "var(--accent-2)" : "var(--text-2)", border: active ? "1px solid rgba(99,102,241,0.2)" : "1px solid transparent" }}>
+          <Link key={href} href={href} onClick={onNavigate} aria-label={badge ? t("notify.orderBadge", { orders: newCount, messages: unreadMessageCount }) : undefined}
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "0.55rem 0.75rem", borderRadius: 10, fontSize: "0.875rem", fontWeight: 500, textDecoration: "none", transition: "all 0.15s", background: active ? "var(--accent-glow)" : "transparent", color: active ? "var(--accent-2)" : "var(--text-2)", border: active ? "1px solid rgba(99,102,241,0.2)" : "1px solid transparent" }}>
             <Icon size={16} />
             {label}
             {count > 0 && (
@@ -120,6 +126,32 @@ function NewOrderBadgeNav({ shopId, nav, pathname, onNavigate }: {
           </Link>
         );
       })}
+      {toasts.length > 0 && (
+        typeof document !== "undefined" && createPortal(
+          <div aria-live="polite" style={{ position: "fixed", right: "1.25rem", bottom: "1.25rem", zIndex: 999, display: "flex", flexDirection: "column", gap: "0.5rem", width: "min(360px, calc(100vw - 2rem))" }}>
+            {toasts.map((toast) => (
+              <div key={toast.id} className="fade-up" style={{ display: "flex", alignItems: "center", gap: 10, padding: "0.8rem", border: "1px solid color-mix(in srgb, var(--accent-2) 35%, var(--border))", borderRadius: 12, background: "var(--bg-2)", boxShadow: "0 8px 28px rgba(0,0,0,0.22)" }}>
+                <MessageCircle size={17} color="var(--accent-2)" style={{ flexShrink: 0 }} />
+                <Link href={toast.conversationId
+                  ? `/dashboard/orders#conversation-${toast.conversationId}`
+                  : toast.orderId
+                    ? `/dashboard/orders#order-chat-${toast.orderId}`
+                    : "/dashboard/orders"} onClick={() => { dismissToast(toast.id); onNavigate(); }}
+                  style={{ minWidth: 0, flex: 1, color: "var(--text-1)", textDecoration: "none", fontSize: "0.8rem", fontWeight: 650 }}>
+                  {toast.conversationId
+                    ? t("notify.newShopConversationToast", { email: toast.name })
+                    : t("notify.newCustomerMessageToast", { code: toast.code, name: toast.name })}
+                </Link>
+                <button type="button" onClick={() => dismissToast(toast.id)} aria-label={t("catalog.close")}
+                  style={{ display: "grid", placeItems: "center", width: 27, height: 27, flex: "0 0 auto", border: 0, borderRadius: 7, background: "var(--bg-3)", color: "var(--text-2)", cursor: "pointer" }}>
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>,
+          document.body
+        )
+      )}
     </>
   );
 }

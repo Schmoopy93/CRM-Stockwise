@@ -3,13 +3,22 @@
 import { useTheme } from "@/lib/theme-context";
 import { Sun, Moon } from "lucide-react";
 
-export function ThemeSwitcher() {
+export function ThemeSwitcher({
+  className,
+  lightLabel = "Switch to light mode",
+  darkLabel = "Switch to dark mode",
+}: {
+  className?: string;
+  lightLabel?: string;
+  darkLabel?: string;
+}) {
   const { theme, toggleTheme } = useTheme();
 
   return (
     <button
       onClick={toggleTheme}
-      aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+      aria-label={theme === "dark" ? lightLabel : darkLabel}
+      className={className}
       style={{
         display: "flex", alignItems: "center", justifyContent: "center",
         width: 34, height: 34,
