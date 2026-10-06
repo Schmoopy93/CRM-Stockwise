@@ -3,6 +3,7 @@
 import { Product } from "@/lib/types";
 import { useI18n } from "@/lib/i18n-context";
 import { BASE_CURRENCY } from "@/lib/currency";
+import { Banknote } from "lucide-react";
 
 export interface ProductPricingValues {
   costPrice: string;
@@ -34,8 +35,6 @@ interface ProductPricingFieldsProps {
   onChange: (values: ProductPricingValues) => void;
 }
 
-const labelStyle = { display: "block", fontSize: "0.75rem", fontWeight: 600, color: "var(--text-3)", marginBottom: 6 } as const;
-
 export default function ProductPricingFields({ values, onChange }: ProductPricingFieldsProps) {
   const { t } = useI18n();
 
@@ -44,31 +43,33 @@ export default function ProductPricingFields({ values, onChange }: ProductPricin
   }
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-      <h2 style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-2)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-        {t("product.pricingSupplier")}
-      </h2>
-      <div className="product-variant-fields" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+    <section className="pform-card">
+      <div className="pform-card-head">
+        <span className="pform-card-icon"><Banknote size={15} /></span>
+        <h2 className="pform-card-title">{t("product.pricingSupplier")}</h2>
+      </div>
+      <p className="pform-card-hint">{t("product.pricingHint")}</p>
+      <div className="pform-grid">
         <div>
-          <label style={labelStyle}>{t("product.costPrice")} ({BASE_CURRENCY})</label>
-          <input className="input" type="text" inputMode="decimal" placeholder={t("product.optional")} value={values.costPrice} onChange={(e) => update("costPrice", e.target.value)} />
+          <label className="pform-label" htmlFor="product-cost-price">{t("product.costPrice")} ({BASE_CURRENCY})</label>
+          <input id="product-cost-price" className="input" type="text" inputMode="decimal" value={values.costPrice} onChange={(e) => update("costPrice", e.target.value)} required />
         </div>
         <div>
-          <label style={labelStyle}>{t("product.salePrice")} ({BASE_CURRENCY})</label>
-          <input className="input" type="text" inputMode="decimal" placeholder={t("product.optional")} value={values.salePrice} onChange={(e) => update("salePrice", e.target.value)} />
+          <label className="pform-label" htmlFor="product-sale-price">{t("product.salePrice")} ({BASE_CURRENCY})</label>
+          <input id="product-sale-price" className="input" type="text" inputMode="decimal" value={values.salePrice} onChange={(e) => update("salePrice", e.target.value)} required />
         </div>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <label style={labelStyle}>{t("product.compareAtPrice")} ({BASE_CURRENCY})</label>
-          <input className="input" type="text" inputMode="decimal" placeholder={t("product.optional")} value={values.compareAtPrice} onChange={(e) => update("compareAtPrice", e.target.value)} />
-          <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: "5px 0 0" }}>{t("product.compareAtPriceHint")}</p>
-        </div>
-        <div>
-          <label style={labelStyle}>{t("product.supplier")}</label>
-          <input className="input" type="text" placeholder={t("product.optional")} value={values.supplierName} onChange={(e) => update("supplierName", e.target.value)} />
+        <div className="pform-span-full">
+          <label className="pform-label" htmlFor="product-compare-at-price">{t("product.compareAtPrice")} ({BASE_CURRENCY})</label>
+          <input id="product-compare-at-price" className="input" type="text" inputMode="decimal" placeholder={t("product.optional")} value={values.compareAtPrice} onChange={(e) => update("compareAtPrice", e.target.value)} />
+          <p className="pform-hint">{t("product.compareAtPriceHint")}</p>
         </div>
         <div>
-          <label style={labelStyle}>{t("product.supplierContact")}</label>
-          <input className="input" type="text" placeholder={t("product.optional")} value={values.supplierContact} onChange={(e) => update("supplierContact", e.target.value)} />
+          <label className="pform-label" htmlFor="product-supplier">{t("product.supplier")}</label>
+          <input id="product-supplier" className="input" type="text" placeholder={t("product.optional")} value={values.supplierName} onChange={(e) => update("supplierName", e.target.value)} />
+        </div>
+        <div>
+          <label className="pform-label" htmlFor="product-supplier-contact">{t("product.supplierContact")}</label>
+          <input id="product-supplier-contact" className="input" type="text" placeholder={t("product.optional")} value={values.supplierContact} onChange={(e) => update("supplierContact", e.target.value)} />
         </div>
       </div>
     </section>

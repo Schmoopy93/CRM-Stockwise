@@ -17,8 +17,8 @@ export default function CookiesPage() {
 
   return (
     <main className={`fade-up ${styles.page}`}>
-      <Link href="/" className={styles.back}>
-        <ArrowLeft size={15} /> {t("back")}
+      <Link href="/" className="pform-back" style={{ alignSelf: "flex-start" }}>
+        <ArrowLeft size={14} /> {t("back")}
       </Link>
 
       <header className={styles.header}>

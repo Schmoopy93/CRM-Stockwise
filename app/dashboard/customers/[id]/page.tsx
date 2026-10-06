@@ -102,8 +102,8 @@ export default function CustomerDetailPage() {
     return (
       <div className="fade-up" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem", paddingTop: "3rem" }}>
         <p style={{ fontSize: "0.9rem", color: "var(--text-2)", margin: 0 }}>{t("customers.notFound")}</p>
-        <Link href="/dashboard/customers" className="btn-secondary" style={{ display: "flex", alignItems: "center", gap: 6, padding: "0.45rem 0.85rem", fontSize: "0.8rem", textDecoration: "none" }}>
-          <ArrowLeft size={13} />
+        <Link href="/dashboard/customers" className="pform-back">
+          <ArrowLeft size={14} />
           {t("customers.backToList")}
         </Link>
       </div>
@@ -112,8 +112,8 @@ export default function CustomerDetailPage() {
 
   return (
     <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-      <Link href="/dashboard/customers" className="btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "flex-start", padding: "0.35rem 0.7rem", fontSize: "0.75rem", textDecoration: "none" }}>
-        <ArrowLeft size={13} />
+      <Link href="/dashboard/customers" className="pform-back" style={{ alignSelf: "flex-start" }}>
+        <ArrowLeft size={14} />
         {t("customers.backToList")}
       </Link>
 

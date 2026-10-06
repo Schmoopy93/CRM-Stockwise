@@ -7,29 +7,6 @@
   gap: 1.75rem;
 }
 
-.back {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  align-self: flex-start;
-  color: var(--text-2);
-  font-size: 0.82rem;
-  font-weight: 600;
-  text-decoration: none;
-  transition: color 0.16s ease, transform 0.16s ease;
-}
-
-.back:hover {
-  color: var(--text-1);
-  transform: translateX(-2px);
-}
-
-.back:focus-visible {
-  outline: 2px solid var(--accent-2);
-  outline-offset: 4px;
-  border-radius: 3px;
-}
-
 .header {
   display: flex;
   flex-direction: column;

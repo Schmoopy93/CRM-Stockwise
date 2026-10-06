@@ -9,7 +9,7 @@ import { useProducts, useShopMoney } from "@/lib/hooks";
 import { usePagination } from "@/lib/use-pagination";
 import ListPagination from "@/components/ListPagination";
 import CategoriesManager from "@/components/CategoriesManager";
-import { Plus, Search, AlertTriangle, ArrowRight, Package, X, Tags, Boxes, Layers3, CircleAlert, LayoutGrid, List as ListIcon } from "lucide-react";
+import { Plus, Search, AlertTriangle, ArrowRight, Package, X, Tags, Boxes, Layers3, CircleAlert, LayoutGrid, List as ListIcon, ArrowUpDown, ChevronDown } from "lucide-react";
 
 type SortKey = "name" | "qty" | "priceAsc" | "priceDesc";
 
@@ -139,12 +139,23 @@ export default function ProductsListPage() {
               </button>
             )}
           </div>
+
+          {categoryNames.length > 0 && (
+            <div className="products-chips" role="tablist" aria-label={t("products.allCategories")}>
+              {categories.map((cat) => (
+                <button key={cat} type="button" role="tab" aria-selected={category === cat} onClick={() => setCategory(cat)} className="products-chip" data-active={category === cat}>
+                  {cat === "all" ? t("products.allCategories") : cat}
+                </button>
+              ))}
+            </div>
+          )}
+
           <label className="products-sort-wrap">
-            <span>{t("products.sortLabel")}</span>
+            <ArrowUpDown size={14} className="products-sort-icon" aria-hidden="true" />
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortKey)}
-              className="input products-sort"
+              className="products-sort"
               aria-label={t("products.sortLabel")}
             >
               <option value="name">{t("products.sortName")}</option>
@@ -152,26 +163,17 @@ export default function ProductsListPage() {
               <option value="priceAsc">{t("products.sortPriceAsc")}</option>
               <option value="priceDesc">{t("products.sortPriceDesc")}</option>
             </select>
+            <ChevronDown size={14} className="products-sort-chevron" aria-hidden="true" />
           </label>
           <div className="products-view-toggle" role="group" aria-label={t("products.viewLabel")}>
             <button type="button" onClick={() => setView("grid")} aria-label={t("products.viewGrid")} title={t("products.viewGrid")} aria-pressed={view === "grid"}>
-              <LayoutGrid size={17} />
+              <LayoutGrid size={16} />
             </button>
             <button type="button" onClick={() => setView("list")} aria-label={t("products.viewList")} title={t("products.viewList")} aria-pressed={view === "list"}>
-              <ListIcon size={18} />
+              <ListIcon size={16} />
             </button>
           </div>
         </div>
-
-        {categoryNames.length > 0 && (
-          <div className="products-chips" role="tablist" aria-label={t("products.allCategories")}>
-            {categories.map((cat) => (
-              <button key={cat} type="button" role="tab" aria-selected={category === cat} onClick={() => setCategory(cat)} className="products-chip" data-active={category === cat}>
-                {cat === "all" ? t("products.allCategories") : cat}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {manageOpen && profile && (

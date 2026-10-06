@@ -433,8 +433,8 @@ export default function CustomerAccount({ shopId }: { shopId: string }) {
           onConfirm={() => void hideConversation()}
           onCancel={() => setConfirmHideConversationId(null)}
         />
-        <Link href={`/catalog/${shopId}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-2)", textDecoration: "none", fontSize: "0.82rem", fontWeight: 650 }}>
-          <ArrowLeft size={15} /> {t("catalog.title")}
+        <Link href={`/catalog/${shopId}`} className="pform-back">
+          <ArrowLeft size={14} /> {t("catalog.title")}
         </Link>
 
         <header style={{ display: "flex", alignItems: "center", gap: 12, margin: "1.5rem 0 1.1rem" }}>

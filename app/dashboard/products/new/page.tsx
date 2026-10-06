@@ -11,7 +11,7 @@ import { ProductCustomField, ProductVariant } from "@/lib/types";
 import ProductCustomFields from "@/components/ProductCustomFields";
 import ProductImages, { ProductImageSlot } from "@/components/ProductImages";
 import ProductPricingFields, { emptyPricing, parsePrice } from "@/components/ProductPricingFields";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Boxes, Layers, Package, Plus, Trash2 } from "lucide-react";
 
 function newVariant(): ProductVariant { return { id: "", label: "", sku: "", quantity: 0 }; }
 
@@ -59,36 +59,43 @@ export default function NewProductPage() {
     } finally { setSaving(false); }
   }
 
-  const fields = [
-    { label: t("product.name"), value: name, setter: setName, required: true, placeholder: t("product.namePlaceholder") },
-    { label: t("product.sku"), value: sku, setter: setSku, required: false, placeholder: t("product.optional") },
-    { label: t("product.category"), value: category, setter: setCategory, required: false, placeholder: t("product.categoryPlaceholder"), list: "product-categories" },
-  ];
-
   return (
     <div className="fade-up">
-      <div style={{ display: "flex", alignItems: "center", gap: "0.875rem", marginBottom: "1.75rem" }}>
-        <Link href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.82rem", color: "var(--text-2)", textDecoration: "none" }}>
+      <div className="pform-head">
+        <Link href="/dashboard" className="pform-back">
           <ArrowLeft size={14} /> {t("back")}
         </Link>
-        <h1 style={{ fontSize: "1.2rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{t("product.newTitle")}</h1>
+        <h1 className="pform-title">{t("product.newTitle")}</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="product-form">
         <div className="product-form-main">
           <ProductImages slots={imageSlots} onChange={setImageSlots} />
 
-          <div className="product-form-basics">
-            {fields.map(({ label, value, setter, required, placeholder, list }) => (
-              <div key={label}>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--text-2)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</label>
-                <input className="input" type="text" placeholder={placeholder} value={value} onChange={(e) => setter(e.target.value)} required={required} list={list} />
+          <section className="pform-card">
+            <div className="pform-card-head">
+              <span className="pform-card-icon"><Package size={15} /></span>
+              <h2 className="pform-card-title">{t("product.basics")}</h2>
+            </div>
+            <p className="pform-card-hint">{t("product.basicsHint")}</p>
+            <div className="pform-grid">
+              <div className="pform-span-full">
+                <label className="pform-label" htmlFor="product-name">{t("product.name")}</label>
+                <input id="product-name" className="input" type="text" placeholder={t("product.namePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} required />
               </div>
-            ))}
-          </div>
-          <datalist id="product-categories">
-            {existingCategories.map((existing) => <option key={existing} value={existing} />)}
-          </datalist>
+              <div>
+                <label className="pform-label" htmlFor="product-sku">{t("product.sku")}</label>
+                <input id="product-sku" className="input" type="text" placeholder={t("product.optional")} value={sku} onChange={(e) => setSku(e.target.value)} />
+              </div>
+              <div>
+                <label className="pform-label" htmlFor="product-category">{t("product.category")}</label>
+                <input id="product-category" className="input" type="text" placeholder={t("product.categoryPlaceholder")} value={category} onChange={(e) => setCategory(e.target.value)} list="product-categories" />
+              </div>
+            </div>
+            <datalist id="product-categories">
+              {existingCategories.map((existing) => <option key={existing} value={existing} />)}
+            </datalist>
+          </section>
 
           <ProductCustomFields
             existingCategories={existingCategories}
@@ -101,54 +108,57 @@ export default function NewProductPage() {
             onCategorySuggest={(suggested) => setCategory((prev) => (prev.trim() ? prev : suggested))}
           />
 
-          <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("product.variants")}</label>
-              <button type="button" onClick={() => setVariants((p) => [...p, newVariant()])}
-                style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.78rem", color: "var(--accent-2)", background: "none", border: "none", cursor: "pointer" }}>
-                <Plus size={13} /> {t("product.addVariant")}
-              </button>
+          <section className="pform-card">
+            <div className="pform-card-head">
+              <span className="pform-card-icon"><Layers size={15} /></span>
+              <h2 className="pform-card-title">{t("product.variants")}</h2>
+              <div className="pform-card-actions">
+                <button type="button" className="pform-btn" onClick={() => setVariants((p) => [...p, newVariant()])}>
+                  <Plus size={13} /> {t("product.addVariant")}
+                </button>
+              </div>
             </div>
+            <p className="pform-card-hint">{t("product.variantsHint")}</p>
             <div className="product-form-variants">
               {variants.map((variant, i) => (
-                <div key={i} style={{ background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 10, padding: "0.875rem" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.625rem" }}>
-                    <span style={{ fontSize: "0.75rem", color: "var(--text-3)", fontWeight: 600 }}>{t("product.variantNumber", { n: i + 1 })}</span>
+                <div key={i} className="pform-variant">
+                  <div className="pform-variant-head">
+                    <span className="pform-variant-num">{t("product.variantNumber", { n: i + 1 })}</span>
                     {variants.length > 1 && (
-                      <button type="button" aria-label={t("product.removeVariant", { n: i + 1 })} onClick={() => setVariants((p) => p.filter((_, idx) => idx !== i))}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--red)", display: "flex" }}>
+                      <button type="button" className="pform-icon-btn" aria-label={t("product.removeVariant", { n: i + 1 })} onClick={() => setVariants((p) => p.filter((_, idx) => idx !== i))}>
                         <Trash2 size={13} />
                       </button>
                     )}
                   </div>
-                  <div className="product-variant-fields" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                    <input type="text" placeholder={t("product.variantName")} value={variant.label} required
-                      onChange={(e) => updateVariant(i, "label", e.target.value)}
-                      style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "0.5rem 0.75rem", fontSize: "0.82rem", color: "var(--text-1)", outline: "none" }} />
-                    <input type="number" placeholder={t("product.quantity")} min="0" value={variant.quantity}
-                      onChange={(e) => updateVariant(i, "quantity", parseInt(e.target.value) || 0)}
-                      style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "0.5rem 0.75rem", fontSize: "0.82rem", color: "var(--text-1)", outline: "none" }} />
-                    <input type="text" placeholder={t("product.variantSkuPlaceholder")} value={variant.sku}
-                      onChange={(e) => updateVariant(i, "sku", e.target.value)}
-                      style={{ gridColumn: "span 2", background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "0.5rem 0.75rem", fontSize: "0.82rem", color: "var(--text-1)", outline: "none" }} />
+                  <div className="product-variant-fields">
+                    <input className="input" type="text" placeholder={t("product.variantName")} value={variant.label} required aria-label={t("product.variantName")}
+                      onChange={(e) => updateVariant(i, "label", e.target.value)} />
+                    <input className="input" type="number" placeholder={t("product.quantity")} min="0" value={variant.quantity} aria-label={t("product.quantity")}
+                      onChange={(e) => updateVariant(i, "quantity", parseInt(e.target.value) || 0)} />
+                    <input className="input pform-span-full" type="text" placeholder={t("product.variantSkuPlaceholder")} value={variant.sku} aria-label={t("product.variantSkuPlaceholder")}
+                      onChange={(e) => updateVariant(i, "sku", e.target.value)} />
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          </section>
         </div>
 
-        <aside className="product-form-side glass">
-          <div>
-            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--text-2)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("product.minStock")}</label>
-            <input className="input" type="number" min="0" value={minStock} onChange={(e) => setMinStock(parseInt(e.target.value) || 0)} />
-          </div>
+        <aside className="product-form-side">
+          <section className="pform-card">
+            <div className="pform-card-head">
+              <span className="pform-card-icon"><Boxes size={15} /></span>
+              <h2 className="pform-card-title">{t("product.minStock")}</h2>
+            </div>
+            <p className="pform-card-hint">{t("product.minStockHint")}</p>
+            <input className="input" type="number" min="0" value={minStock} aria-label={t("product.minStock")} onChange={(e) => setMinStock(parseInt(e.target.value) || 0)} />
+          </section>
 
           <ProductPricingFields values={pricing} onChange={setPricing} />
 
-          {error && <div style={{ background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, padding: "0.75rem 1rem", fontSize: "0.82rem", color: "var(--red)" }}>{error}</div>}
+          {error && <div className="pform-error">{error}</div>}
 
-          <button className="btn-primary" type="submit" disabled={saving} style={{ width: "100%", padding: "0.8rem" }}>
+          <button className="btn-primary pform-submit" type="submit" disabled={saving}>
             {saving ? t("product.saving") : t("product.createBtn")}
           </button>
         </aside>

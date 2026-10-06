@@ -94,9 +94,11 @@ export default function ProductDetailPage() {
   if (loading) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="spinner" /></div>;
 
   if (!product) return (
-    <div style={{ textAlign: "center", padding: "4rem", color: "var(--text-2)" }}>
-      {t("product.notFound")}{" "}
-      <Link href="/dashboard" style={{ color: "var(--accent-2)" }}>{t("back")}</Link>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem", padding: "4rem", color: "var(--text-2)" }}>
+      <p style={{ margin: 0 }}>{t("product.notFound")}</p>
+      <Link href="/dashboard" className="pform-back">
+        <ArrowLeft size={14} /> {t("back")}
+      </Link>
     </div>
   );
 
@@ -129,7 +131,7 @@ export default function ProductDetailPage() {
 
       {/* Breadcrumb + actions */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
-        <Link href="/dashboard/products" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.82rem", color: "var(--text-2)", textDecoration: "none" }}>
+        <Link href="/dashboard/products" className="pform-back">
           <ArrowLeft size={14} /> {t("back")}
         </Link>
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>

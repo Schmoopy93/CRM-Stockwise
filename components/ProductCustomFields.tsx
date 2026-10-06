@@ -4,7 +4,7 @@ import { useState } from "react";
 import { auth } from "@/lib/firebase";
 import { ProductCustomField, ProductCustomFieldType } from "@/lib/types";
 import { useI18n } from "@/lib/i18n-context";
-import { Plus, Sparkles, Trash2 } from "lucide-react";
+import { ListPlus, Plus, Sparkles, Trash2 } from "lucide-react";
 
 type FieldValue = string | number | boolean;
 
@@ -155,56 +155,48 @@ export default function ProductCustomFields({
   }
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap" }}>
-        <div>
-            <h2 style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-2)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            {t("product.customFields")}
-          </h2>
-          <p style={{ fontSize: "0.75rem", color: "var(--text-3)", margin: "4px 0 0" }}>
-            {t("product.customFieldsHint")}
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button
-            type="button"
-            onClick={addManualField}
-            style={{ display: "flex", alignItems: "center", gap: 5, padding: "0.45rem 0.65rem", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-3)", color: "var(--text-2)", cursor: "pointer", fontSize: "0.76rem" }}
-          >
+    <section className="pform-card">
+      <div className="pform-card-head">
+        <span className="pform-card-icon"><ListPlus size={16} /></span>
+        <h2 className="pform-card-title">{t("product.customFields")}</h2>
+        <div className="pform-card-actions">
+          <button type="button" className="pform-btn" onClick={addManualField}>
             <Plus size={13} /> {t("product.addManualField")}
           </button>
           <button
             type="button"
+            className="pform-btn pform-btn-accent"
             onClick={requestSuggestions}
             disabled={suggesting || (!category.trim() && !name.trim())}
-            style={{ display: "flex", alignItems: "center", gap: 5, padding: "0.45rem 0.65rem", borderRadius: 8, border: "1px solid rgba(99,102,241,0.25)", background: "var(--accent-glow)", color: "var(--accent-2)", cursor: suggesting ? "wait" : "pointer", fontSize: "0.76rem", opacity: suggesting || (!category.trim() && !name.trim()) ? 0.6 : 1 }}
           >
             <Sparkles size={13} /> {suggesting ? t("product.suggestingFields") : t("product.suggestFields")}
           </button>
         </div>
       </div>
 
-      {message && <p role="status" style={{ margin: 0, fontSize: "0.76rem", color: "var(--text-3)" }}>{message}</p>}
-      {error && <p role="alert" style={{ margin: 0, fontSize: "0.76rem", color: "var(--red)" }}>{error}</p>}
+      <p className="pform-card-hint">{t("product.customFieldsHint")}</p>
+
+      {message && <p role="status" className="pform-msg">{message}</p>}
+      {error && <p role="alert" className="pform-msg-error">{error}</p>}
 
       {suggestions.length > 0 && (
-        <div style={{ background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 10, padding: "0.875rem", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-          <strong style={{ color: "var(--text-1)", fontSize: "0.8rem" }}>{t("product.proposedFields")} — {t("product.chooseFields")}</strong>
+        <div className="pform-suggest">
+          <strong>{t("product.proposedFields")} — {t("product.chooseFields")}</strong>
           {suggestions.map((field, index) => (
-            <label key={`${field.label}-${index}`} style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--text-2)", fontSize: "0.8rem" }}>
+            <label key={`${field.label}-${index}`}>
               <input type="checkbox" checked={selected.includes(index)} onChange={() => setSelected((current) => current.includes(index) ? current.filter((item) => item !== index) : [...current, index])} />
-              {field.labels?.[locale] ?? field.label} <span style={{ color: "var(--text-3)" }}>({fieldTypes.find((type) => type.value === field.type) ? t(fieldTypes.find((type) => type.value === field.type)!.labelKey) : field.type})</span>
+              {field.labels?.[locale] ?? field.label} <span>({fieldTypes.find((type) => type.value === field.type) ? t(fieldTypes.find((type) => type.value === field.type)!.labelKey) : field.type})</span>
             </label>
           ))}
-          <button type="button" onClick={addSelectedSuggestions} className="btn-primary" style={{ alignSelf: "flex-start", padding: "0.5rem 0.8rem", fontSize: "0.78rem" }}>
+          <button type="button" onClick={addSelectedSuggestions} className="btn-primary">
             {t("product.addSelectedFields")}
           </button>
         </div>
       )}
 
       {definitions.map((field) => (
-        <div key={field.key} style={{ background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 10, padding: "0.875rem", display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-          <div className="product-custom-field-row" style={{ display: "grid", gridTemplateColumns: "minmax(120px, 1fr) minmax(100px, 0.8fr) auto", gap: "0.5rem", alignItems: "center" }}>
+        <div key={field.key} className="pform-field-card">
+          <div className="product-custom-field-row">
             <input aria-label={t("product.customFieldName")} className="input" value={field.labels?.[locale] ?? field.label} maxLength={50} onChange={(event) => updateDefinition(field.key, { label: event.target.value })} />
             <select aria-label={t("product.customFieldType")} className="input" value={field.type} onChange={(event) => {
               const type = event.target.value as ProductCustomFieldType;
@@ -220,7 +212,7 @@ export default function ProductCustomFields({
             }}>
               {fieldTypes.map((type) => <option key={type.value} value={type.value}>{t(type.labelKey)}</option>)}
             </select>
-            <button type="button" aria-label={t("product.removeField", { name: field.labels?.[locale] ?? field.label })} onClick={() => removeField(field.key)} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, color: "var(--red)", border: "1px solid var(--border)", borderRadius: 8, background: "transparent", cursor: "pointer" }}>
+            <button type="button" className="pform-icon-btn" aria-label={t("product.removeField", { name: field.labels?.[locale] ?? field.label })} onClick={() => removeField(field.key)}>
               <Trash2 size={14} />
             </button>
           </div>
@@ -238,11 +230,11 @@ export default function ProductCustomFields({
               }}
             />
           )}
-          <label style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--text-3)", fontSize: "0.74rem" }}>
+          <label className="pform-required">
             <input type="checkbox" checked={field.required} onChange={(event) => updateDefinition(field.key, { required: event.target.checked })} /> {t("product.customFieldRequired")}
           </label>
           {field.type === "boolean" ? (
-            <label style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--text-2)", fontSize: "0.82rem" }}>
+            <label className="pform-value-row">
               <input type="checkbox" checked={Boolean(values[field.key])} required={field.required} onChange={(event) => updateValue(field.key, event.target.checked)} />
               {field.labels?.[locale] ?? field.label}
             </label>
