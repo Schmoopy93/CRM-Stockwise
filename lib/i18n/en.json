@@ -543,6 +543,7 @@
   "orders.items": "Order items",
   "orders.loadFailed": "Orders could not be loaded. Check your connection and try again.",
   "orders.resumeFulfill": "Resume fulfillment",
+  "orders.saleStornoed": "Sale reversed",
   "orders.searchPlaceholder": "Search code, customer, or items…",
   "orders.status.cancelled": "Cancelled",
   "orders.status.confirmed": "Confirmed",

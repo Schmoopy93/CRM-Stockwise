@@ -453,6 +453,7 @@ export function useOrders(shopId: string | undefined, count = 100) {
           note: d.data().note ?? "",
           channel: d.data().channel ?? "other",
           status: d.data().status ?? "new",
+          saleId: d.data().saleId ?? "",
           createdAt: d.data().createdAt?.toDate() ?? null,
         }))
       );
@@ -466,6 +467,27 @@ export function useOrders(shopId: string | undefined, count = 100) {
   }, [shopId, count]);
 
   return { orders, loading, error };
+}
+
+/** Ids of sales that were reversed by a storno. Ordering by `stornoOf` leaves
+ * out documents without the field, so the query returns storno docs only. */
+export function useStornoedSaleIds(shopId: string | undefined) {
+  const [stornoedIds, setStornoedIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (!shopId) return;
+    const q = query(
+      collection(db, "shops", shopId, "sales"),
+      orderBy("stornoOf"),
+      limit(500)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setStornoedIds(new Set(snap.docs.map((d) => d.data().stornoOf as string).filter(Boolean)));
+    }, () => setStornoedIds(new Set()));
+    return unsub;
+  }, [shopId]);
+
+  return stornoedIds;
 }
 
 export function useShopConversations(shopId: string | undefined) {

@@ -529,6 +529,7 @@
   "orders.items": "Articoli dell'ordine",
   "orders.loadFailed": "Impossibile caricare gli ordini. Controlla la connessione e riprova.",
   "orders.resumeFulfill": "Riprendi evasione",
+  "orders.saleStornoed": "Vendita stornata",
   "orders.searchPlaceholder": "Cerca codice, cliente o articoli…",
   "orders.status.cancelled": "Annullato",
   "orders.status.confirmed": "Confermato",

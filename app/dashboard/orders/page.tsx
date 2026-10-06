@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useCustomers, useOrders, useShopConversations } from "@/lib/hooks";
+import { useCustomers, useOrders, useShopConversations, useStornoedSaleIds } from "@/lib/hooks";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { fulfillCatalogOrder, updateOrderStatus, linkOrderToCustomer } from "@/lib/actions";
 import { formatCatalogPrice } from "@/lib/catalog-channels";
@@ -54,6 +54,7 @@ export default function OrdersPage() {
   const intl = INTL_LOCALES[locale];
   const shopId = profile?.shopId;
   const { orders, loading, error: ordersError } = useOrders(shopId);
+  const stornoedSaleIds = useStornoedSaleIds(shopId);
   const { conversations, loading: conversationsLoading, error: conversationsError } = useShopConversations(shopId);
   const { customers, loading: customersLoading } = useCustomers(shopId);
   useNewOrderNotifications(orders, loading);
@@ -440,6 +441,7 @@ export default function OrdersPage() {
             const busy = busyIds.has(order.id);
             const completedLines = Math.min(order.fulfilledLineIndices?.length ?? 0, order.lines.length);
             const progress = order.lines.length > 0 ? Math.round((completedLines / order.lines.length) * 100) : 0;
+            const saleStornoed = Boolean(order.saleId && stornoedSaleIds.has(order.saleId));
             const channelLabel = order.channel === "catalog"
               ? t("orders.source.catalog")
               : t(`catalog.${order.channel === "other" ? "cart" : order.channel}`);
@@ -456,6 +458,11 @@ export default function OrdersPage() {
                         <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: STATUS_COLOR[order.status] }} />
                         {t(`orders.status.${order.status}`)}
                       </span>
+                      {saleStornoed && (
+                        <span style={{ display: "inline-flex", alignItems: "center", padding: "0.2rem 0.55rem", borderRadius: 999, fontSize: "0.7rem", fontWeight: 700, background: "var(--red-dim)", color: "var(--red)" }}>
+                          {t("orders.saleStornoed")}
+                        </span>
+                      )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap", marginTop: "0.55rem", fontSize: "0.76rem", color: "var(--text-3)" }}>
                       <span>{channelLabel}</span>

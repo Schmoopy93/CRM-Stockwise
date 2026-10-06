@@ -548,6 +548,7 @@
   "orders.items": "Stavke porudžbine",
   "orders.loadFailed": "Porudžbine nisu mogle da se učitaju. Proverite vezu i pokušajte ponovo.",
   "orders.resumeFulfill": "Nastavi isporuku",
+  "orders.saleStornoed": "Prodaja stornirana",
   "orders.searchPlaceholder": "Pretraži šifru, kupca ili artikle…",
   "orders.stockNote": "Potvrdite porudžbinu, pa izaberite „Isporuči” da biste evidentirali prodaju i skinuli stanje. Delimična isporuka može bezbedno da se nastavi.",
   "orders.source.catalog": "Javna porudžbina",

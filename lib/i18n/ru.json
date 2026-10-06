@@ -529,6 +529,7 @@
   "orders.items": "Состав заказа",
   "orders.loadFailed": "Не удалось загрузить заказы. Проверьте подключение и повторите попытку.",
   "orders.resumeFulfill": "Продолжить выполнение",
+  "orders.saleStornoed": "Продажа сторнирована",
   "orders.searchPlaceholder": "Поиск по коду, покупателю или товарам…",
   "orders.status.cancelled": "Отменён",
   "orders.status.confirmed": "Подтверждён",

@@ -529,6 +529,7 @@
   "orders.items": "Artículos del pedido",
   "orders.loadFailed": "No se pudieron cargar los pedidos. Comprueba la conexión e inténtalo de nuevo.",
   "orders.resumeFulfill": "Continuar entrega",
+  "orders.saleStornoed": "Venta anulada",
   "orders.searchPlaceholder": "Buscar código, cliente o artículos…",
   "orders.status.cancelled": "Cancelado",
   "orders.status.confirmed": "Confirmado",

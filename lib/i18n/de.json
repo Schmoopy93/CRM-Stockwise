@@ -529,6 +529,7 @@
   "orders.items": "Bestellpositionen",
   "orders.loadFailed": "Bestellungen konnten nicht geladen werden. Prüfen Sie die Verbindung und versuchen Sie es erneut.",
   "orders.resumeFulfill": "Lieferung fortsetzen",
+  "orders.saleStornoed": "Verkauf storniert",
   "orders.searchPlaceholder": "Code, Kunde oder Artikel suchen…",
   "orders.status.cancelled": "Storniert",
   "orders.status.confirmed": "Bestätigt",
