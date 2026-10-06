@@ -34,6 +34,7 @@
   "analytics.range.30days": "30 dana",
   "analytics.range.90days": "90 dana",
   "analytics.range.year": "Po godini",
+  "analytics.salesTruncated": "Previše prodaja u ovom periodu — najstarije prodaje nisu uračunate u prikaz.",
   "analytics.selectYear": "Izaberite godinu",
   "analytics.subtitle": "Pregled za period: {range}",
   "analytics.title": "Analitika",

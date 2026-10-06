@@ -11,6 +11,7 @@ import {
   Timestamp,
   where,
   limit,
+  type DocumentData,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Product, ProductVariant, Sale, ShopCatalogSettings, StockEvent, Customer } from "@/lib/types";
@@ -386,9 +387,33 @@ export function useCatalogStats(shopId: string | undefined, days = 30) {
   };
 }
 
-export function useSales(shopId: string | undefined, count = 20) {
+function mapSale(id: string, d: DocumentData): Sale {
+  return {
+    id,
+    lines: d.lines ?? [],
+    total: d.total ?? 0,
+    channel: d.channel ?? "other",
+    buyerName: d.buyerName ?? "",
+    buyerContact: d.buyerContact ?? d.buyerInstagram ?? "",
+    sourceOrderId: d.sourceOrderId ?? "",
+    sourceOrderCode: d.sourceOrderCode ?? "",
+    stornoOf: d.stornoOf ?? "",
+    customerId: d.customerId ?? "",
+    note: d.note ?? "",
+    actorUid: d.actorUid ?? "",
+    actorName: d.actorName ?? "",
+    createdAt: d.createdAt?.toDate() ?? null,
+  };
+}
+
+/** Latest sales, newest first. Each `loadMore` widens the server window by
+ * `pageSize`; `hasMore` stays true while the window is full, which is the only
+ * signal Firestore gives that older sales wait beyond it. */
+export function useSales(shopId: string | undefined, pageSize = 20) {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+  const [count, setCount] = useState(pageSize);
 
   useEffect(() => {
     if (!shopId) return;
@@ -398,36 +423,73 @@ export function useSales(shopId: string | undefined, count = 20) {
       limit(count)
     );
     const unsub = onSnapshot(q, (snap) => {
-      setSales(
-        snap.docs.map((d) => ({
-          id: d.id,
-          lines: d.data().lines ?? [],
-          total: d.data().total ?? 0,
-          channel: d.data().channel ?? "other",
-          buyerName: d.data().buyerName ?? "",
-          buyerContact: d.data().buyerContact ?? d.data().buyerInstagram ?? "",
-          sourceOrderId: d.data().sourceOrderId ?? "",
-          sourceOrderCode: d.data().sourceOrderCode ?? "",
-          stornoOf: d.data().stornoOf ?? "",
-          customerId: d.data().customerId ?? "",
-          note: d.data().note ?? "",
-          actorUid: d.data().actorUid ?? "",
-          actorName: d.data().actorName ?? "",
-          createdAt: d.data().createdAt?.toDate() ?? null,
-        }))
-      );
+      setSales(snap.docs.map((d) => mapSale(d.id, d.data())));
+      setHasMore(snap.size >= count);
       setLoading(false);
     });
     return unsub;
   }, [shopId, count]);
 
-  return { sales, loading };
+  const loadMore = useCallback(() => setCount((current) => current + pageSize), [pageSize]);
+
+  return { sales, loading, hasMore, loadMore };
 }
 
-export function useOrders(shopId: string | undefined, count = 100) {
+/** Analytics cannot work from a capped "latest N" window — an old sale inside
+ * the selected range must be in the figures no matter how many newer sales
+ * exist. This reads only sales created inside [from, to] and grows the window
+ * itself while it is full, up to `RANGE_MAX_SALES`; `truncated` reports the
+ * rare case where even that was not enough. */
+const RANGE_PAGE_SIZE = 500;
+const RANGE_MAX_SALES = 5000;
+
+export function useSalesInRange(shopId: string | undefined, from: Date, to: Date) {
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [truncated, setTruncated] = useState(false);
+  const [count, setCount] = useState(RANGE_PAGE_SIZE);
+  const fromMs = from.getTime();
+  const toMs = to.getTime();
+
+  useEffect(() => {
+    if (!shopId) return;
+    const q = query(
+      collection(db, "shops", shopId, "sales"),
+      where("createdAt", ">=", Timestamp.fromMillis(fromMs)),
+      where("createdAt", "<=", Timestamp.fromMillis(toMs)),
+      orderBy("createdAt", "desc"),
+      limit(count)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setSales(snap.docs.map((d) => mapSale(d.id, d.data())));
+      setLoading(false);
+      if (snap.size >= count) {
+        if (count < RANGE_MAX_SALES) {
+          setCount((current) => Math.min(current + RANGE_PAGE_SIZE, RANGE_MAX_SALES));
+        } else {
+          setTruncated(true);
+        }
+      } else {
+        setTruncated(false);
+      }
+    }, (cause) => {
+      console.error("Failed to load sales in range", { shopId, fromMs, toMs, cause });
+      setLoading(false);
+    });
+    return unsub;
+  }, [shopId, fromMs, toMs, count]);
+
+  return { sales, loading, truncated };
+}
+
+/** Latest orders, newest first; grows by `pageSize` per `loadMore`. Same
+ * windowing contract as `useSales`. */
+export function useOrders(shopId: string | undefined, pageSize = 100) {
   const [orders, setOrders] = useState<CatalogOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [count, setCount] = useState(pageSize);
 
   useEffect(() => {
     if (!shopId) return;
@@ -457,6 +519,7 @@ export function useOrders(shopId: string | undefined, count = 100) {
           createdAt: d.data().createdAt?.toDate() ?? null,
         }))
       );
+      setHasMore(snap.size >= count);
       setError(null);
       setLoading(false);
     }, (cause) => {
@@ -466,26 +529,32 @@ export function useOrders(shopId: string | undefined, count = 100) {
     return unsub;
   }, [shopId, count]);
 
-  return { orders, loading, error };
+  const loadMore = useCallback(() => setCount((current) => current + pageSize), [pageSize]);
+
+  return { orders, loading, error, hasMore, loadMore };
 }
 
 /** Ids of sales that were reversed by a storno. Ordering by `stornoOf` leaves
- * out documents without the field, so the query returns storno docs only. */
+ * out documents without the field, so the query returns storno docs only.
+ * The window grows itself so a shop with more stornos than one page still gets
+ * every badge. */
 export function useStornoedSaleIds(shopId: string | undefined) {
   const [stornoedIds, setStornoedIds] = useState<Set<string>>(() => new Set());
+  const [count, setCount] = useState(200);
 
   useEffect(() => {
     if (!shopId) return;
     const q = query(
       collection(db, "shops", shopId, "sales"),
       orderBy("stornoOf"),
-      limit(500)
+      limit(count)
     );
     const unsub = onSnapshot(q, (snap) => {
       setStornoedIds(new Set(snap.docs.map((d) => d.data().stornoOf as string).filter(Boolean)));
+      if (snap.size >= count) setCount((current) => current + 200);
     }, () => setStornoedIds(new Set()));
     return unsub;
-  }, [shopId]);
+  }, [shopId, count]);
 
   return stornoedIds;
 }

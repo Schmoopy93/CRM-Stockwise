@@ -25,7 +25,7 @@ export default function SalesPage() {
   const { locale, t } = useI18n();
   const intlLocale = INTL_LOCALES[locale];
   const { products } = useProducts(profile?.shopId);
-  const { sales } = useSales(profile?.shopId);
+  const { sales, hasMore, loadMore } = useSales(profile?.shopId);
   // Sales are recorded in the base currency — what was actually charged — and
   // only the display converts, so a rate change never rewrites past revenue.
   const { money, currency } = useShopMoney(profile?.shopId, intlLocale);
@@ -371,6 +371,14 @@ export default function SalesPage() {
               );
             })}
           </div>
+          {hasMore && (
+            <div className="list-pagination" style={{ marginTop: "0.75rem" }}>
+              <p className="list-pagination-count">{t("paging.showing")} {sales.length}</p>
+              <div className="list-pagination-actions">
+                <button type="button" className="list-pagination-more" onClick={loadMore}>{t("paging.loadMore")}</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

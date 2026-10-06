@@ -34,6 +34,7 @@
   "analytics.range.30days": "30 дней",
   "analytics.range.90days": "90 дней",
   "analytics.range.year": "По годам",
+  "analytics.salesTruncated": "Слишком много продаж за этот период — самые старые продажи не учтены в расчётах.",
   "analytics.selectYear": "Выбрать год",
   "analytics.subtitle": "Период: {range}",
   "analytics.title": "Аналитика",

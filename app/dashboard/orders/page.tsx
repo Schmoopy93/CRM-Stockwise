@@ -53,7 +53,7 @@ export default function OrdersPage() {
   const { locale, t } = useI18n();
   const intl = INTL_LOCALES[locale];
   const shopId = profile?.shopId;
-  const { orders, loading, error: ordersError } = useOrders(shopId);
+  const { orders, loading, error: ordersError, hasMore, loadMore } = useOrders(shopId);
   const stornoedSaleIds = useStornoedSaleIds(shopId);
   const { conversations, loading: conversationsLoading, error: conversationsError } = useShopConversations(shopId);
   const { customers, loading: customersLoading } = useCustomers(shopId);
@@ -634,6 +634,15 @@ export default function OrdersPage() {
             );
           })}
         </section>
+      )}
+
+      {hasMore && orders.length > 0 && (
+        <div className="list-pagination">
+          <p className="list-pagination-count">{t("paging.showing")} {orders.length}</p>
+          <div className="list-pagination-actions">
+            <button type="button" className="list-pagination-more" onClick={loadMore}>{t("paging.loadMore")}</button>
+          </div>
+        </div>
       )}
 
       <p style={{ display: "flex", alignItems: "flex-start", gap: 7, fontSize: "0.75rem", lineHeight: 1.5, color: "var(--text-3)", margin: 0 }}>

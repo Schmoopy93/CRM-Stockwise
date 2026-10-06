@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useProducts, useStockEventsInRange, useCatalogStats, useSales, useShopMoney } from "@/lib/hooks";
+import { useProducts, useStockEventsInRange, useCatalogStats, useSalesInRange, useStornoedSaleIds, useShopMoney } from "@/lib/hooks";
 import { INTL_LOCALES, Locale, useI18n } from "@/lib/i18n-context";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, LineChart, Line,
@@ -145,16 +145,18 @@ export default function AnalyticsPage() {
     dateRange.to
   );
   const { products } = useProducts(profile?.shopId);
-  const { sales } = useSales(profile?.shopId, 500);
+  // Analytics needs every sale in the period, not just the latest N — a shop
+  // with thousands of sales would silently lose old revenue otherwise. The
+  // hook widens its server window on its own while the period is full.
+  const { sales, truncated } = useSalesInRange(profile?.shopId, dateRange.from, dateRange.to);
   const { money } = useShopMoney(profile?.shopId, INTL_LOCALES[locale]);
 
   // A storno annuls its original sale. Analytics leave out both documents — the
   // reversed sale and the storno that points at it — so every period shows only
-  // the sales that still stand, regardless of when the reversal happened.
-  const stornoedIds = useMemo(
-    () => new Set(sales.flatMap((sale) => (sale.stornoOf ? [sale.stornoOf] : []))),
-    [sales]
-  );
+  // the sales that still stand, regardless of when the reversal happened. The
+  // storno set is global, not derived from the period: January can be reversed
+  // in March.
+  const stornoedIds = useStornoedSaleIds(profile?.shopId);
 
   // Revenue data filtered to selected date range
   const revenueData = useMemo(() => {
@@ -365,6 +367,12 @@ export default function AnalyticsPage() {
         <span style={{ fontSize: "0.75rem", color: "var(--text-3)", marginLeft: "0.25rem" }}>
           {dateRange.from.toLocaleDateString(INTL_LOCALES[locale])} – {dateRange.to.toLocaleDateString(INTL_LOCALES[locale])}
         </span>
+        {truncated && (
+          <p style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.75rem", color: "var(--amber)", margin: 0, flexBasis: "100%" }}>
+            <AlertCircle size={13} style={{ flexShrink: 0 }} />
+            {t("analytics.salesTruncated")}
+          </p>
+        )}
       </div>
 
       {eventsError && (

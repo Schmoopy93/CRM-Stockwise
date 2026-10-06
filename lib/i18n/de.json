@@ -34,6 +34,7 @@
   "analytics.range.30days": "30 Tage",
   "analytics.range.90days": "90 Tage",
   "analytics.range.year": "Nach Jahr",
+  "analytics.salesTruncated": "Zu viele Verkäufe in diesem Zeitraum — die ältesten Verkäufe sind nicht in den Zahlen enthalten.",
   "analytics.selectYear": "Jahr auswählen",
   "analytics.subtitle": "Zeitraum: {range}",
   "analytics.title": "Analysen",

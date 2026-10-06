@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { useProducts, useShop, useShopMoney, useSales } from "@/lib/hooks";
+import { useProducts, useShop, useShopMoney, useSalesInRange, useStornoedSaleIds } from "@/lib/hooks";
 import { updateCatalogSettings } from "@/lib/actions";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { CATALOG_CHANNELS, CatalogChannels, hasAnyChannel, isValidChannel } from "@/lib/catalog-channels";
@@ -232,7 +232,13 @@ export default function DashboardPage() {
   const { locale, t } = useI18n();
   const { products, loading } = useProducts(profile?.shopId);
   const { money } = useShopMoney(profile?.shopId, INTL_LOCALES[locale]);
-  const { sales } = useSales(profile?.shopId, 200);
+  // The month figure must cover every sale of the month, not just the latest
+  // page — a busy shop would otherwise under-report. A per-mount clock keeps
+  // the range stable so the query does not resubscribe on every render.
+  const [now] = useState(() => new Date());
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const { sales: monthSales } = useSalesInRange(profile?.shopId, monthStart, now);
+  const stornoedIds = useStornoedSaleIds(profile?.shopId);
   const lowStock = products.filter((p) => p.minStock > 0 && p.totalQuantity <= p.minStock);
   const totalItems = products.reduce((s, p) => s + p.totalQuantity, 0);
   const inventoryValue = products
@@ -240,13 +246,10 @@ export default function DashboardPage() {
     .reduce((s, p) => s + (p.costPrice ?? 0) * p.totalQuantity, 0);
   const hasValue = inventoryValue > 0;
 
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   // A storno annuls its original sale: both the reversed sale and its storno
   // document stay out of the month total, so only sales that still stand count.
-  const stornoedIds = new Set(sales.flatMap((s) => (s.stornoOf ? [s.stornoOf] : [])));
-  const monthRevenue = sales
-    .filter((s) => !s.stornoOf && !stornoedIds.has(s.id) && s.createdAt && s.createdAt >= monthStart)
+  const monthRevenue = monthSales
+    .filter((s) => !s.stornoOf && !stornoedIds.has(s.id))
     .reduce((sum, s) => sum + s.total, 0);
 
   if (loading) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="spinner" /></div>;

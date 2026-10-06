@@ -34,6 +34,7 @@
   "analytics.range.30days": "30 days",
   "analytics.range.90days": "90 days",
   "analytics.range.year": "By year",
+  "analytics.salesTruncated": "Too many sales in this period — the oldest ones are not included in the figures.",
   "analytics.selectYear": "Select year",
   "analytics.subtitle": "Showing period: {range}",
   "analytics.title": "Analytics",
