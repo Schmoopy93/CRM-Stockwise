@@ -11,8 +11,8 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import LoginAskAi from "@/components/LoginAskAi";
 import {
   Package, TrendingUp, BarChart2, ClipboardList,
-  ScanBarcode, Layers, Users, ArrowRight, X, FileSpreadsheet,
-  ShoppingBag, Store,
+  ScanBarcode, Users, UserRound, ArrowRight, X, FileSpreadsheet,
+  ShoppingBag, Store, Receipt, DollarSign,
 } from "lucide-react";
 
 type Mode = "login" | "newShop" | "joinShop";
@@ -21,13 +21,15 @@ const FEATURE_KEYS = [
   { icon: Package,      key: "products",  color: "rgba(99,102,241,0.12)", iconColor: "#6366f1" },
   { icon: TrendingUp,   key: "receive",   color: "rgba(34,197,94,0.1)",   iconColor: "#22c55e" },
   { icon: ShoppingBag,  key: "sales",     color: "rgba(236,72,153,0.1)",  iconColor: "#ec4899" },
+  { icon: Receipt,      key: "orders",    color: "rgba(245,158,11,0.1)",  iconColor: "#f59e0b" },
+  { icon: UserRound,    key: "customers", color: "rgba(14,165,233,0.1)",  iconColor: "#0ea5e9" },
   { icon: Store,        key: "catalog",   color: "rgba(34,211,238,0.1)",  iconColor: "#22d3ee" },
   { icon: BarChart2,    key: "analytics", color: "rgba(168,85,247,0.1)",  iconColor: "#a855f7" },
+  { icon: DollarSign,   key: "currency",  color: "rgba(20,184,166,0.1)",  iconColor: "#14b8a6" },
   { icon: Users,        key: "team",      color: "rgba(34,197,94,0.1)",   iconColor: "#22c55e" },
   { icon: ClipboardList,key: "audit",     color: "rgba(245,158,11,0.1)",  iconColor: "#f59e0b" },
   { icon: FileSpreadsheet, key: "importExport", color: "rgba(34,211,238,0.1)", iconColor: "#22d3ee" },
   { icon: ScanBarcode,  key: "scan",      color: "rgba(239,68,68,0.1)",   iconColor: "#ef4444" },
-  { icon: Layers,       key: "variants",  color: "rgba(168,85,247,0.1)",  iconColor: "#a855f7" },
 ] as const;
 
 function subscribeToNothing() {
@@ -217,7 +219,7 @@ export default function LoginPage() {
             {/* Close */}
             <button
               onClick={closeModal}
-              aria-label="Zatvori"
+              aria-label={t("catalog.close")}
               style={{ position: "absolute", top: 14, right: 14, width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer", color: "var(--text-3)", transition: "all 0.15s" }}
               onMouseOver={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--text-1)"; }}
               onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--text-3)"; }}
@@ -274,7 +276,7 @@ export default function LoginPage() {
                 <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                   {t("auth.shopId")}
                 </label>
-                <input className="input" type="text" placeholder="Shop ID" value={shopId} onChange={(e) => setShopId(e.target.value)} autoFocus />
+                <input className="input" type="text" placeholder={t("auth.shopId")} value={shopId} onChange={(e) => setShopId(e.target.value)} autoFocus />
               </div>
             )}
 
@@ -321,7 +323,7 @@ export default function LoginPage() {
         @keyframes slideUp { from { opacity: 0; transform: translateY(16px) scale(0.97) } to { opacity: 1; transform: none } }
         .login-features { grid-template-columns: 1fr; }
         @media (min-width: 640px) { .login-features { grid-template-columns: repeat(2, 1fr); } }
-        @media (min-width: 1280px) { .login-features { grid-template-columns: repeat(5, 1fr); } }
+        @media (min-width: 1280px) { .login-features { grid-template-columns: repeat(4, 1fr); } }
         @media (max-width: 480px) {
           .nav-brand { display: none; }
           .nav-login-label { display: none; }
