@@ -11,11 +11,12 @@ import { CatalogItem, CatalogStatEvent } from "@/lib/types";
 import { catalogLink, MAX_QUANTITY } from "./catalog-store";
 import { catalogItemAvailable, catalogStockForVariant, fieldText, itemImages, saleDiscount } from "./catalog-card";
 
-export default function CatalogDetail({ item, locale, prices, shopId, onClose, onAdd, onNotify, onTrack }: {
+export default function CatalogDetail({ item, locale, prices, shopId, canPurchase, onClose, onAdd, onNotify, onTrack }: {
   item: CatalogItem;
   locale: Locale;
   prices: PriceTools;
   shopId: string;
+  canPurchase: boolean;
   onClose: () => void;
   onAdd: (variant: string, quantity: number, variantId?: string) => void;
   onNotify: (message: string) => void;
@@ -175,27 +176,29 @@ export default function CatalogDetail({ item, locale, prices, shopId, onClose, o
             </div>
           )}
 
-          <div className="cat-modal-actions">
-            <Link
-              className="cat-modal-ask"
-              href={`/catalog/${shopId}/account?productId=${encodeURIComponent(item.id)}#shop-chat`}
-            >
-              <MessageCircle size={15} />
-              {t("chat.askAboutProduct")}
-            </Link>
-            <div className="cat-buy-row">
-              <div className="cat-stepper" role="group" aria-label={t("catalog.quantity")}>
-                <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} disabled={quantity <= 1} aria-label={t("catalog.decrease")}><Minus size={15} /></button>
-                <span aria-live="polite">{quantity}</span>
-                <button type="button" onClick={() => setQuantity((q) => Math.min(MAX_QUANTITY, availableQuantity, q + 1))} disabled={quantity >= Math.min(MAX_QUANTITY, availableQuantity)} aria-label={t("catalog.increase")}><Plus size={15} /></button>
+          {canPurchase && (
+            <div className="cat-modal-actions">
+              <Link
+                className="cat-modal-ask"
+                href={`/catalog/${shopId}/account?productId=${encodeURIComponent(item.id)}#shop-chat`}
+              >
+                <MessageCircle size={15} />
+                {t("chat.askAboutProduct")}
+              </Link>
+              <div className="cat-buy-row">
+                <div className="cat-stepper" role="group" aria-label={t("catalog.quantity")}>
+                  <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} disabled={quantity <= 1} aria-label={t("catalog.decrease")}><Minus size={15} /></button>
+                  <span aria-live="polite">{quantity}</span>
+                  <button type="button" onClick={() => setQuantity((q) => Math.min(MAX_QUANTITY, availableQuantity, q + 1))} disabled={quantity >= Math.min(MAX_QUANTITY, availableQuantity)} aria-label={t("catalog.increase")}><Plus size={15} /></button>
+                </div>
+                <button type="button" className="btn-primary cat-add-btn" disabled={needsVariant || outOfStock || quantity > availableQuantity} onClick={() => { onAdd(variant, quantity, item.variantIds?.[variantIndex]); onClose(); }}>
+                  <ShoppingBag size={16} />
+                  {needsVariant ? t("catalog.chooseVariant") : outOfStock ? t("catalog.outOfStock") : t("catalog.addToCart")}
+                </button>
               </div>
-              <button type="button" className="btn-primary cat-add-btn" disabled={needsVariant || outOfStock || quantity > availableQuantity} onClick={() => { onAdd(variant, quantity, item.variantIds?.[variantIndex]); onClose(); }}>
-                <ShoppingBag size={16} />
-                {needsVariant ? t("catalog.chooseVariant") : outOfStock ? t("catalog.outOfStock") : t("catalog.addToCart")}
-              </button>
+              {outOfStock && <p className="cat-hint cat-stock-warning">{t("catalog.outOfStock")}</p>}
             </div>
-            {outOfStock && <p className="cat-hint cat-stock-warning">{t("catalog.outOfStock")}</p>}
-          </div>
+          )}
         </div>
       </div>
     </div>,

@@ -10,6 +10,7 @@ import { INTL_LOCALES, useI18n } from "@/lib/i18n-context";
 import { channelsFromShop, EMPTY_CHANNELS } from "@/lib/catalog-channels";
 import { BASE_CURRENCY, isSupportedCurrency } from "@/lib/currency";
 import { trackCatalogEvent } from "@/lib/actions";
+import { useAuth } from "@/lib/auth-context";
 import { CatalogItem, CatalogStatEvent, ShopCatalogSettings } from "@/lib/types";
 import { ArrowUpDown, MessageCircle, Package, Search, ShoppingBag, Sparkles, X } from "lucide-react";
 import { setProductParam, useCart, useProductParam } from "./catalog-store";
@@ -29,6 +30,9 @@ function comparePrice(a: CatalogItem, b: CatalogItem, direction: 1 | -1) {
 
 export default function CatalogView({ shopId }: { shopId: string }) {
   const { t, locale } = useI18n();
+  const { user, profile, loading: authLoading } = useAuth();
+  const isShopOwner = !authLoading && Boolean(user && profile?.shopId === shopId);
+  const showCustomerActions = !authLoading && !isShopOwner;
   const intl = INTL_LOCALES[locale];
   const [shop, setShop] = useState<ShopCatalogSettings | null>(null);
   const [shopLoading, setShopLoading] = useState(true);
@@ -206,15 +210,19 @@ export default function CatalogView({ shopId }: { shopId: string }) {
                 <div className="cat-hero-tools">
                   <ThemeSwitcher className="cat-theme-toggle" lightLabel={t("theme.switchToLight")} darkLabel={t("theme.switchToDark")} />
                 </div>
-                <Link href={`/catalog/${shopId}/account#shop-chat`} className="cat-ask-shop">
-                  <MessageCircle size={15} />
-                  {t("chat.askBeforeOrder")}
-                </Link>
-                {hasChannels && (
-                  <div className="cat-hero-order-via">
-                    <p className="cat-hero-caption">{t("catalog.orderVia")}</p>
-                    <OrderChannels channels={channels} onChannelClick={track} />
-                  </div>
+                {showCustomerActions && (
+                  <>
+                    <Link href={`/catalog/${shopId}/account#shop-chat`} className="cat-ask-shop">
+                      <MessageCircle size={15} />
+                      {t("chat.askBeforeOrder")}
+                    </Link>
+                    {hasChannels && (
+                      <div className="cat-hero-order-via">
+                        <p className="cat-hero-caption">{t("catalog.orderVia")}</p>
+                        <OrderChannels channels={channels} onChannelClick={track} />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -294,6 +302,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
                   <div className="cat-grid">
                     {filtered.map((item, index) => (
                       <CatalogCard key={item.id} item={item} locale={locale} prices={prices} index={index}
+                        canAddToCart={showCustomerActions}
                         onOpen={() => setProductParam(item.id)} onQuickAdd={() => quickAdd(item)} />
                     ))}
                   </div>
@@ -304,19 +313,23 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         )}
 
         <footer className="cat-footer">
-          <Link href={`/catalog/${shopId}/account`} className="cat-account-link">
-            <MessageCircle size={14} />
-            {t("chat.myOrders")}
-          </Link>
-          <Link href="/" className="cat-footer-cta">
-            <Sparkles size={14} />
-            {t("catalog.createOwn")}
-          </Link>
+          {showCustomerActions && (
+            <>
+              <Link href={`/catalog/${shopId}/account`} className="cat-account-link">
+                <MessageCircle size={14} />
+                {t("chat.myOrders")}
+              </Link>
+              <Link href="/" className="cat-footer-cta">
+                <Sparkles size={14} />
+                {t("catalog.createOwn")}
+              </Link>
+            </>
+          )}
           <Link href="/cookies" className="cat-cookie-link">{t("cookies.title")}</Link>
         </footer>
       </div>
 
-      {cartCount > 0 && !cartOpen && (
+      {showCustomerActions && cartCount > 0 && !cartOpen && (
         <button type="button" className="cat-cart-bar" onClick={() => setCartOpen(true)}>
           <span className="cat-cart-bar-icon">
             <ShoppingBag size={18} />
@@ -334,6 +347,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           locale={locale}
           prices={prices}
           shopId={shopId}
+          canPurchase={showCustomerActions}
           onClose={closeDetail}
           onAdd={(variant, quantity, variantId) => addToCart(selected, variant, quantity, variantId)}
           onNotify={notify}
@@ -341,7 +355,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         />
       )}
 
-      {cartOpen && (
+      {showCustomerActions && cartOpen && (
         <CatalogCart
           lines={cartLines}
           locale={locale}

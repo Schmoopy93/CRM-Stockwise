@@ -719,6 +719,68 @@ test("only shop owners can change shop configuration", async () => {
   await assertFails(updateDoc(doc(staffDb, "shops", shopId), { currency: "USD" }));
 });
 
+test("owners can grant catalog access only to staff in their shop", async () => {
+  const ownerDb = firestoreFor("owner-a");
+  const staffDb = firestoreFor("staff-a");
+  const outsiderDb = firestoreFor("outsider");
+  const staffRef = doc(ownerDb, "users", "staff-a");
+
+  const members = await assertSucceeds(getDocs(query(collection(ownerDb, "users"), where("shopId", "==", shopId))));
+  assert.equal(members.size, 2);
+  await assertFails(getDocs(query(collection(staffDb, "users"), where("shopId", "==", shopId))));
+
+  await assertSucceeds(updateDoc(staffRef, { permissions: { manageCatalog: true } }));
+  await assertSucceeds(updateDoc(staffRef, { permissions: { manageCatalog: false } }));
+  await assertFails(updateDoc(doc(staffDb, "users", "staff-a"), { permissions: { manageCatalog: true } }));
+  await assertFails(updateDoc(doc(outsiderDb, "users", "staff-a"), { permissions: { manageCatalog: true } }));
+  await assertFails(updateDoc(staffRef, { role: "owner" }));
+  await assertFails(updateDoc(staffRef, { permissions: { manageCatalog: true, manageCurrency: true } }));
+});
+
+test("catalog managers can edit settings while shop members retain product catalog sync", async () => {
+  const ownerDb = firestoreFor("owner-a");
+  const staffDb = firestoreFor("staff-a");
+  const unprivilegedStaffDb = firestoreFor("staff-no-catalog");
+  const shopRef = doc(staffDb, "shops", shopId);
+  const catalogRef = doc(staffDb, "shops", shopId, "catalog", productId);
+  const catalogItem = {
+    name: "Jacket",
+    category: "Clothing",
+    imageUrl: "",
+    images: [],
+    salePrice: 20,
+    variants: ["M"],
+    variantIds: [variantId],
+    stockQuantity: 5,
+    variantStock: { [variantId]: 5 },
+    fields: [],
+    hidden: false,
+    updatedAt: serverTimestamp(),
+  };
+
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "users", "staff-no-catalog"), {
+      shopId,
+      displayName: "Unprivileged staff",
+      role: "staff",
+    });
+  });
+  await assertFails(updateDoc(shopRef, { catalogEnabled: true }));
+  await assertSucceeds(setDoc(catalogRef, catalogItem));
+  await assertSucceeds(updateDoc(doc(ownerDb, "users", "staff-a"), { permissions: { manageCatalog: true } }));
+
+  await assertSucceeds(updateDoc(shopRef, { catalogEnabled: true, catalogWhatsapp: "+381601234567" }));
+  await assertSucceeds(setDoc(catalogRef, catalogItem));
+  await assertFails(updateDoc(shopRef, { currency: "USD" }));
+  await assertFails(updateDoc(shopRef, { name: "Unauthorized rename" }));
+  await assertFails(updateDoc(shopRef, { catalogEnabled: false, currency: "USD" }));
+  await assertSucceeds(updateDoc(catalogRef, { name: "Managed jacket", updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(unprivilegedStaffDb, "shops", shopId, "catalog", productId), {
+    name: "Updated from product",
+    updatedAt: serverTimestamp(),
+  }));
+});
+
 test("products with positive stock cannot be deleted", async () => {
   const db = firestoreFor("owner-a");
   await assertFails(deleteDoc(doc(db, "shops", shopId, "products", productId)));

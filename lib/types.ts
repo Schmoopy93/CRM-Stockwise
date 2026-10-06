@@ -5,6 +5,9 @@ export interface UserProfile {
   shopId: string;
   displayName: string;
   role: "owner" | "staff";
+  permissions?: {
+    manageCatalog?: boolean;
+  };
 }
 
 export interface Supplier {

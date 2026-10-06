@@ -34,11 +34,12 @@ export function fieldText(field: CatalogField, locale: Locale, t: (key: string) 
   return { label, value };
 }
 
-export default function CatalogCard({ item, locale, prices, index, onOpen, onQuickAdd }: {
+export default function CatalogCard({ item, locale, prices, index, canAddToCart, onOpen, onQuickAdd }: {
   item: CatalogItem;
   locale: Locale;
   prices: PriceTools;
   index: number;
+  canAddToCart: boolean;
   onOpen: () => void;
   onQuickAdd: () => void;
 }) {
@@ -106,12 +107,14 @@ export default function CatalogCard({ item, locale, prices, index, onOpen, onQui
               )}
             </span>
           ) : <span />}
-          <button
-            type="button" className="cat-card-add" onClick={onQuickAdd} disabled={!quickAddAvailable}
-            aria-label={`${t(quickAddAvailable ? "catalog.addToCart" : "catalog.outOfStock")} — ${item.name}`}
-          >
-            {quickAddAvailable ? <Plus size={18} strokeWidth={2.5} /> : <Package size={16} />}
-          </button>
+          {canAddToCart && (
+            <button
+              type="button" className="cat-card-add" onClick={onQuickAdd} disabled={!quickAddAvailable}
+              aria-label={`${t(quickAddAvailable ? "catalog.addToCart" : "catalog.outOfStock")} — ${item.name}`}
+            >
+              {quickAddAvailable ? <Plus size={18} strokeWidth={2.5} /> : <Package size={16} />}
+            </button>
+          )}
         </div>
       </div>
     </article>

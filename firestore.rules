@@ -68,6 +68,46 @@ service cloud.firestore {
         && get(userPath(request.auth.uid)).data.role == 'owner';
     }
 
+    function canManageCatalog(shopId) {
+      return isMember(shopId)
+        && (get(userPath(request.auth.uid)).data.role == 'owner'
+          || (get(userPath(request.auth.uid)).data.role == 'staff'
+            && get(userPath(request.auth.uid)).data.get('permissions', {}).get('manageCatalog', false) == true));
+    }
+
+    function validCatalogSettings(data) {
+      return (!('catalogEnabled' in data) || data.catalogEnabled is bool)
+        && (!('catalogWhatsapp' in data) || (data.catalogWhatsapp is string && data.catalogWhatsapp.size() <= 100))
+        && (!('catalogTelegram' in data) || (data.catalogTelegram is string && data.catalogTelegram.size() <= 100))
+        && (!('catalogInstagram' in data) || (data.catalogInstagram is string && data.catalogInstagram.size() <= 100))
+        && (!('catalogContact' in data) || (data.catalogContact is string && data.catalogContact.size() <= 100))
+        && (!('catalogLogoUrl' in data) || (data.catalogLogoUrl is string && data.catalogLogoUrl.size() <= 2048))
+        && (!('catalogCoverUrl' in data) || (data.catalogCoverUrl is string && data.catalogCoverUrl.size() <= 2048));
+    }
+
+    function validCatalogDocument(data) {
+      return data.keys().hasOnly([
+          'name', 'category', 'imageUrl', 'images', 'salePrice', 'compareAtPrice', 'variants', 'variantIds', 'stockQuantity', 'variantStock', 'fields', 'hidden', 'createdAt', 'updatedAt'
+        ])
+        && (!('stockQuantity' in data) || (data.stockQuantity is int && data.stockQuantity >= 0))
+        && (!('variantStock' in data) || (data.variantStock is map && data.variantStock.size() <= 200))
+        && (!('compareAtPrice' in data) || (data.compareAtPrice is number && data.compareAtPrice >= 0))
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && data.name is string
+        && data.category is string
+        && data.imageUrl is string
+        && (!('images' in data) || (data.images is list && data.images.size() <= 6))
+        && (!('salePrice' in data) || (data.salePrice is number && data.salePrice >= 0))
+        && data.variants is list
+        && (!('variantIds' in data)
+          || (data.variantIds is list
+            && data.variantIds.size() == data.variants.size()
+            && data.variantIds.size() <= 200))
+        && data.fields is list
+        && data.hidden is bool
+        && data.updatedAt == request.time;
+    }
+
     function validProductImages(data) {
       return !('images' in data)
         || (data.images is list && data.images.size() == 0)
@@ -196,7 +236,7 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow get: if signedIn() && request.auth.uid == uid;
-      allow list: if false;
+      allow list: if signedIn() && isShopOwner(resource.data.shopId);
 
       // A user may only create their own profile. New-shop creation is atomic:
       // the paired shop document must be created in the same batch.
@@ -211,8 +251,18 @@ service cloud.firestore {
           || (request.resource.data.role == 'staff'
             && exists(shopPath(request.resource.data.shopId))));
 
-      // Shop membership and role changes must go through a trusted admin flow.
-      allow update, delete: if false;
+      // Owners may grant catalog access to staff, but cannot change membership or role.
+      allow update: if isShopOwner(resource.data.shopId)
+        && resource.data.role == 'staff'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['permissions'])
+        && request.resource.data.keys().hasOnly(['shopId', 'displayName', 'role', 'permissions'])
+        && request.resource.data.shopId == resource.data.shopId
+        && request.resource.data.displayName == resource.data.displayName
+        && request.resource.data.role == 'staff'
+        && request.resource.data.permissions is map
+        && request.resource.data.permissions.keys().hasOnly(['manageCatalog'])
+        && request.resource.data.permissions.manageCatalog is bool;
+      allow delete: if false;
     }
 
     match /shops/{shopId} {
@@ -229,7 +279,14 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && getAfter(userPath(request.auth.uid)).data.shopId == shopId
         && getAfter(userPath(request.auth.uid)).data.role == 'owner';
-      allow update, delete: if isShopOwner(shopId);
+      allow update: if isShopOwner(shopId)
+        || (canManageCatalog(shopId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'catalogEnabled', 'catalogWhatsapp', 'catalogTelegram', 'catalogInstagram',
+            'catalogContact', 'catalogLogoUrl', 'catalogCoverUrl'
+          ])
+          && validCatalogSettings(request.resource.data));
+      allow delete: if isShopOwner(shopId);
 
       match /products/{productId} {
         allow read: if isMember(shopId);
@@ -326,32 +383,9 @@ service cloud.firestore {
       match /catalog/{catalogId} {
         // World-readable: documents contain only customer-safe fields.
         allow read: if true;
-        allow create, update: if isMember(shopId)
-          && request.resource.data.keys().hasOnly([
-            'name', 'category', 'imageUrl', 'images', 'salePrice', 'compareAtPrice', 'variants', 'variantIds', 'stockQuantity', 'variantStock', 'fields', 'hidden', 'createdAt', 'updatedAt'
-          ])
-          && (!('stockQuantity' in request.resource.data)
-            || (request.resource.data.stockQuantity is int && request.resource.data.stockQuantity >= 0))
-          && (!('variantStock' in request.resource.data)
-            || (request.resource.data.variantStock is map && request.resource.data.variantStock.size() <= 200))
-          && (!('compareAtPrice' in request.resource.data)
-            || (request.resource.data.compareAtPrice is number && request.resource.data.compareAtPrice >= 0))
-          && (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp)
-          && request.resource.data.name is string
-          && request.resource.data.category is string
-          && request.resource.data.imageUrl is string
-          && (!('images' in request.resource.data)
-            || (request.resource.data.images is list && request.resource.data.images.size() <= 6))
-          && (!('salePrice' in request.resource.data)
-            || (request.resource.data.salePrice is number && request.resource.data.salePrice >= 0))
-          && request.resource.data.variants is list
-          && (!('variantIds' in request.resource.data)
-            || (request.resource.data.variantIds is list
-              && request.resource.data.variantIds.size() == request.resource.data.variants.size()
-              && request.resource.data.variantIds.size() <= 200))
-          && request.resource.data.fields is list
-          && request.resource.data.hidden is bool
-          && request.resource.data.updatedAt == request.time;
+        // Product edits by shop members publish their customer-safe projection;
+        // catalog publication settings remain separately permission-gated.
+        allow create, update: if isMember(shopId) && validCatalogDocument(request.resource.data);
         allow delete: if isMember(shopId);
       }
 

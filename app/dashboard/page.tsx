@@ -12,11 +12,11 @@ import { usePagination } from "@/lib/use-pagination";
 import ListPagination from "@/components/ListPagination";
 import CatalogBrandingFields from "@/components/CatalogBrandingFields";
 import CurrencySettingsCard from "@/components/CurrencySettingsCard";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, doc, getDocs, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Product, ProductVariant } from "@/lib/types";
+import { Product, ProductVariant, UserProfile } from "@/lib/types";
 import { BASE_CURRENCY } from "@/lib/currency";
-import { Plus, Search, AlertTriangle, Package, TrendingDown, Layers, ArrowRight, DollarSign, Store, Copy, Check, ExternalLink, ShoppingBag, X, CheckCircle, RefreshCw } from "lucide-react";
+import { Plus, Search, AlertTriangle, Package, TrendingDown, Layers, ArrowRight, DollarSign, Store, Copy, Check, ExternalLink, ShoppingBag, X, CheckCircle, RefreshCw, Users } from "lucide-react";
 
 function QuickSellModal({ product, shopId, actorUid, actorName, onClose }: {
   product: Product; shopId: string; actorUid: string; actorName: string; onClose: () => void;
@@ -206,6 +206,107 @@ function CatalogSettingsCard({ shopId }: { shopId: string }) {
   );
 }
 
+function StaffCatalogAccessCard({ shopId }: { shopId: string }) {
+  const { t } = useI18n();
+  const [staffMembers, setStaffMembers] = useState<UserProfile[]>([]);
+  const [staffLoading, setStaffLoading] = useState(true);
+  const [staffSavingUid, setStaffSavingUid] = useState<string | null>(null);
+  const [staffError, setStaffError] = useState("");
+
+  useEffect(() => onSnapshot(query(collection(db, "users"), where("shopId", "==", shopId)), (snapshot) => {
+    const members = snapshot.docs
+      .map((memberDoc) => {
+        const data = memberDoc.data();
+        return {
+          uid: memberDoc.id,
+          shopId: data.shopId ?? "",
+          displayName: data.displayName ?? "",
+          role: data.role === "owner" ? "owner" as const : "staff" as const,
+          permissions: { manageCatalog: data.permissions?.manageCatalog === true },
+        };
+      })
+      .filter((member) => member.role === "staff")
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    setStaffMembers(members);
+    setStaffLoading(false);
+    setStaffError("");
+  }, () => {
+    setStaffLoading(false);
+    setStaffError(t("catalog.staffAccessError"));
+  }), [shopId, t]);
+
+  async function setStaffCatalogAccess(member: UserProfile, enabled: boolean) {
+    setStaffSavingUid(member.uid);
+    setStaffError("");
+    try {
+      await updateDoc(doc(db, "users", member.uid), { permissions: { manageCatalog: enabled } });
+    } catch (err: unknown) {
+      setStaffError(translateError(err, t, "catalog.staffAccessError"));
+    } finally {
+      setStaffSavingUid(null);
+    }
+  }
+
+  return (
+    <section style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.1rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.7rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--bg-3)", color: "var(--accent-2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Users size={17} />
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <p style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--text-1)", margin: 0 }}>{t("catalog.staffAccessTitle")}</p>
+          <p style={{ fontSize: "0.72rem", lineHeight: 1.45, color: "var(--text-3)", margin: "0.15rem 0 0" }}>{t("catalog.staffAccessDescription")}</p>
+        </div>
+      </div>
+      {staffLoading ? (
+        <div role="status" aria-label={t("catalog.staffLoading")} style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <span style={{ height: 42, borderRadius: 9, background: "var(--bg-3)", opacity: 0.7 }} />
+          <span style={{ height: 42, borderRadius: 9, background: "var(--bg-3)", opacity: 0.45 }} />
+        </div>
+      ) : staffMembers.length === 0 ? (
+        <p style={{ fontSize: "0.75rem", color: "var(--text-3)", margin: 0, padding: "0.65rem 0 0", borderTop: "1px solid var(--border)" }}>{t("catalog.staffEmpty")}</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {staffMembers.map((member) => {
+            const enabled = member.permissions?.manageCatalog === true;
+            const savingMember = staffSavingUid === member.uid;
+            return (
+              <div key={member.uid} style={{ minHeight: 58, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", borderTop: "1px solid var(--border)", padding: "0.55rem 0" }}>
+                <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                  <span aria-hidden="true" style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--accent-glow)", color: "var(--accent-2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: "0.72rem", fontWeight: 750 }}>
+                    {member.displayName.trim().slice(0, 1).toUpperCase() || "?"}
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, overflow: "hidden", color: "var(--text-1)", fontSize: "0.76rem", fontWeight: 650, textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{member.displayName}</p>
+                    <p style={{ margin: "0.12rem 0 0", color: "var(--text-3)", fontSize: "0.67rem" }}>{t("user.staff")}</p>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "0.55rem", flexShrink: 0 }}>
+                  <span style={{ minWidth: 66, color: enabled ? "var(--green)" : "var(--text-3)", fontSize: "0.68rem", fontWeight: 650, textAlign: "right" }}>
+                    {t(enabled ? "catalog.on" : "catalog.off")}
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={enabled}
+                    aria-label={`${t("catalog.staffCanManage")}: ${member.displayName}`}
+                    disabled={savingMember}
+                    onClick={() => setStaffCatalogAccess(member, !enabled)}
+                    style={{ width: 42, height: 24, display: "flex", alignItems: "center", justifyContent: enabled ? "flex-end" : "flex-start", padding: 3, border: `1px solid ${enabled ? "var(--accent)" : "var(--border)"}`, borderRadius: 99, background: enabled ? "var(--accent)" : "var(--bg-3)", cursor: savingMember ? "wait" : "pointer", opacity: savingMember ? 0.65 : 1, transition: "background 0.16s, border-color 0.16s, opacity 0.16s" }}
+                  >
+                    <span aria-hidden="true" style={{ width: 16, height: 16, borderRadius: "50%", background: "var(--bg-2)", boxShadow: "0 1px 3px rgba(0,0,0,0.22)" }} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {staffError && <p role="alert" style={{ fontSize: "0.75rem", color: "var(--red)", margin: 0 }}>{staffError}</p>}
+    </section>
+  );
+}
+
 export default function DashboardPage() {
   const { profile } = useAuth();
   const { locale, t } = useI18n();
@@ -294,10 +395,13 @@ export default function DashboardPage() {
 
       {/* Shop settings (owner only) */}
       {profile?.role === "owner" && profile.shopId && (
-        <>
-          <CurrencySettingsCard shopId={profile.shopId} />
-          <CatalogSettingsCard shopId={profile.shopId} />
-        </>
+        <CurrencySettingsCard shopId={profile.shopId} />
+      )}
+      {profile?.shopId && (profile.role === "owner" || profile.permissions?.manageCatalog === true) && (
+        <CatalogSettingsCard shopId={profile.shopId} />
+      )}
+      {profile?.role === "owner" && profile.shopId && (
+        <StaffCatalogAccessCard shopId={profile.shopId} />
       )}
 
       {/* Low stock alert */}

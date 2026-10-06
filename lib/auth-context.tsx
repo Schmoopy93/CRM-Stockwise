@@ -42,6 +42,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               shopId: snap.data().shopId ?? "",
               displayName: snap.data().displayName ?? user.displayName ?? "",
               role: snap.data().role ?? "staff",
+              permissions: {
+                manageCatalog: snap.data().permissions?.manageCatalog === true,
+              },
             }
           : null,
       });
