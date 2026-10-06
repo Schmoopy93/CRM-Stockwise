@@ -174,6 +174,10 @@ export interface SaleLine {
   variantLabel: string;
   quantity: number;
   unitPrice: number;
+  /** Purchase price per unit at the moment of sale, snapshotted so profit stays
+   * what it was even after the product's cost changes. Absent on sales recorded
+   * before this existed, where analytics falls back to the current cost. */
+  unitCost?: number;
 }
 
 export interface Sale {
@@ -185,6 +189,9 @@ export interface Sale {
   buyerContact: string;
   sourceOrderId?: string;
   sourceOrderCode?: string;
+  /** Set on a compensating document that reverses another sale. The reversed
+   * sale itself is never modified — reports subtract stornos by this link. */
+  stornoOf?: string;
   /** The customer this sale was attributed to, when one was picked. */
   customerId?: string;
   note: string;

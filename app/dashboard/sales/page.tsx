@@ -4,13 +4,13 @@ import { useState, lazy, Suspense } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useProducts, useSales, useShopMoney } from "@/lib/hooks";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
-import { findProductByCode, PartialReceiptError, recordSale, linkSaleToCustomer } from "@/lib/actions";
+import { findProductByCode, PartialReceiptError, recordSale, stornoSale, linkSaleToCustomer } from "@/lib/actions";
 import CustomerPicker from "@/components/CustomerPicker";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
-import { Product, ProductVariant, SaleChannel } from "@/lib/types";
+import { Product, ProductVariant, Sale, SaleChannel } from "@/lib/types";
 import { BASE_CURRENCY } from "@/lib/currency";
-import { Plus, Minus, ShoppingBag, CheckCircle, Barcode, Search, Trash2, AtSign, History } from "lucide-react";
+import { Plus, Minus, ShoppingBag, CheckCircle, Barcode, Search, Trash2, AtSign, History, Undo2 } from "lucide-react";
 
 const BarcodeScanner = lazy(() =>
   import("@/components/BarcodeScanner").then((m) => ({ default: m.BarcodeScanner }))
@@ -41,6 +41,32 @@ export default function SalesPage() {
   const [buyerContact, setBuyerContact] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [note, setNote] = useState("");
+  const [stornoId, setStornoId] = useState("");
+  const [stornoBusy, setStornoBusy] = useState(false);
+  const [stornoRestored, setStornoRestored] = useState<{ saleId: string; keys: string[] } | null>(null);
+
+  const stornoedIds = new Set(sales.flatMap((sale) => (sale.stornoOf ? [sale.stornoOf] : [])));
+
+  async function handleStorno(sale: Sale) {
+    if (!profile || stornoBusy) return;
+    setStornoBusy(true);
+    setError("");
+    try {
+      const skip = stornoRestored?.saleId === sale.id ? stornoRestored.keys : [];
+      await stornoSale(profile.shopId, sale, profile.uid, profile.displayName, skip);
+      setStornoId("");
+      setStornoRestored(null);
+    } catch (cause) {
+      if (cause instanceof PartialReceiptError) {
+        setStornoRestored({ saleId: sale.id, keys: cause.completedLineKeys });
+        setError(t("sales.stornoPartial", { n: cause.completedLineKeys.length }));
+      } else {
+        setError(translateError(cause, t, "sales.stornoFailure"));
+      }
+    } finally {
+      setStornoBusy(false);
+    }
+  }
 
   const filtered = search.length > 1
     ? products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase()))
@@ -285,10 +311,19 @@ export default function SalesPage() {
             <h2 style={{ fontSize: "1rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{t("sales.history")}</h2>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            {sales.map((sale) => (
-              <div key={sale.id} className="glass" style={{ padding: "0.875rem 1.125rem", borderRadius: 12, display: "flex", alignItems: "center", gap: "0.875rem", flexWrap: "wrap" }}>
+            {sales.map((sale) => {
+              const isStorno = Boolean(sale.stornoOf);
+              const isStornoed = stornoedIds.has(sale.id);
+              const confirming = stornoId === sale.id;
+              return (
+              <div key={sale.id} className="glass" style={{ padding: "0.875rem 1.125rem", borderRadius: 12, display: "flex", alignItems: "center", gap: "0.875rem", flexWrap: "wrap", ...(isStorno ? { border: "1px solid rgba(239,68,68,0.3)" } : {}) }}>
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600, color: "var(--text-1)" }}>
+                    {isStorno && (
+                      <span style={{ display: "inline-block", marginRight: 6, padding: "1px 6px", borderRadius: 6, background: "var(--red-dim)", color: "var(--red)", fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.04em", verticalAlign: "middle" }}>
+                        {t("sales.stornoBadge")}
+                      </span>
+                    )}
                     {sale.lines.map((line) => `${line.productName} ×${line.quantity}`).join(", ")}
                   </p>
                   <p style={{ margin: "2px 0 0", fontSize: "0.72rem", color: "var(--text-3)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -298,7 +333,7 @@ export default function SalesPage() {
                     {sale.buyerContact && <span>· {sale.channel === "instagram" ? `@${sale.buyerContact}` : sale.buyerContact}</span>}
                     {sale.createdAt && <span>· {sale.createdAt.toLocaleString(intlLocale)}</span>}
                   </p>
-                  {profile && !sale.sourceOrderId && (
+                  {profile && !sale.sourceOrderId && !isStorno && (
                     <div style={{ marginTop: "0.4rem" }}>
                       <CustomerPicker
                         shopId={profile.shopId}
@@ -307,10 +342,34 @@ export default function SalesPage() {
                       />
                     </div>
                   )}
+                  {isStornoed && (
+                    <p style={{ margin: "0.4rem 0 0", fontSize: "0.75rem", color: "var(--red)", fontWeight: 600 }}>{t("sales.stornoedBadge")}</p>
+                  )}
+                  {!isStorno && !isStornoed && (confirming ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-2)" }}>{t("sales.stornoConfirm")}</span>
+                      <button onClick={() => void handleStorno(sale)} disabled={stornoBusy}
+                        style={{ padding: "0.3rem 0.7rem", background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, color: "var(--red)", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer" }}>
+                        {stornoBusy ? t("sales.stornoBusy") : t("sales.storno")}
+                      </button>
+                      <button onClick={() => { setStornoId(""); setStornoRestored(null); }} disabled={stornoBusy}
+                        style={{ padding: "0.3rem 0.7rem", background: "none", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-2)", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer" }}>
+                        {t("cancel")}
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => { setStornoId(sale.id); setStornoRestored(null); setError(""); }}
+                      style={{ marginTop: "0.5rem", display: "inline-flex", alignItems: "center", gap: 5, padding: "0.3rem 0.7rem", background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, color: "var(--red)", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer" }}>
+                      <Undo2 size={12} /> {t("sales.storno")}
+                    </button>
+                  ))}
                 </div>
-                <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--green)" }}>{money(sale.total, { minimumFractionDigits: 2 })}</span>
+                <span style={{ fontWeight: 700, fontSize: "0.9rem", color: isStorno ? "var(--red)" : "var(--green)" }}>
+                  {isStorno ? `−${money(sale.total, { minimumFractionDigits: 2 })}` : money(sale.total, { minimumFractionDigits: 2 })}
+                </span>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

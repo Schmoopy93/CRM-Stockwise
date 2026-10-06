@@ -35,6 +35,17 @@ export default function CustomerDetailPage() {
   const { sales, orders } = useCustomerActivity(shopId, id);
   const { money } = useShopMoney(shopId, intl);
 
+  // A storno annuls its original sale — neither the reversed sale nor its
+  // storno document counts toward what the customer spent or did.
+  const stornoedIds = useMemo(
+    () => new Set(sales.flatMap((sale) => (sale.stornoOf ? [sale.stornoOf] : []))),
+    [sales]
+  );
+  const standingSales = useMemo(
+    () => sales.filter((sale) => !sale.stornoOf && !stornoedIds.has(sale.id)),
+    [sales, stornoedIds]
+  );
+
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
@@ -43,7 +54,7 @@ export default function CustomerDetailPage() {
   // here rather than in either hook: only one list decides the order, and
   // neither collection has to know the other exists.
   const entries = useMemo<Entry[]>(() => {
-    const fromSales: Entry[] = sales.map((sale) => ({
+    const fromSales: Entry[] = standingSales.map((sale) => ({
       kind: "sale" as const,
       at: sale.createdAt,
       id: sale.id,
@@ -64,12 +75,12 @@ export default function CustomerDetailPage() {
     }));
     return [...fromSales, ...fromOrders]
       .sort((a, b) => (b.at?.getTime() ?? 0) - (a.at?.getTime() ?? 0));
-  }, [sales, orders, t]);
+  }, [standingSales, orders, t]);
 
   // A sale total is stored in the base currency; an order total is stored in the
   // currency the customer was quoted in, so it must be formatted and never
   // converted. Mixing the two rules in one place is what makes this readable.
-  const spentOnSales = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const spentOnSales = standingSales.reduce((sum, sale) => sum + sale.total, 0);
 
   async function remove() {
     if (!shopId) return;
@@ -160,7 +171,7 @@ export default function CustomerDetailPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "0.75rem" }}>
         {[
           { label: t("customers.totalSpent"), value: money(spentOnSales), icon: <Banknote size={15} /> },
-          { label: t("customers.salesCount", { n: sales.length }), value: String(sales.length), icon: <Receipt size={15} /> },
+          { label: t("customers.salesCount", { n: standingSales.length }), value: String(standingSales.length), icon: <Receipt size={15} /> },
           { label: t("customers.ordersCount", { n: orders.length }), value: String(orders.length), icon: <ShoppingBag size={15} /> },
         ].map((tile) => (
           <div key={tile.label} className="glass" style={{ padding: "0.75rem 0.9rem", borderRadius: 12 }}>

@@ -637,6 +637,19 @@ test("sales can be attributed to a customer, but nothing else on them can change
   await assertFails(setDoc(doc(db, "shops", shopId, "sales", "s3"), { ...newSale, customerId: "", createdAt: serverTimestamp() }));
   await assertFails(setDoc(doc(db, "shops", shopId, "sales", "s4"), { ...newSale, customerId: 42, createdAt: serverTimestamp() }));
 
+  // A storno is a new compensating document, so the link must be a usable id.
+  await assertSucceeds(setDoc(doc(db, "shops", shopId, "sales", "storno"), { ...newSale, stornoOf: "s1", createdAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(db, "shops", shopId, "sales", "storno-empty"), { ...newSale, stornoOf: "", createdAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(db, "shops", shopId, "sales", "storno-num"), { ...newSale, stornoOf: 42, createdAt: serverTimestamp() }));
+
+  // The line shape is deliberately unpinned, so the cost snapshot rides along
+  // inside each line without a rules change.
+  await assertSucceeds(setDoc(doc(db, "shops", shopId, "sales", "costed"), {
+    ...newSale,
+    lines: [{ ...sale.lines[0], unitCost: 4 }],
+    createdAt: serverTimestamp(),
+  }));
+
   // Attributing a recorded sale is the one edit allowed after the fact, because
   // it records who it was to without touching what was sold or for how much.
   await assertSucceeds(updateDoc(doc(db, "shops", shopId, "sales", "s1"), { customerId: "c1" }));

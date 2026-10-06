@@ -595,7 +595,7 @@ service cloud.firestore {
         allow read: if isMember(shopId);
         allow create: if isMember(shopId)
           && request.resource.data.keys().hasOnly([
-            'lines', 'total', 'channel', 'buyerName', 'buyerContact', 'buyerInstagram', 'customerId', 'sourceOrderId', 'sourceOrderCode', 'note', 'actorUid', 'actorName', 'createdAt'
+            'lines', 'total', 'channel', 'buyerName', 'buyerContact', 'buyerInstagram', 'customerId', 'sourceOrderId', 'sourceOrderCode', 'stornoOf', 'note', 'actorUid', 'actorName', 'createdAt'
           ])
           && request.resource.data.keys().hasAny(['buyerContact', 'buyerInstagram'])
           && !request.resource.data.keys().hasAll(['buyerContact', 'buyerInstagram'])
@@ -623,6 +623,12 @@ service cloud.firestore {
               && request.resource.data.sourceOrderId.size() > 0
               && request.resource.data.sourceOrderCode is string
               && request.resource.data.sourceOrderCode.size() > 0))
+          // A storno is a separate compensating sale document that links back to
+          // the original through this field; the original itself is never mutated.
+          && (!('stornoOf' in request.resource.data)
+            || (request.resource.data.stornoOf is string
+              && request.resource.data.stornoOf.size() > 0
+              && request.resource.data.stornoOf.size() <= 100))
           && validCustomerRef(request.resource.data)
           && request.resource.data.actorUid == request.auth.uid
           && request.resource.data.actorName is string

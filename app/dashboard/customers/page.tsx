@@ -38,9 +38,13 @@ export default function CustomersPage() {
 
   // Spending is the join the shop cannot do by hand: a customer is linked to
   // sales by id, so the totals here follow the same link the detail page uses.
+  // A storno annuls its original sale — both documents are skipped, so each
+  // customer's total only counts sales that still stand.
   const spentBy = useMemo(() => {
+    const stornoedIds = new Set(sales.flatMap((sale) => (sale.stornoOf ? [sale.stornoOf] : [])));
     const totals = new Map<string, number>();
     for (const sale of sales) {
+      if (sale.stornoOf || stornoedIds.has(sale.id)) continue;
       if (!sale.customerId) continue;
       totals.set(sale.customerId, (totals.get(sale.customerId) ?? 0) + sale.total);
     }

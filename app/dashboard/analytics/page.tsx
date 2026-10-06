@@ -7,7 +7,7 @@ import { INTL_LOCALES, Locale, useI18n } from "@/lib/i18n-context";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, LineChart, Line,
 } from "recharts";
-import { TrendingDown, TrendingUp, Activity, AlertCircle, Package, Eye, MessageCircle, Send, AtSign, Share2, Percent, ShoppingBag, DollarSign } from "lucide-react";
+import { TrendingDown, TrendingUp, Activity, AlertCircle, Package, Eye, MessageCircle, Send, AtSign, Share2, Percent, ShoppingBag, DollarSign, Coins } from "lucide-react";
 
 function formatDay(date: Date, locale: Locale) {
   return date.toLocaleDateString(INTL_LOCALES[locale], { day: "2-digit", month: "2-digit", timeZone: "UTC" });
@@ -148,6 +148,14 @@ export default function AnalyticsPage() {
   const { sales } = useSales(profile?.shopId, 500);
   const { money } = useShopMoney(profile?.shopId, INTL_LOCALES[locale]);
 
+  // A storno annuls its original sale. Analytics leave out both documents — the
+  // reversed sale and the storno that points at it — so every period shows only
+  // the sales that still stand, regardless of when the reversal happened.
+  const stornoedIds = useMemo(
+    () => new Set(sales.flatMap((sale) => (sale.stornoOf ? [sale.stornoOf] : []))),
+    [sales]
+  );
+
   // Revenue data filtered to selected date range
   const revenueData = useMemo(() => {
     const buckets = new Map<string, { date: string; revenue: number }>();
@@ -167,6 +175,7 @@ export default function AnalyticsPage() {
       else cursor.setDate(cursor.getDate() + 1);
     }
     for (const sale of sales) {
+      if (sale.stornoOf || stornoedIds.has(sale.id)) continue;
       if (!sale.createdAt) continue;
       const d = sale.createdAt;
       if (d < dateRange.from || d > dateRange.to) continue;
@@ -179,13 +188,64 @@ export default function AnalyticsPage() {
       if (bucket) bucket.revenue = Math.round((bucket.revenue + sale.total) * 100) / 100;
     }
     return [...buckets.values()];
-  }, [sales, dateRange, activityGroup, locale]);
+  }, [sales, dateRange, activityGroup, locale, stornoedIds]);
 
   const totalRevenue = useMemo(
-    () => sales.filter((s) => s.createdAt && s.createdAt >= dateRange.from && s.createdAt <= dateRange.to)
+    () => sales.filter((s) => !s.stornoOf && !stornoedIds.has(s.id) && s.createdAt && s.createdAt >= dateRange.from && s.createdAt <= dateRange.to)
       .reduce((sum, s) => sum + s.total, 0),
-    [sales, dateRange]
+    [sales, dateRange, stornoedIds]
   );
+
+  const productCosts = useMemo(
+    () => new Map(products.map((product) => [product.id, product.costPrice])),
+    [products]
+  );
+
+  // Profit uses each line's snapshotted purchase price; sales older than the
+  // snapshot fall back to the product's current cost. Reversed sales are left
+  // out entirely, matching how revenue treats a storno.
+  const profitStats = useMemo(() => {
+    const costByProduct = productCosts;
+    let profit = 0;
+    let coveredRevenue = 0;
+    let missingCost = false;
+    for (const sale of sales) {
+      if (sale.stornoOf || stornoedIds.has(sale.id)) continue;
+      if (!sale.createdAt || sale.createdAt < dateRange.from || sale.createdAt > dateRange.to) continue;
+      for (const line of sale.lines ?? []) {
+        const costPrice = line.unitCost ?? costByProduct.get(line.productId);
+        if (typeof costPrice === "number") {
+          profit += line.quantity * (line.unitPrice - costPrice);
+          coveredRevenue += line.quantity * line.unitPrice;
+        } else {
+          missingCost = true;
+        }
+      }
+    }
+    return {
+      profit: Math.round(profit * 100) / 100,
+      margin: coveredRevenue > 0 ? Math.round((profit / coveredRevenue) * 100) : null,
+      missingCost,
+    };
+  }, [sales, dateRange, productCosts, stornoedIds]);
+
+  const deadStock = useMemo(() => {
+    const netSold = new Map<string, number>();
+    for (const sale of sales) {
+      if (sale.stornoOf || stornoedIds.has(sale.id)) continue;
+      if (!sale.createdAt || sale.createdAt < dateRange.from || sale.createdAt > dateRange.to) continue;
+      for (const line of sale.lines ?? []) {
+        netSold.set(line.productId, (netSold.get(line.productId) ?? 0) + line.quantity);
+      }
+    }
+    return products
+      .filter((product) => product.totalQuantity > 0 && (netSold.get(product.id) ?? 0) <= 0)
+      .map((product) => ({
+        ...product,
+        tiedValue: (product.costPrice ?? product.salePrice ?? 0) * product.totalQuantity,
+      }))
+      .sort((a, b) => b.tiedValue - a.tiedValue);
+  }, [products, sales, dateRange, stornoedIds]);
 
   // Use daily, weekly, and monthly buckets as the selected period grows.
   const activityData = useMemo(() => {
@@ -315,6 +375,7 @@ export default function AnalyticsPage() {
       )}
 
       {/* Stats row */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
       <div className="analytics-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "1rem" }}>
         {[
           { icon: <Package size={16} />, label: t("analytics.products"), value: products.length, color: "#6366f1", bg: "rgba(99,102,241,0.1)", isLoading: false },
@@ -322,6 +383,7 @@ export default function AnalyticsPage() {
           { icon: <TrendingUp size={16} />, label: t("analytics.received"), value: totalIn, color: "var(--green)", bg: "var(--green-dim)", isLoading: true },
           { icon: <TrendingDown size={16} />, label: t("analytics.issued"), value: totalOut, color: lowStock.length > 0 ? "var(--amber)" : "var(--red)", bg: lowStock.length > 0 ? "var(--amber-dim)" : "var(--red-dim)", isLoading: true },
           { icon: <DollarSign size={16} />, label: t("analytics.revenue"), value: money(totalRevenue, { minimumFractionDigits: 2 }), color: "#a855f7", bg: "rgba(168,85,247,0.1)", isLoading: false },
+          { icon: <Coins size={16} />, label: profitStats.margin !== null ? t("analytics.profitMargin", { pct: profitStats.margin }) : t("analytics.profit"), value: money(profitStats.profit, { minimumFractionDigits: 2 }), color: "var(--green)", bg: "var(--green-dim)", isLoading: false },
         ].map(({ icon, label, value, color, bg, isLoading }) => (
           <div key={label} className="glass" style={{ padding: "1.1rem 1.25rem", display: "flex", alignItems: "center", gap: "0.875rem" }}>
             <div style={{ width: 36, height: 36, background: bg, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0 }}>
@@ -335,6 +397,10 @@ export default function AnalyticsPage() {
             </div>
           </div>
         ))}
+      </div>
+        {profitStats.missingCost && (
+          <p style={{ fontSize: "0.75rem", color: "var(--amber)", margin: 0 }}>{t("analytics.profitIncomplete")}</p>
+        )}
       </div>
 
       {/* Activity chart */}
@@ -452,6 +518,35 @@ export default function AnalyticsPage() {
                   <div>
                     <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-1)", margin: 0 }}>{p.name}</p>
                     <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: "1px 0 0" }}>{t("analytics.minStock")} {p.minStock}</p>
+                  </div>
+                  <span style={{ fontWeight: 700, color: "var(--amber)", fontSize: "1.1rem" }}>{p.totalQuantity}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Dead stock: in stock the whole period, nothing sold */}
+        <div className="glass" style={{ padding: "1.5rem" }}>
+          <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 0.25rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            {t("analytics.deadStockCount", { n: deadStock.length })}
+          </h2>
+          <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: "0 0 1rem" }}>{t("analytics.deadStockSubtitle")}</p>
+          {deadStock.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "2rem 0", color: "var(--green)", fontSize: "0.875rem" }}>
+              {t("analytics.deadStockEmpty")}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: 220, overflow: "auto" }}>
+              {deadStock.map((p) => (
+                <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid var(--border)" }}>
+                  <div>
+                    <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-1)", margin: 0 }}>{p.name}</p>
+                    <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: "1px 0 0" }}>
+                      {p.tiedValue > 0
+                        ? t("analytics.deadStockHint", { value: money(p.tiedValue, { minimumFractionDigits: 2 }) })
+                        : t("analytics.deadStockNoValue")}
+                    </p>
                   </div>
                   <span style={{ fontWeight: 700, color: "var(--amber)", fontSize: "1.1rem" }}>{p.totalQuantity}</span>
                 </div>

@@ -33,7 +33,7 @@ import { normalizeCustomer, type CustomerInput } from "@/lib/customers";
 import { getLocalizedOptionValue } from "@/lib/product-field-options";
 import { CatalogChannels } from "@/lib/catalog-channels";
 import { BASE_CURRENCY, isSupportedCurrency, roundForCurrency } from "@/lib/currency";
-import { AppLocale, CatalogOrder, CatalogStatEvent, OrderStatus, Product, ProductCustomField, ProductVariant, SaleChannel, SaleLine } from "@/lib/types";
+import { AppLocale, CatalogOrder, CatalogStatEvent, OrderStatus, Product, ProductCustomField, ProductVariant, Sale, SaleChannel, SaleLine } from "@/lib/types";
 
 const BATCH_LIMIT = 450;
 const READ_CONCURRENCY = 24;
@@ -362,6 +362,10 @@ export async function fulfillCatalogOrder(
     throw new Error("VALUE_OUT_OF_RANGE");
   }
 
+  // Costs are snapshotted from each product as its line is fulfilled, so a
+  // later change to the product's purchase price cannot rewrite past profit.
+  const costByProduct = new Map<string, number>();
+
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     await runTransaction(db, async (tx) => {
@@ -393,6 +397,9 @@ export async function fulfillCatalogOrder(
       if (!productSnap.exists() || !variantSnap.exists()) throw new Error("ORDER_VARIANT_NOT_FOUND");
       const product = productSnap.data();
       const variant = variantSnap.data();
+      if (typeof product.costPrice === "number" && Number.isFinite(product.costPrice) && product.costPrice >= 0) {
+        costByProduct.set(line.productId, product.costPrice);
+      }
       if (variant.quantity < line.quantity || product.totalQuantity < line.quantity) {
         throw new Error("ORDER_STOCK_INSUFFICIENT");
       }
@@ -427,6 +434,10 @@ export async function fulfillCatalogOrder(
   }
 
   const saleRef = doc(db, "shops", shopId, "sales", `order-${orderId}`);
+  const saleLinesWithCost: SaleLine[] = saleLines.map((line) => {
+    const unitCost = costByProduct.get(line.productId);
+    return typeof unitCost === "number" ? { ...line, unitCost } : line;
+  });
   await runTransaction(db, async (tx) => {
     const [currentOrder, existingSale] = await Promise.all([tx.get(orderRef), tx.get(saleRef)]);
     if (!currentOrder.exists()) throw new Error("ORDER_NOT_FOUND");
@@ -444,7 +455,7 @@ export async function fulfillCatalogOrder(
     }
     if (!existingSale.exists()) {
       tx.set(saleRef, {
-        lines: saleLines,
+        lines: saleLinesWithCost,
         total,
         channel: "catalog",
         buyerName: (initialData.customerName ?? "").trim().slice(0, 100),
@@ -873,6 +884,15 @@ export async function recordSale(
   const total = lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
   if (!Number.isSafeInteger(Math.round(total * 100))) throw new Error("VALUE_OUT_OF_RANGE");
 
+  // The caller may pass a cost snapshot from the product it saw on screen; it
+  // is kept only when it is a usable number, otherwise the line simply has no
+  // cost and analytics falls back to the product's current purchase price.
+  const saleLines: SaleLine[] = lines.map(({ unitCost, ...line }) => (
+    typeof unitCost === "number" && Number.isFinite(unitCost) && unitCost >= 0
+      ? { ...line, unitCost }
+      : line
+  ));
+
   const completedLineKeys: string[] = [];
   try {
     for (const line of lines) {
@@ -894,7 +914,7 @@ export async function recordSale(
 
   try {
     await addDoc(collection(db, "shops", shopId, "sales"), {
-      lines,
+      lines: saleLines,
       total: Math.round(total * 100) / 100,
       channel: buyer.channel,
       buyerName: buyer.buyerName.trim().slice(0, 100),
@@ -903,6 +923,99 @@ export async function recordSale(
         : buyer.buyerContact.trim()).slice(0, 100),
       ...(buyer.customerId ? { customerId: buyer.customerId.slice(0, 100) } : {}),
       note: (buyer.note ?? "").trim().slice(0, 500),
+      actorUid,
+      actorName,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    throw new PartialReceiptError(completedLineKeys, { cause: error });
+  }
+}
+
+/** Reverses a sale with a compensating document. The original record is never
+ * touched — the storno is a second sale-shaped document linking back through
+ * `stornoOf`, stock is taken back line by line (reason "return"), and reports
+ * net the two out. Passing back the completed line keys of a failed attempt
+ * skips what was already restored, mirroring the receipt retry contract.
+ */
+export async function stornoSale(
+  shopId: string,
+  sale: Pick<Sale, "id" | "lines" | "channel" | "buyerName" | "buyerContact" | "customerId" | "note">,
+  actorUid: string,
+  actorName: string,
+  skipLineKeys: string[] = []
+) {
+  const lines = sale.lines;
+  if (lines.length === 0) throw new Error("LINES_REQUIRED");
+  if (lines.length > 100) throw new Error("TOO_MANY_LINES");
+  if (lines.some((line) => !Number.isSafeInteger(line.quantity) || line.quantity <= 0)) {
+    throw new Error("LINE_QUANTITY_INVALID");
+  }
+  if (lines.some((line) => !Number.isFinite(line.unitPrice) || line.unitPrice < 0)) {
+    throw new Error("PRICE_INVALID");
+  }
+  if (new Set(lines.map((line) => `${line.productId}/${line.variantId}`)).size !== lines.length) {
+    throw new Error("DUPLICATE_VARIANT");
+  }
+  const total = lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+  if (!Number.isSafeInteger(Math.round(total * 100)) || total > 100_000_000) {
+    throw new Error("VALUE_OUT_OF_RANGE");
+  }
+
+  const existing = await getDocs(query(
+    collection(db, "shops", shopId, "sales"),
+    where("stornoOf", "==", sale.id),
+    limit(1)
+  ));
+  if (!existing.empty) throw new Error("SALE_ALREADY_STORNED");
+
+  const completedLineKeys: string[] = [];
+  const skip = new Set(skipLineKeys);
+  for (const line of lines) {
+    const key = `${line.productId}/${line.variantId}`;
+    if (skip.has(key)) {
+      completedLineKeys.push(key);
+      continue;
+    }
+    try {
+      await adjustStock(
+        shopId,
+        line.productId,
+        { id: line.variantId, label: line.variantLabel, sku: "", quantity: 0 },
+        line.quantity,
+        actorUid,
+        actorName,
+        "return"
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === "VARIANT_NOT_FOUND" || message === "PRODUCT_NOT_FOUND") {
+        // Nothing left to give back; the money side of the storno still stands.
+      } else {
+        if (completedLineKeys.length > 0) throw new PartialReceiptError(completedLineKeys, { cause: error });
+        throw error;
+      }
+    }
+    completedLineKeys.push(key);
+  }
+
+  const saleLines: SaleLine[] = lines.map(({ unitCost, ...line }) => (
+    typeof unitCost === "number" && Number.isFinite(unitCost) && unitCost >= 0
+      ? { ...line, unitCost }
+      : line
+  ));
+  try {
+    await addDoc(collection(db, "shops", shopId, "sales"), {
+      lines: saleLines,
+      total: Math.round(total * 100) / 100,
+      channel: sale.channel,
+      buyerName: sale.buyerName.trim().slice(0, 100),
+      buyerContact: (sale.channel === "instagram"
+        ? sale.buyerContact.trim().replace(/^@/, "")
+        : sale.buyerContact.trim()).slice(0, 100),
+      ...(sale.customerId ? { customerId: sale.customerId.slice(0, 100) } : {}),
+      stornoOf: sale.id,
+      note: (sale.note ?? "").trim().slice(0, 500),
       actorUid,
       actorName,
       createdAt: serverTimestamp(),

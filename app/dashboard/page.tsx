@@ -241,8 +241,11 @@ export default function DashboardPage() {
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  // A storno annuls its original sale: both the reversed sale and its storno
+  // document stay out of the month total, so only sales that still stand count.
+  const stornoedIds = new Set(sales.flatMap((s) => (s.stornoOf ? [s.stornoOf] : [])));
   const monthRevenue = sales
-    .filter((s) => s.createdAt && s.createdAt >= monthStart)
+    .filter((s) => !s.stornoOf && !stornoedIds.has(s.id) && s.createdAt && s.createdAt >= monthStart)
     .reduce((sum, s) => sum + s.total, 0);
 
   if (loading) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="spinner" /></div>;
