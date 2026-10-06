@@ -949,6 +949,11 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           .cat-order-fields { gap: 0.6rem; }
           .cat-cart-bar { left: 1rem; right: 1rem; justify-content: flex-start; }
           .cat-cart-bar-total { margin-left: auto; }
+          /* Sticky toolbar re-composites its blur on every scroll frame and the
+             card badges put one blur layer per grid card; backgrounds are ~90%
+             opaque so the blur is invisible while the GPU cost is real. */
+          .cat-toolbar { background: var(--bg-2); backdrop-filter: none; -webkit-backdrop-filter: none; }
+          .cat-card-cat, .cat-card-count, .cat-hero-contact { backdrop-filter: none; -webkit-backdrop-filter: none; }
         }
 
         @media (max-width: 380px) {

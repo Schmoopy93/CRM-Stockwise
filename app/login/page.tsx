@@ -124,7 +124,7 @@ export default function LoginPage() {
       </div>
 
       {/* Navbar */}
-      <nav style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", background: "color-mix(in srgb, var(--bg-2) 72%, transparent)", gap: 8 }}>
+      <nav className="login-navbar" style={{ position: "sticky", top: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", background: "color-mix(in srgb, var(--bg-2) 72%, transparent)", gap: 8 }}>
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <div style={{ width: 32, height: 32, borderRadius: 9, overflow: "hidden", boxShadow: "0 4px 14px rgba(99,102,241,0.45)", flexShrink: 0 }}><Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={32} height={32} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /></div>
@@ -149,7 +149,7 @@ export default function LoginPage() {
       </nav>
 
       {/* Hero */}
-      <section style={{ position: "relative", zIndex: 1, textAlign: "center", padding: "4rem 1.5rem 3rem" }}>
+      <section className="login-hero" style={{ position: "relative", zIndex: 1, textAlign: "center", padding: "4rem 1.5rem 3rem" }}>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "var(--accent-glow)", border: "1px solid rgba(99,102,241,0.3)", borderRadius: 99, padding: "0.28rem 0.85rem", marginBottom: "1.25rem" }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6366f1", display: "inline-block", boxShadow: "0 0 8px #6366f1" }} />
           <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--accent)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{t("login.badge")}</span>
@@ -183,7 +183,7 @@ export default function LoginPage() {
       </section>
 
       {/* Feature grid — full width */}
-      <section style={{ position: "relative", zIndex: 1, padding: "0 1.5rem 5rem", maxWidth: 1200, marginInline: "auto", width: "100%" }}>
+      <section className="login-features-wrap" style={{ position: "relative", zIndex: 1, padding: "0 1.5rem 5rem", maxWidth: 1200, marginInline: "auto", width: "100%" }}>
         <div className="login-features" style={{ display: "grid", gap: "1rem" }}>
           {FEATURE_KEYS.map(({ icon: Icon, key, color, iconColor }) => (
             <div
@@ -214,7 +214,7 @@ export default function LoginPage() {
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
-            style={{ width: "100%", maxWidth: 400, background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 20, padding: "1.75rem", boxShadow: "0 24px 80px rgba(0,0,0,0.5)", position: "relative", animation: "slideUp 0.2s ease" }}
+            style={{ width: "100%", maxWidth: 400, maxHeight: "calc(100dvh - 2rem)", overflowY: "auto", background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 20, padding: "1.75rem", boxShadow: "0 24px 80px rgba(0,0,0,0.5)", position: "relative", animation: "slideUp 0.2s ease" }}
           >
             {/* Close */}
             <button
@@ -328,6 +328,15 @@ export default function LoginPage() {
           .nav-brand { display: none; }
           .nav-login-label { display: none; }
           .nav-login-btn { padding: 0.42rem 0.6rem !important; }
+          /* Fullscreen blur re-composites on every scroll frame; on phones the
+             opaque bar reads the same. !important beats the inline style. */
+          .login-navbar {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            background: var(--bg-2) !important;
+          }
+          .login-hero { padding: 2.6rem 1.25rem 2.25rem; }
+          .login-features-wrap { padding-bottom: 3.5rem !important; }
         }
       `}</style>
     </div>

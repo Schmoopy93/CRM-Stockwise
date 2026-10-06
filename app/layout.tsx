@@ -37,6 +37,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
+  // Cover lets env(safe-area-inset-*) report real values in the PWA standalone
+  // mode, where the mobile header pads itself below the notch.
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#0f0f14" },
     { media: "(prefers-color-scheme: light)", color: "#f4f4f8" },

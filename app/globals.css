@@ -55,6 +55,8 @@ body {
   min-width: 320px;
   min-height: 100%;
   margin: 0;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -659,8 +661,8 @@ select.input { cursor: pointer; }
 .products-row[data-last] { border-bottom: 0; }
 .products-row:hover, .products-row:focus-visible { background: color-mix(in srgb, var(--bg-3) 68%, var(--bg-2)); }
 .products-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.products-row[data-low] { background: rgba(245, 158, 11, 0.04); }
-.products-row[data-low]:hover { background: rgba(245, 158, 11, 0.08); }
+.products-row[data-low] { background: color-mix(in srgb, var(--amber) 4%, transparent); }
+.products-row[data-low]:hover { background: color-mix(in srgb, var(--amber) 8%, transparent); }
 
 .products-cell-main { display: flex; align-items: center; gap: 0.625rem; min-width: 0; }
 .products-thumb {
@@ -730,19 +732,19 @@ select.input { cursor: pointer; }
   font-size: 0.875rem;
 }
 
-/* Loading skeletons */
+/* Loading skeletons — opacity pulse only: animating background-position forces
+   a repaint every frame, while opacity runs on the compositor. */
 .products-skeleton {
   height: 62px;
   border-radius: 14px;
   border: 1px solid var(--border);
-  background: linear-gradient(90deg, var(--bg-2) 25%, var(--bg-3) 37%, var(--bg-2) 63%);
-  background-size: 400% 100%;
-  animation: products-skeleton-pulse 1.3s ease-in-out infinite;
+  background: var(--bg-3);
+  animation: skeleton-pulse 1.3s ease-in-out infinite;
 }
 .products-skeleton--head { height: 78px; margin-bottom: 0.25rem; }
-@keyframes products-skeleton-pulse {
-  0% { background-position: 100% 50%; }
-  100% { background-position: 0 50%; }
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }
 
 @media (max-width: 760px) {
@@ -758,7 +760,7 @@ select.input { cursor: pointer; }
     border-radius: 10px;
     background: var(--bg-2);
   }
-  .products-row[data-low] { border-color: rgba(245, 158, 11, 0.32); }
+  .products-row[data-low] { border-color: color-mix(in srgb, var(--amber) 32%, transparent); }
   .products-cell-main { grid-area: main; }
   .products-cell-qty { grid-area: qty; align-self: start; }
   .products-cell-cat { grid-area: cat; }
@@ -783,6 +785,9 @@ select.input { cursor: pointer; }
   .products-card-stock strong { font-size: 0.9rem; }
   .products-card-arrow { display: none; }
   .products-card-alert { font-size: 0.62rem; }
+  /* Badge sits on every card in the grid; its blur costs a composite layer per
+     card while the 90% background barely shows anything through. */
+  .products-card-category { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 
 @media (max-width: 900px) {
@@ -794,22 +799,29 @@ select.input { cursor: pointer; }
 }
 
 @media (max-width: 700px) {
-  .products-filters { top: 60px; }
-  .app-shell { display: block !important; }
+  /* Sticky header/filters scroll with the page, so a backdrop blur would be
+     re-composited on every frame over content that is ~96% opaque anyway. */
   .mobile-header {
     position: sticky;
     top: 0;
     z-index: 999;
-    height: 60px;
+    min-height: 60px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 0.5rem 1rem;
-    background: rgba(22, 22, 31, 0.96);
+    padding: max(0.5rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-left)) max(0.5rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-right));
+    background: var(--bg-2);
     border-bottom: 1px solid var(--border);
-    backdrop-filter: blur(14px);
   }
+  .products-filters {
+    top: calc(60px + env(safe-area-inset-top));
+    background: var(--bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .glass { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .app-shell { display: block !important; }
   .app-sidebar {
     position: fixed;
     inset: 0 auto 0 0;
@@ -817,6 +829,7 @@ select.input { cursor: pointer; }
     height: 100dvh;
     min-height: 100dvh;
     overflow-y: auto;
+    overscroll-behavior: contain;
     transform: translateX(-105%);
     transition: transform 0.22s ease;
     box-shadow: 16px 0 40px rgba(0, 0, 0, 0.28);
@@ -837,8 +850,8 @@ select.input { cursor: pointer; }
   }
   .app-main {
     width: 100%;
-    min-height: calc(100dvh - 60px);
-    padding: 1.1rem 1rem max(1.25rem, env(safe-area-inset-bottom));
+    min-height: calc(100dvh - 60px - env(safe-area-inset-top));
+    padding: 1.1rem max(1rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
     overflow: visible;
   }
   .app-main > .fade-up { min-width: 0; max-width: 100% !important; }
@@ -849,8 +862,8 @@ select.input { cursor: pointer; }
 }
 
 @media (max-width: 480px) {
-  .app-main { padding-inline: 0.75rem; }
-  .mobile-header { padding-inline: 0.75rem; }
+  .app-main { padding-inline: max(0.75rem, env(safe-area-inset-left)) max(0.75rem, env(safe-area-inset-right)); }
+  .mobile-header { padding-inline: max(0.75rem, env(safe-area-inset-left)) max(0.75rem, env(safe-area-inset-right)); }
   .products-page { gap: 1rem; }
   .products-head { align-items: flex-start; gap: 0.75rem; padding-bottom: 0.9rem; }
   .products-title { font-size: 1.45rem; }
@@ -864,7 +877,7 @@ select.input { cursor: pointer; }
   .products-stat-icon svg { width: 15px; height: 15px; }
   .products-stat-label { font-size: 0.65rem; }
   .products-stat-value { font-size: 1.02rem; }
-  .products-filters { top: 60px; padding: 0.6rem; }
+  .products-filters { padding: 0.6rem; }
   .products-filter-row { align-items: stretch; flex-direction: column; gap: 0.5rem; }
   .products-search { flex: 1 1 auto; }
   .products-sort-wrap { display: grid; grid-template-columns: auto minmax(0, 1fr); }
@@ -965,11 +978,5 @@ select.input { cursor: pointer; }
 }
 
 .light .mobile-header {
-  background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
-}
-
-.light .products-skeleton {
-  background: linear-gradient(90deg, #f2f4f9 25%, #e4e7ef 37%, #f2f4f9 63%);
-  background-size: 400% 100%;
 }
