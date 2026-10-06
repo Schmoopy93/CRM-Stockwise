@@ -7,9 +7,11 @@ import {
   deleteDoc,
   deleteField,
   doc,
+  documentId,
   getDoc,
   getDocs,
   increment,
+  limit,
   orderBy,
   query,
   runTransaction,
@@ -238,6 +240,12 @@ test("anonymous visitors can only bump one catalog counter by one while the cata
   await assertFails(setDoc(doc(signedOutDb, "shops", shopId, "catalogStats", "not-a-day"), { views: increment(1) }, { merge: true }));
   await assertFails(getDoc(statsRef));
   await assertSucceeds(getDoc(doc(firestoreFor("staff-a"), "shops", shopId, "catalogStats", "2026-09-29")));
+  await assertSucceeds(getDocs(query(
+    collection(firestoreFor("staff-a"), "shops", shopId, "catalogStats"),
+    where(documentId(), ">=", "2026-09-01"),
+    orderBy(documentId()),
+    limit(30)
+  )));
 });
 
 test("customers can place catalog orders but members own the lifecycle", async () => {

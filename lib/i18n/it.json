@@ -4,6 +4,8 @@
   "analytics.allGood": "✓ Tutti i prodotti hanno scorte sufficienti",
   "analytics.catalogConversion": "Conversione",
   "analytics.catalogEmpty": "Ancora nessuna visita. Condividi il link del catalogo su Instagram, WhatsApp o Telegram.",
+  "analytics.catalogLoadFailed": "Impossibile caricare le statistiche del catalogo pubblico. Controlla la connessione e riprova.",
+  "analytics.catalogLoading": "Caricamento delle statistiche del catalogo pubblico…",
   "analytics.catalogShares": "Condivisioni",
   "analytics.catalogSubtitle": "Visite e clic sui pulsanti d'ordine negli ultimi 30 giorni",
   "analytics.catalogTitle": "Catalogo pubblico",

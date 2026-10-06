@@ -342,10 +342,21 @@ export function useStockEventsInRange(shopId: string | undefined, from: Date, to
 
 export function useCatalogStats(shopId: string | undefined, days = 30) {
   const [stats, setStats] = useState<CatalogStatsDay[]>([]);
+  const [loadedShopId, setLoadedShopId] = useState<string | null>(null);
+  const [failedShopId, setFailedShopId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!shopId) return;
-    const q = query(collection(db, "shops", shopId, "catalogStats"), orderBy(documentId(), "desc"), limit(days));
+    const today = new Date();
+    const firstDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - (days - 1)))
+      .toISOString()
+      .slice(0, 10);
+    const q = query(
+      collection(db, "shops", shopId, "catalogStats"),
+      where(documentId(), ">=", firstDay),
+      orderBy(documentId()),
+      limit(days)
+    );
     const unsub = onSnapshot(q, (snap) => {
       setStats(
         snap.docs.map((d) => ({
@@ -358,11 +369,21 @@ export function useCatalogStats(shopId: string | undefined, days = 30) {
           orders: d.data().orders ?? 0,
         }))
       );
-    }, () => setStats([]));
+      setLoadedShopId(shopId);
+      setFailedShopId(null);
+    }, () => {
+      setStats([]);
+      setLoadedShopId(shopId);
+      setFailedShopId(shopId);
+    });
     return unsub;
   }, [shopId, days]);
 
-  return stats;
+  return {
+    stats: shopId && loadedShopId === shopId ? stats : [],
+    loading: Boolean(shopId) && loadedShopId !== shopId,
+    error: Boolean(shopId) && failedShopId === shopId,
+  };
 }
 
 export function useSales(shopId: string | undefined, count = 20) {

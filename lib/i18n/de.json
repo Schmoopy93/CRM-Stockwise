@@ -4,6 +4,8 @@
   "analytics.allGood": "✓ Alle Produkte haben ausreichend Bestand",
   "analytics.catalogConversion": "Konversion",
   "analytics.catalogEmpty": "Noch keine Besuche. Teilen Sie den Katalog-Link auf Instagram, WhatsApp oder Telegram.",
+  "analytics.catalogLoadFailed": "Die Statistiken des öffentlichen Katalogs konnten nicht geladen werden. Prüfen Sie die Verbindung und versuchen Sie es erneut.",
+  "analytics.catalogLoading": "Statistiken des öffentlichen Katalogs werden geladen…",
   "analytics.catalogShares": "Geteilt",
   "analytics.catalogSubtitle": "Besuche und Klicks auf Bestell-Buttons in den letzten 30 Tagen",
   "analytics.catalogTitle": "Öffentlicher Katalog",

@@ -10,7 +10,7 @@ import {
 import { TrendingDown, TrendingUp, Activity, AlertCircle, Package, Eye, MessageCircle, Send, AtSign, Share2, Percent, ShoppingBag, DollarSign } from "lucide-react";
 
 function formatDay(date: Date, locale: Locale) {
-  return date.toLocaleDateString(INTL_LOCALES[locale], { day: "2-digit", month: "2-digit" });
+  return date.toLocaleDateString(INTL_LOCALES[locale], { day: "2-digit", month: "2-digit", timeZone: "UTC" });
 }
 
 function dateKey(date: Date) {
@@ -24,7 +24,7 @@ const CHANNEL_COLORS = { whatsapp: "#25d366", telegram: "#229ed9", instagram: "#
 
 function CatalogStatsSection({ shopId, locale }: { shopId: string | undefined; locale: Locale }) {
   const { t } = useI18n();
-  const stats = useCatalogStats(shopId, 30);
+  const { stats, loading, error } = useCatalogStats(shopId, 30);
 
   const totals = useMemo(() => stats.reduce(
     (sum, day) => ({
@@ -41,8 +41,8 @@ function CatalogStatsSection({ shopId, locale }: { shopId: string | undefined; l
   const chartData = useMemo(() => {
     const byDay = new Map(stats.map((day) => [day.day, day]));
     const now = new Date();
-    return Array.from({ length: 14 }, (_, i) => {
-      const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (13 - i)));
+    return Array.from({ length: 30 }, (_, i) => {
+      const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (29 - i)));
       const row = byDay.get(date.toISOString().slice(0, 10));
       return { date: formatDay(date, locale), whatsapp: row?.whatsapp ?? 0, telegram: row?.telegram ?? 0, instagram: row?.instagram ?? 0 };
     });
@@ -50,6 +50,7 @@ function CatalogStatsSection({ shopId, locale }: { shopId: string | undefined; l
 
   const clicks = totals.whatsapp + totals.telegram + totals.instagram;
   const conversion = totals.views > 0 ? Math.round((clicks / totals.views) * 100) : 0;
+  const hasActivity = totals.views + clicks + totals.share + totals.orders > 0;
 
   return (
     <div className="glass" style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
@@ -60,7 +61,7 @@ function CatalogStatsSection({ shopId, locale }: { shopId: string | undefined; l
         <p style={{ fontSize: "0.75rem", color: "var(--text-3)", margin: "4px 0 0" }}>{t("analytics.catalogSubtitle")}</p>
       </div>
 
-      <div className="analytics-stats" style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "0.75rem" }}>
+      <div className="analytics-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(135px, 1fr))", gap: "0.75rem" }}>
         {[
           { icon: <Eye size={15} />, label: t("analytics.catalogViews"), value: totals.views, color: "#6366f1" },
           { icon: <MessageCircle size={15} />, label: "WhatsApp", value: totals.whatsapp, color: CHANNEL_COLORS.whatsapp },
@@ -75,12 +76,16 @@ function CatalogStatsSection({ shopId, locale }: { shopId: string | undefined; l
               <span style={{ color, display: "flex" }}>{icon}</span>
               {label}
             </span>
-            <p style={{ fontSize: "1.35rem", fontWeight: 700, margin: 0, color: "var(--text-1)", lineHeight: 1 }}>{value}</p>
+            <p style={{ fontSize: "1.35rem", fontWeight: 700, margin: 0, color: "var(--text-1)", lineHeight: 1 }}>{loading ? "…" : error ? "—" : value}</p>
           </div>
         ))}
       </div>
 
-      {totals.views === 0 && clicks === 0 ? (
+      {error ? (
+        <p role="alert" style={{ color: "var(--red)", fontSize: "0.82rem", textAlign: "center", padding: "1.5rem 0", margin: 0 }}>{t("analytics.catalogLoadFailed")}</p>
+      ) : loading ? (
+        <p role="status" style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "1.5rem 0", margin: 0 }}>{t("analytics.catalogLoading")}</p>
+      ) : !hasActivity ? (
         <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "1.5rem 0", margin: 0 }}>{t("analytics.catalogEmpty")}</p>
       ) : (
         <ResponsiveContainer width="100%" height={200}>

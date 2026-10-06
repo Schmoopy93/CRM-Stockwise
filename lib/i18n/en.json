@@ -4,6 +4,8 @@
   "analytics.allGood": "✓ All products have sufficient stock",
   "analytics.catalogConversion": "Conversion",
   "analytics.catalogEmpty": "No visits yet. Share your catalog link on Instagram, WhatsApp or Telegram.",
+  "analytics.catalogLoadFailed": "Public catalog analytics could not be loaded. Check your connection and try again.",
+  "analytics.catalogLoading": "Loading public catalog analytics…",
   "analytics.catalogShares": "Shares",
   "analytics.catalogSubtitle": "Visits and order button clicks in the last 30 days",
   "analytics.catalogTitle": "Public catalog",

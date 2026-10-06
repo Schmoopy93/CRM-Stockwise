@@ -4,6 +4,8 @@
   "analytics.allGood": "✓ Svi artikli imaju dovoljno stanja",
   "analytics.catalogConversion": "Konverzija",
   "analytics.catalogEmpty": "Još nema poseta. Podelite link kataloga na Instagramu, WhatsApp-u ili Telegramu.",
+  "analytics.catalogLoadFailed": "Podaci javnog kataloga nisu mogli da se učitaju. Proverite vezu i pokušajte ponovo.",
+  "analytics.catalogLoading": "Učitavanje podataka javnog kataloga…",
   "analytics.catalogShares": "Deljenja",
   "analytics.catalogSubtitle": "Posete i klikovi na dugmad za porudžbinu u poslednjih 30 dana",
   "analytics.catalogTitle": "Javni katalog",

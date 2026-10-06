@@ -4,6 +4,8 @@
   "analytics.allGood": "✓ Все товары имеют достаточный остаток",
   "analytics.catalogConversion": "Конверсия",
   "analytics.catalogEmpty": "Посещений пока нет. Поделитесь ссылкой на каталог в Instagram, WhatsApp или Telegram.",
+  "analytics.catalogLoadFailed": "Не удалось загрузить статистику публичного каталога. Проверьте подключение и повторите попытку.",
+  "analytics.catalogLoading": "Загрузка статистики публичного каталога…",
   "analytics.catalogShares": "Репосты",
   "analytics.catalogSubtitle": "Посещения и нажатия кнопок заказа за последние 30 дней",
   "analytics.catalogTitle": "Публичный каталог",
