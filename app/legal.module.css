@@ -92,6 +92,46 @@
   line-height: 1.55;
 }
 
+.para {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.84rem;
+  line-height: 1.75;
+}
+
+.list {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.listItem {
+  color: var(--text-2);
+  font-size: 0.84rem;
+  line-height: 1.65;
+}
+
+.related {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.relatedLink {
+  color: var(--accent-2);
+  font-size: 0.8rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.relatedLink:hover {
+  text-decoration: underline;
+}
+
 .section {
   display: flex;
   flex-direction: column;
@@ -266,6 +306,11 @@
 
   .calloutText {
     font-size: 0.84rem;
+  }
+
+  .para,
+  .listItem {
+    font-size: 0.8rem;
   }
 
   .tableWrap {

@@ -315,6 +315,10 @@ export default function LoginPage() {
           <span style={{ fontSize: "0.75rem", color: "var(--text-3)" }}>{new Date().getFullYear()}</span>
           <span style={{ fontSize: "0.78rem", color: "var(--border)" }}>·</span>
           <Link href="/cookies" style={{ fontSize: "0.75rem", color: "var(--text-3)" }}>{t("cookies.title")}</Link>
+          <span style={{ fontSize: "0.78rem", color: "var(--border)" }}>·</span>
+          <Link href="/privacy" style={{ fontSize: "0.75rem", color: "var(--text-3)" }}>{t("legal.privacy.title")}</Link>
+          <span style={{ fontSize: "0.78rem", color: "var(--border)" }}>·</span>
+          <Link href="/terms" style={{ fontSize: "0.75rem", color: "var(--text-3)" }}>{t("legal.terms.title")}</Link>
         </div>
       </footer>
 

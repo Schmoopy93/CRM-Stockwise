@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import type { Locale } from "@/lib/i18n-context";
 
-/** Public site origin. Every canonical/hreflang URL is built from this. */
-export const BASE_URL = "https://inventory-crm.vercel.app";
+/** Public site origin. Every canonical/hreflang URL is built from this.
+ * This is the live Vercel deployment domain (GitHub repo homepage); the bare
+ * `inventory-crm.vercel.app` belongs to an unrelated app. */
+export const BASE_URL = "https://crm-inventory-chi.vercel.app";
 
 /** Maps our short locale codes to the BCP-47 tags used for hreflang/OG. */
 export const LOCALE_TAGS: Record<Locale, { hreflang: string; og: string; htmlLang: string }> = {

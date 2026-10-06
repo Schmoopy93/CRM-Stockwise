@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n-context";
 import { ArrowLeft, Cookie, ExternalLink, Megaphone, Settings2, ShieldCheck } from "lucide-react";
-import styles from "./cookies.module.css";
+import styles from "../legal.module.css";
 
 const ITEMS = [
   { name: "inventory-locale", typeKey: "cookies.typeCookie", purposeKey: "cookies.purposeLocale", durationKey: "cookies.durationYear" },
@@ -110,6 +110,11 @@ export default function CookiesPage() {
           </div>
         </section>
       </div>
+
+      <nav className={styles.related} aria-label={t("legal.seeAlso")}>
+        <Link href="/privacy" className={styles.relatedLink}>{t("legal.privacy.title")}</Link>
+        <Link href="/terms" className={styles.relatedLink}>{t("legal.terms.title")}</Link>
+      </nav>
     </main>
   );
 }

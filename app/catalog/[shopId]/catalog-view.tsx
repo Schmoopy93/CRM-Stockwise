@@ -325,7 +325,13 @@ export default function CatalogView({ shopId }: { shopId: string }) {
               </Link>
             </>
           )}
-          <Link href="/cookies" className="cat-cookie-link">{t("cookies.title")}</Link>
+          <nav className="cat-legal" aria-label={t("legal.seeAlso")}>
+            <Link href="/cookies" className="cat-cookie-link">{t("cookies.title")}</Link>
+            <span aria-hidden="true">·</span>
+            <Link href="/privacy" className="cat-cookie-link">{t("legal.privacy.title")}</Link>
+            <span aria-hidden="true">·</span>
+            <Link href="/terms" className="cat-cookie-link">{t("legal.terms.title")}</Link>
+          </nav>
         </footer>
       </div>
 
@@ -629,6 +635,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-account-link:hover { color: var(--shop-accent); border-color: var(--shop-accent); background: var(--bg-3); }
         .cat-cookie-link { color: var(--text-3); text-decoration: none; }
         .cat-cookie-link:hover { color: var(--text-1); }
+        .cat-legal { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.45rem; }
 
         /* ── Floating cart ── */
         .cat-cart-bar {

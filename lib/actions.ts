@@ -1,5 +1,7 @@
 import {
+  deleteUser,
   GoogleAuthProvider,
+  reauthenticateWithPopup,
   signInWithPopup,
   signOut as firebaseSignOut,
   User,
@@ -10,6 +12,7 @@ import {
   deleteField,
   doc,
   deleteDoc,
+  DocumentReference,
   FieldValue,
   getDoc,
   getDocs,
@@ -1023,4 +1026,111 @@ export async function stornoSale(
   } catch (error) {
     throw new PartialReceiptError(completedLineKeys, { cause: error });
   }
+}
+
+// ─── Account & shop deletion ─────────────────────────────────────────────────
+
+/** Every subcollection a shop wipe has to clear. Nested collections are named
+ * as subs so children go before their parent documents. */
+const SHOP_TREES: { name: string; subs: string[] }[] = [
+  { name: "products", subs: ["variants"] },
+  { name: "customers", subs: [] },
+  { name: "catalog", subs: [] },
+  { name: "catalogStats", subs: [] },
+  { name: "conversations", subs: ["messages"] },
+  { name: "orders", subs: ["messages"] },
+  { name: "sales", subs: [] },
+  { name: "stockEvents", subs: [] },
+];
+
+/** Firestore has no cascading deletes, so a wipe walks the tree itself: page
+ * through a collection, collect each page's subcollection documents first,
+ * then delete children and parents together in chunked batches. */
+async function deleteCollectionTree(path: string, subs: string[]) {
+  while (true) {
+    const page = await getDocs(query(collection(db, path), limit(BATCH_LIMIT)));
+    if (page.empty) return;
+    const subRefs = await mapWithConcurrency(page.docs, async (parent) => {
+      const collected: DocumentReference[] = [];
+      for (const sub of subs) {
+        const subSnap = await getDocs(collection(db, parent.ref.path, sub));
+        for (const subDoc of subSnap.docs) collected.push(subDoc.ref);
+      }
+      return collected;
+    });
+    const operations: BatchOperation[] = [];
+    for (const refs of subRefs) for (const ref of refs) operations.push((batch) => batch.delete(ref));
+    for (const parent of page.docs) operations.push((batch) => batch.delete(parent.ref));
+    await commitInChunks(operations);
+  }
+}
+
+// Firebase treats credentials older than five minutes as stale for deleteUser,
+// so anything older triggers a fresh popup up front.
+const REAUTH_WINDOW_MS = 4 * 60 * 1000;
+
+function googleAuthProvider() {
+  return new GoogleAuthProvider();
+}
+
+async function hasFreshCredential(user: User) {
+  const lastLogin = user.metadata.lastSignInTime ? Date.parse(user.metadata.lastSignInTime) : NaN;
+  return Number.isFinite(lastLogin) && Date.now() - lastLogin <= REAUTH_WINDOW_MS;
+}
+
+/** Deletes the Auth account behind the current session. Firebase may still
+ * demand a recent login; the popup re-proves the identity, then the delete
+ * retries against the refreshed credential. */
+async function deleteSignedInUser(user: User) {
+  try {
+    await deleteUser(user);
+  } catch (error) {
+    const code = (error as { code?: string }).code ?? "";
+    if (!code.endsWith("requires-recent-login")) throw error;
+    await reauthenticateWithPopup(user, googleAuthProvider());
+    await deleteUser(user);
+  }
+}
+
+/** Owner-only right-to-erasure: wipes the shop tree, the team roster, the shop
+ * document and finally the owner's own account. The Google popup runs before
+ * anything is destroyed, so a cancelled sign-in aborts the wipe untouched. */
+export async function deleteShopAccount() {
+  const user = auth.currentUser;
+  if (!user) throw new Error("NOT_AUTHENTICATED");
+  const userSnap = await getDoc(doc(db, "users", user.uid));
+  const shopId = userSnap.data()?.shopId;
+  if (!userSnap.exists() || typeof shopId !== "string" || !shopId) throw new Error("NOT_AUTHENTICATED");
+  if (userSnap.data()?.role !== "owner") throw new Error("SHOP_OWNER_REQUIRED");
+
+  if (!(await hasFreshCredential(user))) await reauthenticateWithPopup(user, googleAuthProvider());
+
+  for (const tree of SHOP_TREES) {
+    await deleteCollectionTree(`shops/${shopId}/${tree.name}`, tree.subs);
+  }
+
+  // The roster, minus the owner — their own document goes last so the
+  // owner-only rules still hold while everything else is being removed.
+  const members = await getDocs(query(collection(db, "users"), where("shopId", "==", shopId)));
+  await commitInChunks(
+    members.docs
+      .filter((member) => member.id !== user.uid)
+      .map((member) => (batch) => batch.delete(member.ref))
+  );
+
+  await deleteDoc(doc(db, "shops", shopId));
+  await deleteDoc(doc(db, "users", user.uid));
+  await deleteSignedInUser(user);
+}
+
+/** Staff right-to-erasure: removes their membership document and their Auth
+ * account. The shop and its data stay untouched. */
+export async function deleteOwnAccount() {
+  const user = auth.currentUser;
+  if (!user) throw new Error("NOT_AUTHENTICATED");
+  const userRef = doc(db, "users", user.uid);
+  const userSnap = await getDoc(userRef);
+  if (userSnap.exists() && userSnap.data()?.role === "owner") throw new Error("SHOP_OWNER_CANNOT_LEAVE");
+  if (userSnap.exists()) await deleteDoc(userRef);
+  await deleteSignedInUser(user);
 }

@@ -9,6 +9,7 @@ import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { CATALOG_CHANNELS, CatalogChannels, hasAnyChannel, isValidChannel } from "@/lib/catalog-channels";
 import CatalogBrandingFields from "@/components/CatalogBrandingFields";
 import CurrencySettingsCard from "@/components/CurrencySettingsCard";
+import DangerZone from "@/components/DangerZone";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { UserProfile } from "@/lib/types";
@@ -310,6 +311,9 @@ export default function DashboardPage() {
           <span style={{ fontSize: "0.83rem", color: "var(--amber)", fontWeight: 700 }}>{t("dashboard.lowStockAlert", { n: lowStock.length })}</span>
         </div>
       )}
+
+      {/* Account & shop deletion */}
+      {profile?.shopId && <DangerZone shopId={profile.shopId} />}
 
     </div>
   );

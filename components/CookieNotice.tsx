@@ -8,6 +8,7 @@ import { Cookie } from "lucide-react";
 
 const STORAGE_KEY = "inventory-cookie-notice";
 const CHANGE_EVENT = "inventory-cookie-notice-change";
+const LEGAL_PATHS = new Set(["/cookies", "/privacy", "/terms"]);
 
 const noticeStore = {
   subscribe(onChange: () => void) {
@@ -32,7 +33,7 @@ export function CookieNotice() {
   const pathname = usePathname();
   const dismissed = useSyncExternalStore(noticeStore.subscribe, noticeStore.get, () => true);
 
-  if (dismissed || pathname === "/cookies") return null;
+  if (dismissed || LEGAL_PATHS.has(pathname)) return null;
 
   return (
     <div
