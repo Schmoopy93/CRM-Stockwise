@@ -13,7 +13,7 @@ const TRANSLATIONS: Record<Locale, Record<string, string>> = { sr, en, ru, de, e
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await localeFromHeaders();
   const dictionary = TRANSLATIONS[locale];
-  return buildMetadata({ locale, path: "/cookies", title: dictionary["cookies.title"], description: dictionary["cookies.intro"] });
+  return buildMetadata({ locale, path: "/cookies", title: dictionary["cookies.title"], description: dictionary["cookies.notice"] });
 }
 
 export default function CookiesLayout({ children }: { children: React.ReactNode }) {

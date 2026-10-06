@@ -4,7 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { I18nProvider } from "@/lib/i18n-context";
 import { ThemeProvider } from "@/lib/theme-context";
-import { BASE_URL, localeFromHeaders, seoCopy } from "@/lib/seo";
+import { BASE_URL, buildMetadata, localeFromHeaders, seoCopy } from "@/lib/seo";
 import { CookieNotice } from "@/components/CookieNotice";
 
 const inter = Inter({
@@ -14,25 +14,20 @@ const inter = Inter({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { title, description } = seoCopy(await localeFromHeaders());
+  const locale = await localeFromHeaders();
+  const { title, description } = seoCopy(locale);
   return {
     metadataBase: new URL(BASE_URL),
+    ...buildMetadata({ locale, path: "/", title, description }),
+    // The template must win over buildMetadata's plain string title.
     title: {
       default: title,
       template: "%s — Stockwise",
     },
-    description,
-    applicationName: "Stockwise",
-    referrer: "origin-when-cross-origin",
-    robots: {
-      index: true,
-      follow: true,
-      googleBot: { index: true, follow: true, "max-snippet": -1, "max-image-preview": "large" },
-    },
     icons: {
       icon: "/favicon.ico",
       shortcut: "/favicon.ico",
-      apple: "/favicon.ico",
+      apple: "/apple-touch-icon.png",
     },
     manifest: "/manifest.json",
   };

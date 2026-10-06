@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useI18n, translateError } from "@/lib/i18n-context";
+import { useI18n, translateError, INTL_LOCALES } from "@/lib/i18n-context";
 import { useExchangeRates, useShop } from "@/lib/hooks";
 import { updateShopCurrency } from "@/lib/actions";
 import { BASE_CURRENCY, hasRate, SUPPORTED_CURRENCIES } from "@/lib/currency";
@@ -82,7 +82,7 @@ export default function CurrencySettingsCard({ shopId }: { shopId: string }) {
                 rate: (rates.rates[selected] ?? 0).toLocaleString(locale, { maximumFractionDigits: 4 }),
                 base: BASE_CURRENCY,
                 currency: selected,
-                date: rates.date,
+                date: rates.date ? new Date(rates.date).toLocaleDateString(INTL_LOCALES[locale]) : "—",
               })}
       </p>
 

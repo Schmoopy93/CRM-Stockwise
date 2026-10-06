@@ -38,9 +38,10 @@ export async function fetchExchangeRates(): Promise<ExchangeRates> {
     if (!response.ok) throw new Error(`RATE_SOURCE_HTTP_${response.status}`);
     const payload = (await response.json()) as RateProviderPayload;
     if (payload.result !== "success" || !payload.rates) throw new Error("RATE_SOURCE_MALFORMED");
+    const updatedAt = new Date(payload.time_last_update_utc ?? "");
     return {
       base: payload.base_code ?? BASE_CURRENCY,
-      date: (payload.time_last_update_utc ?? "").slice(0, 10),
+      date: Number.isNaN(updatedAt.getTime()) ? "" : updatedAt.toISOString().slice(0, 10),
       rates: sanitizeRates(payload.rates),
     };
   } catch {

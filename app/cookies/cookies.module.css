@@ -1,0 +1,361 @@
+.page {
+  width: min(100% - 3rem, 980px);
+  margin: 0 auto;
+  padding: 2rem 0 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  align-self: flex-start;
+  color: var(--text-2);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.16s ease, transform 0.16s ease;
+}
+
+.back:hover {
+  color: var(--text-1);
+  transform: translateX(-2px);
+}
+
+.back:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.35rem 0 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.headerTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.heroIcon,
+.sectionIcon,
+.infoIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: var(--accent-2);
+  background: var(--accent-glow);
+}
+
+.heroIcon {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+}
+
+.title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 1.85rem;
+  font-weight: 800;
+  line-height: 1.18;
+}
+
+.updated {
+  margin: 0.35rem 0 0;
+  color: var(--text-3);
+  font-size: 0.72rem;
+}
+
+.intro,
+.infoText {
+  max-width: 780px;
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.9rem;
+  line-height: 1.75;
+}
+
+.callout {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1.05rem 1.2rem;
+  border: 1px solid color-mix(in srgb, var(--accent-2) 35%, var(--border));
+  border-radius: 13px;
+  background: var(--accent-glow);
+}
+
+.calloutIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  color: var(--accent-2);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+}
+
+.calloutText {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 0.94rem;
+  font-weight: 650;
+  line-height: 1.55;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.sectionIcon,
+.infoIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+
+.sectionTitle,
+.infoTitle {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 0.94rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.sectionIndex {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tableWrap {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--bg-2);
+}
+
+.table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  color: var(--text-2);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.table th {
+  padding: 0.75rem 0.9rem;
+  background: var(--bg-3);
+  color: var(--text-3);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.table th:nth-child(1) { width: 24%; }
+.table th:nth-child(2) { width: 17%; }
+.table th:nth-child(3) { width: 43%; }
+.table th:nth-child(4) { width: 16%; }
+
+.table td {
+  padding: 0.8rem 0.9rem;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.table tbody tr:hover {
+  background: color-mix(in srgb, var(--bg-3) 45%, transparent);
+}
+
+.name {
+  color: var(--text-1);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.73rem;
+  overflow-wrap: anywhere;
+}
+
+.type {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-3);
+  color: var(--text-2);
+  font-size: 0.67rem;
+  line-height: 1.35;
+}
+
+.duration {
+  color: var(--text-1);
+  white-space: nowrap;
+}
+
+.mobileList {
+  display: none;
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+  padding-top: 0.25rem;
+}
+
+.infoSection {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: start;
+  gap: 0.7rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.infoTitle {
+  margin: 0 0 0.4rem;
+}
+
+.infoWide {
+  grid-column: 1 / -1;
+}
+
+.infoText {
+  font-size: 0.8rem;
+  line-height: 1.65;
+}
+
+@media (max-width: 680px) {
+  .page {
+    width: min(100% - 2rem, 540px);
+    padding: 1.25rem 0 3rem;
+    gap: 1.45rem;
+  }
+
+  .header {
+    padding-bottom: 1.2rem;
+  }
+
+  .heroIcon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  .title {
+    font-size: 1.55rem;
+  }
+
+  .intro {
+    font-size: 0.84rem;
+  }
+
+  .callout {
+    align-items: flex-start;
+    gap: 0.7rem;
+    padding: 0.9rem 0.95rem;
+  }
+
+  .calloutIcon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+  }
+
+  .calloutText {
+    font-size: 0.84rem;
+  }
+
+  .tableWrap {
+    display: none;
+  }
+
+  .mobileList {
+    display: grid;
+    gap: 0.6rem;
+  }
+
+  .entry {
+    min-width: 0;
+    padding: 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-2);
+  }
+
+  .entryHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .entryPurpose {
+    margin-top: 0.7rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .entryPurpose > span,
+  .entryDuration > span:first-child {
+    color: var(--text-3);
+    font-size: 0.63rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .entryPurpose p {
+    margin: 0.25rem 0 0;
+    color: var(--text-2);
+    font-size: 0.76rem;
+    line-height: 1.55;
+  }
+
+  .entryDuration {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.65rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .entryDuration > span:last-child {
+    color: var(--text-1);
+    font-size: 0.73rem;
+    text-align: right;
+  }
+
+  .infoGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+}

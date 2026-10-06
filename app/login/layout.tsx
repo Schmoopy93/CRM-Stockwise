@@ -42,9 +42,18 @@ export default async function LoginLayout({ children }: { children: React.ReactN
     featureList: FEATURES[locale],
   };
 
+  const organizationLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Stockwise",
+    url: BASE_URL,
+    logo: `${BASE_URL}/android-chrome-512x512.png`,
+  };
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationLd) }} />
       {children}
     </>
   );
