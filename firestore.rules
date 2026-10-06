@@ -340,7 +340,7 @@ service cloud.firestore {
         allow read: if isMember(shopId);
         allow create: if get(shopPath(shopId)).data.catalogEnabled == true
           && request.resource.data.keys().hasOnly([
-            'code', 'lines', 'total', 'currency', 'customerName', 'customerContact', 'note', 'channel', 'status', 'createdAt'
+            'code', 'lines', 'total', 'currency', 'customerName', 'customerContact', 'customerEmail', 'customerAddress', 'customerCity', 'note', 'channel', 'status', 'createdAt'
           ])
           && request.resource.data.code is string
           && request.resource.data.code.matches('^[A-Z0-9]{4,12}$')
@@ -376,6 +376,15 @@ service cloud.firestore {
           && request.resource.data.customerContact is string
           && request.resource.data.customerContact.size() > 0
           && request.resource.data.customerContact.size() <= 100
+          && request.resource.data.customerEmail is string
+          && request.resource.data.customerEmail.matches('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$')
+          && request.resource.data.customerEmail.size() <= 254
+          && request.resource.data.customerAddress is string
+          && request.resource.data.customerAddress.size() > 0
+          && request.resource.data.customerAddress.size() <= 200
+          && request.resource.data.customerCity is string
+          && request.resource.data.customerCity.size() > 0
+          && request.resource.data.customerCity.size() <= 100
           && request.resource.data.note is string
           && request.resource.data.note.size() <= 500
           && request.resource.data.channel in ['catalog', 'whatsapp', 'telegram', 'instagram', 'other']
@@ -388,7 +397,7 @@ service cloud.firestore {
         // quote the shop approved is still the quote on file.
         allow update: if isMember(shopId)
           && request.resource.data.keys().hasOnly([
-            'code', 'lines', 'total', 'currency', 'customerName', 'customerContact', 'customerId', 'note', 'channel', 'status', 'fulfilledLineIndices', 'lastFulfilledLineIndex', 'lastFulfillmentEventId', 'saleId', 'createdAt'
+            'code', 'lines', 'total', 'currency', 'customerName', 'customerContact', 'customerEmail', 'customerAddress', 'customerCity', 'customerId', 'note', 'channel', 'status', 'fulfilledLineIndices', 'lastFulfilledLineIndex', 'lastFulfillmentEventId', 'saleId', 'createdAt'
           ])
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'customerName', 'customerContact', 'customerId', 'fulfilledLineIndices', 'lastFulfilledLineIndex', 'lastFulfillmentEventId', 'saleId'])
           && request.resource.data.status in ['new', 'confirmed', 'fulfilling', 'fulfilled', 'cancelled']

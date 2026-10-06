@@ -135,6 +135,9 @@ export interface CatalogOrder {
   currency?: string;
   customerName: string;
   customerContact: string;
+  customerEmail?: string;
+  customerAddress?: string;
+  customerCity?: string;
   /** Set by the shop when it links the order to a customer record. Visitors
    * never supply it — they have no account and no way to claim an identity. */
   customerId?: string;

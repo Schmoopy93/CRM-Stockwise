@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { createPortal } from "react-dom";
-import { Check, Loader2, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
+import { Check, Loader2, Minus, Package, Plus, ShoppingBag, Trash2, X } from "lucide-react";
 import { INTL_LOCALES, Locale, translateError, useI18n } from "@/lib/i18n-context";
 import { buildOrderMessage, CatalogChannels } from "@/lib/catalog-channels";
 import type { PriceTools } from "@/lib/currency";
@@ -20,7 +20,7 @@ export interface ResolvedCartLine {
   quantity: number;
 }
 
-export default function CatalogCart({ lines, locale, prices, shopId, channels, onQuantity, onClear, onClose, onNotify, onTrack }: {
+export default function CatalogCart({ lines, locale, prices, shopId, channels, onQuantity, onClear, onOrderPlaced, onClose, onNotify, onTrack }: {
   lines: ResolvedCartLine[];
   locale: Locale;
   prices: PriceTools;
@@ -28,6 +28,7 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
   channels: CatalogChannels;
   onQuantity: (itemId: string, variant: string, quantity: number, variantId?: string) => void;
   onClear: () => void;
+  onOrderPlaced: () => void;
   onClose: () => void;
   onNotify: (message: string) => void;
   onTrack: (event: CatalogStatEvent) => void;
@@ -35,9 +36,13 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
   const { t } = useI18n();
   const intl = INTL_LOCALES[locale];
   const [name, setName] = useState("");
-  const [contact, setContact] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
   const [placing, setPlacing] = useState(false);
   const [placedCode, setPlacedCode] = useState("");
+  const [placedMessage, setPlacedMessage] = useState("");
   const [placeError, setPlaceError] = useState("");
   const channelList = availableChannels(channels);
   const priced = lines.every((line) => line.item.salePrice !== undefined);
@@ -49,10 +54,10 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
     unitPrice: line.item.salePrice === undefined ? undefined : prices.toCurrency(line.item.salePrice),
   }));
   const baseMessage = buildOrderMessage(orderLines, catalogLink(shopId, locale), intl, t, prices.currency);
-  const message = placedCode ? `${baseMessage}\n${t("catalog.orderCodeLabel")}: ${placedCode}` : baseMessage;
+  const message = placedMessage || baseMessage;
 
   async function place() {
-    if (placing || !name.trim() || !contact.trim() || !priced || lines.length === 0) return;
+    if (placing || !name.trim() || !email.trim() || !phone.trim() || !address.trim() || !city.trim() || !priced || lines.length === 0) return;
     setPlacing(true); setPlaceError("");
     try {
       // Sent in the currency the customer was quoted, and tagged with it, so the
@@ -72,11 +77,24 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
             : {}),
         })),
         customerName: name,
-        customerContact: contact,
+        customerContact: phone,
+        customerEmail: email,
+        customerAddress: address,
+        customerCity: city,
         note: "",
         channel: "catalog",
       }, prices.currency);
+      setPlacedMessage([
+        baseMessage,
+        `${t("catalog.orderCodeLabel")}: ${code}`,
+        `${t("catalog.orderName")}: ${name}`,
+        `${t("catalog.orderEmail")}: ${email}`,
+        `${t("catalog.orderPhone")}: ${phone}`,
+        `${t("catalog.orderAddress")}: ${address}`,
+        `${t("catalog.orderCity")}: ${city}`,
+      ].join("\n"));
       setPlacedCode(code);
+      onOrderPlaced();
       onNotify(t("catalog.orderSaved", { code }));
     } catch (cause) {
       setPlaceError(translateError(cause, t, "catalog.orderFailed"));
@@ -104,15 +122,30 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
             {t("catalog.cart")}
             {lines.length > 0 && <span className="cat-drawer-badge">{lines.reduce((sum, line) => sum + line.quantity, 0)}</span>}
           </p>
-          <button type="button" onClick={onClose} aria-label={t("catalog.close")} className="cat-modal-close" style={{ position: "static" }}>
+          <button type="button" onClick={onClose} aria-label={t("catalog.close")} className="cat-modal-close cat-drawer-close">
             <X size={16} />
           </button>
         </header>
 
-        {lines.length === 0 ? (
-          <div className="cat-empty" style={{ margin: "1.25rem", flex: 1 }}>
+        {lines.length === 0 && !placedCode ? (
+          <div className="cat-empty cat-cart-empty">
             <ShoppingBag size={30} strokeWidth={1.5} />
             {t("catalog.cartEmpty")}
+          </div>
+        ) : placedCode ? (
+          <div className="cat-order-confirmation">
+            <div className="cat-order-success-mark"><Check size={22} /></div>
+            <p className="cat-order-success">{t("catalog.orderSaved", { code: placedCode })}</p>
+            {channelList.length > 0 && (
+              <>
+                <p className="cat-modal-section">{t("catalog.cartSend")}</p>
+                <OrderChannels channels={channels} message={message} onCopied={() => onNotify(t("catalog.messageCopied"))} onChannelClick={onTrack} />
+                {channelList.some((channel) => channel !== "whatsapp") && <p className="cat-hint">{t("catalog.copyHint")}</p>}
+              </>
+            )}
+            <button type="button" className="cat-drawer-clear" onClick={onClose}>
+              {t("catalog.close")}
+            </button>
           </div>
         ) : (
           <>
@@ -122,7 +155,7 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
                 return (
                   <li key={`${item.id}-${variantId ?? variant}`} className="cat-line">
                     <div className="cat-line-media">
-                      {image ? <Image src={image} alt="" fill sizes="64px" quality={90} style={{ objectFit: "cover" }} /> : <Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={64} height={64} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+                      {image ? <Image src={image} alt="" fill sizes="64px" quality={90} style={{ objectFit: "contain" }} /> : <Package size={24} strokeWidth={1.4} aria-hidden="true" />}
                     </div>
                     <div className="cat-line-info">
                       <p className="cat-line-name">{item.name}</p>
@@ -153,37 +186,70 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
               )}
 
               {!placedCode && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  <p className="cat-modal-section" style={{ margin: 0 }}>{t("catalog.orderSection")}</p>
-                  <input
-                    className="input" type="text" autoComplete="name"
-                    aria-label={t("catalog.orderName")} placeholder={t("catalog.orderName")}
-                    value={name} onChange={(e) => setName(e.target.value)} maxLength={100}
-                    required
-                  />
-                  <input
-                    className="input" type="text" autoComplete="tel"
-                    aria-label={t("catalog.orderContact")} placeholder={t("catalog.orderContact")}
-                    value={contact} onChange={(e) => setContact(e.target.value)} maxLength={100}
-                    required
-                  />
+                <form className="cat-order-form" onSubmit={(event) => { event.preventDefault(); void place(); }}>
+                  <div className="cat-order-heading">
+                    <span className="cat-order-heading-icon"><Package size={16} /></span>
+                    <div>
+                      <p className="cat-modal-section">{t("catalog.orderSection")}</p>
+                      <p className="cat-order-intro">{t("catalog.orderHint")}</p>
+                    </div>
+                  </div>
+                  <div className="cat-order-fields">
+                    <label className="cat-order-field">
+                      <span>{t("catalog.orderName")}</span>
+                      <input
+                        className="input cat-order-input" type="text" autoComplete="name"
+                        placeholder={t("catalog.orderName")}
+                        value={name} onChange={(e) => setName(e.target.value)} maxLength={100}
+                        required
+                      />
+                    </label>
+                    <label className="cat-order-field">
+                      <span>{t("catalog.orderEmail")}</span>
+                      <input
+                        className="input cat-order-input" type="email" autoComplete="email"
+                        placeholder={t("catalog.orderEmail")}
+                        value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254}
+                        required
+                      />
+                    </label>
+                    <label className="cat-order-field">
+                      <span>{t("catalog.orderPhone")}</span>
+                      <input
+                        className="input cat-order-input" type="tel" autoComplete="tel"
+                        placeholder={t("catalog.orderPhone")}
+                        value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={100}
+                        required
+                      />
+                    </label>
+                    <label className="cat-order-field">
+                      <span>{t("catalog.orderCity")}</span>
+                      <input
+                        className="input cat-order-input" type="text" autoComplete="address-level2"
+                        placeholder={t("catalog.orderCity")}
+                        value={city} onChange={(e) => setCity(e.target.value)} maxLength={100}
+                        required
+                      />
+                    </label>
+                    <label className="cat-order-field cat-order-field-wide">
+                      <span>{t("catalog.orderAddress")}</span>
+                      <input
+                        className="input cat-order-input" type="text" autoComplete="street-address"
+                        placeholder={t("catalog.orderAddress")}
+                        value={address} onChange={(e) => setAddress(e.target.value)} maxLength={200}
+                        required
+                      />
+                    </label>
+                  </div>
                   <button
-                    type="button" className="btn-primary" onClick={place} disabled={placing || !name.trim() || !contact.trim() || !priced}
-                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                    type="submit" className="btn-primary cat-order-button" disabled={placing || !name.trim() || !email.trim() || !phone.trim() || !address.trim() || !city.trim() || !priced}
                   >
                     {placing ? <Loader2 size={15} className="cat-spin" /> : <Check size={15} />}
                     {placing ? t("catalog.orderPlacing") : t("catalog.orderPlace")}
                   </button>
-                  <p className="cat-hint" style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-3)" }}>{t("catalog.orderHint")}</p>
-                  {!priced && <p className="cat-hint" style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-3)" }}>{t("catalog.orderPriceRequired")}</p>}
-                  {placeError && <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--red)" }}>{placeError}</p>}
-                </div>
-              )}
-
-              {placedCode && (
-                <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--green)" }}>
-                  {t("catalog.orderSaved", { code: placedCode })}
-                </p>
+                  {!priced && <p className="cat-hint cat-order-note">{t("catalog.orderPriceRequired")}</p>}
+                  {placeError && <p className="cat-order-error">{placeError}</p>}
+                </form>
               )}
 
               {channelList.length > 0 && (

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Minus, Plus, Share2, ShoppingBag, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Minus, Package, Plus, Share2, ShoppingBag, X } from "lucide-react";
 import { Locale, useI18n } from "@/lib/i18n-context";
 import type { PriceTools } from "@/lib/currency";
 import { CatalogItem, CatalogStatEvent } from "@/lib/types";
@@ -83,10 +83,10 @@ export default function CatalogDetail({ item, locale, prices, shopId, onClose, o
           >
             {images.length > 0 ? images.map((src, i) => (
               <div key={i} className="cat-modal-slide">
-                <Image src={src} alt={`${item.name} — ${i + 1}`} fill sizes="(max-width: 760px) 100vw, 520px" quality={90} style={{ objectFit: "cover" }} loading={i === 0 ? "eager" : "lazy"} />
+                <Image src={src} alt={`${item.name} — ${i + 1}`} fill sizes="(max-width: 760px) 100vw, 520px" quality={90} style={{ objectFit: "contain" }} loading={i === 0 ? "eager" : "lazy"} />
               </div>
             )) : (
-              <div className="cat-modal-slide" aria-hidden="true"><Image src="/android-chrome-512x512.png" alt="" width={512} height={512} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /></div>
+              <div className="cat-modal-slide cat-modal-placeholder" aria-hidden="true"><Package size={48} strokeWidth={1.25} /></div>
             )}
           </div>
           {images.length > 1 && (

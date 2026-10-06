@@ -232,13 +232,15 @@ test("customers can place catalog orders but members own the lifecycle", async (
   const staffDb = firestoreFor("staff-a");
   // `currency` is part of the order shape: an order keeps the currency it was
   // quoted in, so it is in the fixture rather than added per assertion.
-  const order = { code: "K7M2QP", total: 20, currency: "EUR", customerName: "Ana", customerContact: "@ana", note: "", channel: "instagram", createdAt: serverTimestamp() };
+  const order = { code: "K7M2QP", total: 20, currency: "EUR", customerName: "Ana", customerContact: "@ana", customerEmail: "ana@example.com", customerAddress: "Knez Mihailova 1", customerCity: "Beograd", note: "", channel: "instagram", createdAt: serverTimestamp() };
   const line = { productId, variantId, productName: "Jacket", variantLabel: "M", quantity: 1, unitPrice: 20, baseUnitPrice: 20 };
 
   await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o1"), { ...order, lines: [], status: "new" }));
   await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o2"), { ...order, lines: [line], status: "confirmed" }));
   await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o3"), { ...order, lines: [line], status: "new", costPrice: 3 }));
   await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o4"), { ...order, code: "bad-code", lines: [line], status: "new" }));
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o6"), { ...order, customerCity: "", lines: [line], status: "new" }));
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o7"), { ...order, customerEmail: "invalid", lines: [line], status: "new" }));
 
   await env.withSecurityRulesDisabled(async (context) => {
     await updateDoc(doc(context.firestore(), "shops", shopId), { catalogEnabled: true });

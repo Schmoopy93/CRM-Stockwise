@@ -341,6 +341,14 @@ export default function OrdersPage() {
                         {order.customerContact}
                       </p>
                     )}
+                    {(order.customerEmail || order.customerAddress || order.customerCity) && (
+                      <div style={{ fontSize: "0.76rem", color: "var(--text-2)", lineHeight: 1.5, overflowWrap: "anywhere" }}>
+                        {order.customerEmail && <p style={{ margin: 0 }}>{order.customerEmail}</p>}
+                        {(order.customerAddress || order.customerCity) && (
+                          <p style={{ margin: 0 }}>{[order.customerAddress, order.customerCity].filter(Boolean).join(", ")}</p>
+                        )}
+                      </div>
+                    )}
                     {order.note && (
                       <p style={{ fontSize: "0.76rem", color: "var(--text-2)", lineHeight: 1.5, whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: "0.55rem 0 0" }}>
                         {order.note}

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Images, Plus } from "lucide-react";
+import { Images, Package, Plus } from "lucide-react";
 import { Locale, useI18n } from "@/lib/i18n-context";
 import type { PriceTools } from "@/lib/currency";
 import { CatalogField, CatalogItem } from "@/lib/types";
@@ -38,9 +38,9 @@ export default function CatalogCard({ item, locale, prices, index, onOpen, onQui
       <button type="button" className="cat-card-hit" onClick={onOpen} aria-label={item.name} />
       <div className="cat-card-media">
         {images[0] ? (
-          <Image src={images[0]} alt={item.name} fill sizes="(max-width: 760px) 50vw, 240px" quality={90} style={{ objectFit: "cover" }} />
+          <Image src={images[0]} alt={item.name} fill sizes="(max-width: 760px) 50vw, 240px" quality={90} style={{ objectFit: "contain" }} />
         ) : (
-          <Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={512} height={512} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          <div className="cat-card-placeholder" aria-hidden="true"><Package size={40} strokeWidth={1.25} /></div>
         )}
         <div className="cat-card-shade" aria-hidden="true" />
         {item.category && <span className="cat-card-cat">{item.category}</span>}

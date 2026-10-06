@@ -25,6 +25,9 @@ export interface OrderInput {
   lines: OrderLine[];
   customerName: string;
   customerContact: string;
+  customerEmail: string;
+  customerAddress: string;
+  customerCity: string;
   note: string;
   channel: string;
 }
@@ -34,6 +37,10 @@ export function normalizeOrderInput(input: OrderInput): OrderInput {
   if (input.lines.length > MAX_ORDER_LINES) throw new Error("ORDER_TOO_MANY_LINES");
   if (!clamp(input.customerName, 100)) throw new Error("ORDER_NAME_REQUIRED");
   if (!clamp(input.customerContact, 100)) throw new Error("ORDER_CONTACT_REQUIRED");
+  const customerEmail = clamp(input.customerEmail, 254).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) throw new Error("ORDER_EMAIL_INVALID");
+  if (!clamp(input.customerAddress, 200)) throw new Error("ORDER_ADDRESS_REQUIRED");
+  if (!clamp(input.customerCity, 100)) throw new Error("ORDER_CITY_REQUIRED");
   if (input.lines.some((line) => !/^[A-Za-z0-9_-]{1,128}$/.test(line.productId.trim()) ||
     !clamp(line.productName, 100))) {
     throw new Error("ORDER_LINE_INVALID");
@@ -75,6 +82,9 @@ export function normalizeOrderInput(input: OrderInput): OrderInput {
     lines,
     customerName: clamp(input.customerName, 100),
     customerContact: clamp(input.customerContact, 100),
+    customerEmail,
+    customerAddress: clamp(input.customerAddress, 200),
+    customerCity: clamp(input.customerCity, 100),
     note: clamp(input.note, 500),
     channel: input.channel,
   };

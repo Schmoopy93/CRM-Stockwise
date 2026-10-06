@@ -16,6 +16,9 @@ const input = {
   lines: [line],
   customerName: "Ana",
   customerContact: "@ana",
+  customerEmail: "ana@example.com",
+  customerAddress: "Knez Mihailova 1",
+  customerCity: "Beograd",
   note: "",
   channel: "whatsapp",
 };
@@ -32,6 +35,9 @@ test("catalog order codes are short and unambiguous", () => {
 test("rejects anonymous or unpriced orders before a Firestore write", () => {
   assert.throws(() => normalizeOrderInput({ ...input, customerName: "" }), /ORDER_NAME_REQUIRED/);
   assert.throws(() => normalizeOrderInput({ ...input, customerContact: " " }), /ORDER_CONTACT_REQUIRED/);
+  assert.throws(() => normalizeOrderInput({ ...input, customerEmail: "not-an-email" }), /ORDER_EMAIL_INVALID/);
+  assert.throws(() => normalizeOrderInput({ ...input, customerAddress: " " }), /ORDER_ADDRESS_REQUIRED/);
+  assert.throws(() => normalizeOrderInput({ ...input, customerCity: " " }), /ORDER_CITY_REQUIRED/);
   assert.throws(() => normalizeOrderInput({ ...input, lines: [{ ...line, unitPrice: undefined }] }), /ORDER_PRICE_REQUIRED/);
 });
 
