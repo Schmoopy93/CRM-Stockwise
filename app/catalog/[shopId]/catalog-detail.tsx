@@ -8,7 +8,7 @@ import { Locale, useI18n } from "@/lib/i18n-context";
 import type { PriceTools } from "@/lib/currency";
 import { CatalogItem, CatalogStatEvent } from "@/lib/types";
 import { catalogLink, MAX_QUANTITY } from "./catalog-store";
-import { fieldText, itemImages, saleDiscount } from "./catalog-card";
+import { catalogItemAvailable, catalogStockForVariant, fieldText, itemImages, saleDiscount } from "./catalog-card";
 
 export default function CatalogDetail({ item, locale, prices, shopId, onClose, onAdd, onNotify, onTrack }: {
   item: CatalogItem;
@@ -29,6 +29,12 @@ export default function CatalogDetail({ item, locale, prices, shopId, onClose, o
   const images = itemImages(item);
   const discount = saleDiscount(item);
   const needsVariant = item.variants.length > 0 && variantIndex < 0;
+  const availableQuantity = item.variants.length > 0
+    ? catalogStockForVariant(item, variantIndex)
+    : item.stockQuantity ?? 0;
+  const outOfStock = item.variants.length > 0 && variantIndex < 0
+    ? !catalogItemAvailable(item)
+    : availableQuantity <= 0;
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -141,8 +147,10 @@ export default function CatalogDetail({ item, locale, prices, shopId, onClose, o
               <div className="cat-variant-list" role="radiogroup" aria-label={t("catalog.variants")}>
                 {item.variants.map((label, optionIndex) => (
                   <button key={item.variantIds?.[optionIndex] ?? `${label}-${optionIndex}`} type="button" role="radio" aria-checked={variantIndex === optionIndex}
-                    className="cat-variant" data-active={variantIndex === optionIndex || undefined} onClick={() => setVariantIndex(optionIndex)}>
-                    {label}
+                    className="cat-variant" data-active={variantIndex === optionIndex || undefined}
+                    disabled={catalogStockForVariant(item, optionIndex) <= 0}
+                    onClick={() => { setVariantIndex(optionIndex); setQuantity(1); }}>
+                    {label}{catalogStockForVariant(item, optionIndex) <= 0 ? ` · ${t("catalog.outOfStock")}` : ""}
                   </button>
                 ))}
               </div>
@@ -171,14 +179,14 @@ export default function CatalogDetail({ item, locale, prices, shopId, onClose, o
               <div className="cat-stepper" role="group" aria-label={t("catalog.quantity")}>
                 <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} disabled={quantity <= 1} aria-label={t("catalog.decrease")}><Minus size={15} /></button>
                 <span aria-live="polite">{quantity}</span>
-                <button type="button" onClick={() => setQuantity((q) => Math.min(MAX_QUANTITY, q + 1))} disabled={quantity >= MAX_QUANTITY} aria-label={t("catalog.increase")}><Plus size={15} /></button>
+                <button type="button" onClick={() => setQuantity((q) => Math.min(MAX_QUANTITY, availableQuantity, q + 1))} disabled={quantity >= Math.min(MAX_QUANTITY, availableQuantity)} aria-label={t("catalog.increase")}><Plus size={15} /></button>
               </div>
-              <button type="button" className="btn-primary cat-add-btn" disabled={needsVariant} onClick={() => { onAdd(variant, quantity, item.variantIds?.[variantIndex]); onClose(); }}>
+              <button type="button" className="btn-primary cat-add-btn" disabled={needsVariant || outOfStock || quantity > availableQuantity} onClick={() => { onAdd(variant, quantity, item.variantIds?.[variantIndex]); onClose(); }}>
                 <ShoppingBag size={16} />
-                {t("catalog.addToCart")}
+                {needsVariant ? t("catalog.chooseVariant") : outOfStock ? t("catalog.outOfStock") : t("catalog.addToCart")}
               </button>
             </div>
-
+            {outOfStock && <p className="cat-hint cat-stock-warning">{t("catalog.outOfStock")}</p>}
           </div>
         </div>
       </div>

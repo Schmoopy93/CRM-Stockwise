@@ -111,9 +111,20 @@ export function useShop(shopId: string | undefined): ShopCatalogSettings & { loa
 
 const NEW_PRODUCT_DAYS = 14;
 
+function readCatalogVariantStock(value: unknown): Record<string, number> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const stock: Record<string, number> = {};
+  for (const [id, quantity] of Object.entries(value)) {
+    if (typeof quantity !== "number" || !Number.isSafeInteger(quantity) || quantity < 0) return undefined;
+    stock[id] = quantity;
+  }
+  return stock;
+}
+
 export function useCatalog(shopId: string | undefined) {
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!shopId) return;
@@ -132,16 +143,23 @@ export function useCatalog(shopId: string | undefined) {
           isNew: (d.data().createdAt?.toMillis?.() ?? 0) >= newSince,
           variants: Array.isArray(d.data().variants) ? d.data().variants : [],
           variantIds: Array.isArray(d.data().variantIds) ? d.data().variantIds : undefined,
+          stockQuantity: typeof d.data().stockQuantity === "number" ? d.data().stockQuantity : undefined,
+          variantStock: readCatalogVariantStock(d.data().variantStock),
           fields: Array.isArray(d.data().fields) ? d.data().fields : [],
           hidden: d.data().hidden === true,
         }))
       );
+      setError(false);
+      setLoading(false);
+    }, (snapshotError) => {
+      console.error("Failed to load public catalog", snapshotError);
+      setError(true);
       setLoading(false);
     });
     return unsub;
   }, [shopId]);
 
-  return { items, loading };
+  return { items, loading, error };
 }
 
 export function useProducts(shopId: string | undefined) {

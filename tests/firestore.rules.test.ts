@@ -72,6 +72,8 @@ async function updateStock(uid: string, delta: number, eventDelta = delta) {
   await runTransaction(db, async (transaction) => {
     const variantSnap = await transaction.get(variantRef);
     const productSnap = await transaction.get(productRef);
+    const catalogRef = doc(db, "shops", shopId, "catalog", productId);
+    const catalogSnap = await transaction.get(catalogRef);
     const eventId = eventRef.id;
     transaction.update(variantRef, {
       quantity: variantSnap.data()!.quantity + delta,
@@ -82,6 +84,13 @@ async function updateStock(uid: string, delta: number, eventDelta = delta) {
       lastStockEventId: eventId,
       updatedAt: serverTimestamp(),
     });
+    if (catalogSnap.exists()) {
+      transaction.update(catalogRef, {
+        stockQuantity: catalogSnap.data()!.stockQuantity + delta,
+        [`variantStock.${variantId}`]: catalogSnap.data()!.variantStock[variantId] + delta,
+        updatedAt: serverTimestamp(),
+      });
+    }
     transaction.set(eventRef, {
       productId,
       variantId,
@@ -523,6 +532,30 @@ test("a valid stock transaction updates variant, product total, and event togeth
   const variant = await getDoc(doc(db, "shops", shopId, "products", productId, "variants", variantId));
   assert.equal(product.data()?.totalQuantity, 7);
   assert.equal(variant.data()?.quantity, 7);
+});
+
+test("a stock transaction keeps public catalog availability in sync atomically", async () => {
+  const db = firestoreFor("owner-a");
+  const catalogRef = doc(db, "shops", shopId, "catalog", productId);
+  await assertSucceeds(setDoc(catalogRef, {
+    name: "Jacket",
+    category: "Clothing",
+    imageUrl: "",
+    images: [],
+    salePrice: 20,
+    variants: ["M"],
+    variantIds: [variantId],
+    stockQuantity: 5,
+    variantStock: { [variantId]: 5 },
+    fields: [],
+    hidden: false,
+    updatedAt: serverTimestamp(),
+  }));
+
+  await assertSucceeds(updateStock("staff-a", -5));
+  const catalog = await getDoc(doc(firestoreFor(), "shops", shopId, "catalog", productId));
+  assert.equal(catalog.data()?.stockQuantity, 0);
+  assert.equal(catalog.data()?.variantStock[variantId], 0);
 });
 
 test("a stock transaction with a mismatched event delta is rejected", async () => {

@@ -130,7 +130,8 @@ function buildCatalogDoc(
   images: string[],
   salePrice: number | undefined,
   compareAtPrice: number | undefined,
-  variants: { id: string; label: string }[],
+  variants: { id: string; label: string; quantity: number }[],
+  stockQuantity: number,
   definitions: ProductCustomField[],
   values: Record<string, string | number | boolean>,
   hidden: boolean,
@@ -157,8 +158,10 @@ function buildCatalogDoc(
     images: images.length > 0 ? images : (imageUrl ? [imageUrl] : []),
     salePrice: salePrice !== undefined ? salePrice : deleteField(),
     compareAtPrice: salePrice !== undefined && compareAtPrice !== undefined && compareAtPrice > salePrice ? compareAtPrice : deleteField(),
-    variants: variants.map((variant) => variant.label),
-    variantIds: variants.map((variant) => variant.id),
+    variants: variants.filter((variant) => variant.label).map((variant) => variant.label),
+    variantIds: variants.filter((variant) => variant.label).map((variant) => variant.id),
+    stockQuantity,
+    variantStock: Object.fromEntries(variants.map((variant) => [variant.id, variant.quantity])),
     fields,
     hidden,
     ...(createdAt ? { createdAt } : {}),
@@ -201,8 +204,11 @@ export async function updateCatalogSettings(shopId: string, settings: CatalogSet
   const variantsByProduct = await mapWithConcurrency(productsSnap.docs, (productDoc) =>
     getDocs(collection(productDoc.ref, "variants")).then((variantsSnap) =>
       variantsSnap.docs
-        .map((variantDoc) => ({ id: variantDoc.id, label: (variantDoc.data().label ?? "").trim() }))
-        .filter((variant) => variant.label)
+        .map((variantDoc) => ({
+          id: variantDoc.id,
+          label: (variantDoc.data().label ?? "").trim(),
+          quantity: variantDoc.data().quantity ?? 0,
+        }))
     )
   );
   productsSnap.docs.forEach((productDoc, index) => {
@@ -215,6 +221,7 @@ export async function updateCatalogSettings(shopId: string, settings: CatalogSet
       typeof data.salePrice === "number" ? data.salePrice : undefined,
       typeof data.compareAtPrice === "number" ? data.compareAtPrice : undefined,
       variantsByProduct[index],
+      data.totalQuantity ?? variantsByProduct[index].reduce((sum, variant) => sum + variant.quantity, 0),
       data.customFieldDefinitions ?? [],
       data.customFieldValues ?? {},
       data.catalogHidden === true,
@@ -377,7 +384,12 @@ export async function fulfillCatalogOrder(
 
       const productRef = doc(db, "shops", shopId, "products", line.productId);
       const variantRef = doc(productRef, "variants", variantIds[index]);
-      const [productSnap, variantSnap] = await Promise.all([tx.get(productRef), tx.get(variantRef)]);
+      const catalogRef = doc(db, "shops", shopId, "catalog", line.productId);
+      const [productSnap, variantSnap, catalogSnap] = await Promise.all([
+        tx.get(productRef),
+        tx.get(variantRef),
+        tx.get(catalogRef),
+      ]);
       if (!productSnap.exists() || !variantSnap.exists()) throw new Error("ORDER_VARIANT_NOT_FOUND");
       const product = productSnap.data();
       const variant = variantSnap.data();
@@ -388,6 +400,13 @@ export async function fulfillCatalogOrder(
       const eventRef = doc(collection(db, "shops", shopId, "stockEvents"));
       tx.update(variantRef, { quantity: totals.variantQuantity, lastStockEventId: eventRef.id });
       tx.update(productRef, { totalQuantity: totals.productQuantity, lastStockEventId: eventRef.id });
+      if (catalogSnap.exists()) {
+        tx.update(catalogRef, {
+          stockQuantity: totals.productQuantity,
+          [`variantStock.${variantIds[index]}`]: totals.variantQuantity,
+          updatedAt: serverTimestamp(),
+        });
+      }
       tx.set(eventRef, {
         productId: line.productId,
         variantId: variantIds[index],
@@ -558,7 +577,10 @@ export async function saveProduct(
   let isNewProduct = false;
 
   await runTransaction(db, async (tx) => {
-    const productSnap = await tx.get(docRef);
+    const [productSnap, shopSnap] = await Promise.all([
+      tx.get(docRef),
+      tx.get(doc(db, "shops", shopId)),
+    ]);
     isNewProduct = !productSnap.exists();
     if (productSnap.exists()) {
       const existingTotal = productSnap.data().totalQuantity ?? 0;
@@ -616,27 +638,28 @@ export async function saveProduct(
         quantity: variant.quantity,
       }, { merge: true });
     }
-  });
 
-  if (await isCatalogEnabled(shopId)) {
-    await setDoc(
-      doc(db, "shops", shopId, "catalog", id),
-      buildCatalogDoc(
-        name,
-        category,
-        imageUrl,
-        imageUrls,
-        salePrice,
-        compareAtPrice,
-        variants.map((variant, index) => ({ id: variantIds[index], label: variant.label.trim() })).filter((variant) => variant.label),
-        customFieldDefinitions,
-        customFieldValues,
-        catalogHidden,
-        isNewProduct ? serverTimestamp() : undefined
-      ),
-      { merge: true }
-    );
-  }
+    if (shopSnap.data()?.catalogEnabled === true) {
+      tx.set(
+        doc(db, "shops", shopId, "catalog", id),
+        buildCatalogDoc(
+          name,
+          category,
+          imageUrl,
+          imageUrls,
+          salePrice,
+          compareAtPrice,
+          variants.map((variant, index) => ({ id: variantIds[index], label: variant.label.trim(), quantity: variant.quantity })),
+          total,
+          customFieldDefinitions,
+          customFieldValues,
+          catalogHidden,
+          isNewProduct ? serverTimestamp() : undefined
+        ),
+        { merge: true }
+      );
+    }
+  });
   return id;
 }
 
@@ -749,6 +772,8 @@ export async function adjustStock(
     if (!variantSnap.exists()) throw new Error("VARIANT_NOT_FOUND");
     const productSnap = await tx.get(productRef);
     if (!productSnap.exists()) throw new Error("PRODUCT_NOT_FOUND");
+    const catalogRef = doc(db, "shops", shopId, "catalog", productId);
+    const catalogSnap = await tx.get(catalogRef);
     const variantQuantity = variantSnap.data().quantity ?? 0;
     const productQuantity = productSnap.data().totalQuantity ?? 0;
     if (variantQuantity + delta < 0 || productQuantity + delta < 0) throw new Error("INSUFFICIENT_STOCK");
@@ -756,6 +781,13 @@ export async function adjustStock(
 
     tx.update(variantRef, { quantity: next.variantQuantity, lastStockEventId: eventRef.id });
     tx.update(productRef, { totalQuantity: next.productQuantity, lastStockEventId: eventRef.id, updatedAt: serverTimestamp() });
+    if (catalogSnap.exists()) {
+      tx.update(catalogRef, {
+        stockQuantity: next.productQuantity,
+        [`variantStock.${variant.id}`]: next.variantQuantity,
+        updatedAt: serverTimestamp(),
+      });
+    }
     tx.set(eventRef, {
       productId,
       variantId: variant.id,

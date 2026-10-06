@@ -16,7 +16,7 @@ import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Product, ProductVariant } from "@/lib/types";
 import { BASE_CURRENCY } from "@/lib/currency";
-import { Plus, Search, AlertTriangle, Package, TrendingDown, Layers, ArrowRight, DollarSign, Store, Copy, Check, ExternalLink, ShoppingBag, X, CheckCircle } from "lucide-react";
+import { Plus, Search, AlertTriangle, Package, TrendingDown, Layers, ArrowRight, DollarSign, Store, Copy, Check, ExternalLink, ShoppingBag, X, CheckCircle, RefreshCw } from "lucide-react";
 
 function QuickSellModal({ product, shopId, actorUid, actorName, onClose }: {
   product: Product; shopId: string; actorUid: string; actorName: string; onClose: () => void;
@@ -179,6 +179,12 @@ function CatalogSettingsCard({ shopId }: { shopId: string }) {
             style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.78rem", color: "var(--text-2)", background: "transparent", border: "1px solid var(--border)", borderRadius: 9, padding: "0.5rem 0.8rem", cursor: "pointer" }}>
             {copied ? <Check size={13} color="var(--green)" /> : <Copy size={13} />}
             {copied ? t("catalog.copied") : t("catalog.copyLink")}
+          </button>
+          <button
+            onClick={() => save(true)}
+            disabled={saving || !channelsValid}
+            style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.78rem", color: "var(--text-2)", background: "transparent", border: "1px solid var(--border)", borderRadius: 9, padding: "0.5rem 0.8rem", cursor: saving || !channelsValid ? "default" : "pointer", opacity: saving || !channelsValid ? 0.6 : 1 }}>
+            <RefreshCw size={13} /> {t("catalog.refreshStock")}
           </button>
         </div>
       )}

@@ -13,7 +13,7 @@ import { trackCatalogEvent } from "@/lib/actions";
 import { CatalogItem, CatalogStatEvent, ShopCatalogSettings } from "@/lib/types";
 import { ArrowUpDown, Package, Search, ShoppingBag, Sparkles, X } from "lucide-react";
 import { setProductParam, useCart, useProductParam } from "./catalog-store";
-import CatalogCard, { fieldText } from "./catalog-card";
+import CatalogCard, { catalogStockForVariant, fieldText } from "./catalog-card";
 import CatalogDetail from "./catalog-detail";
 import CatalogCart, { ResolvedCartLine } from "./catalog-cart";
 import OrderChannels, { availableChannels } from "./order-channels";
@@ -31,7 +31,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
   const intl = INTL_LOCALES[locale];
   const [shop, setShop] = useState<ShopCatalogSettings | null>(null);
   const [shopLoading, setShopLoading] = useState(true);
-  const { items, loading } = useCatalog(shopId);
+  const { items, loading, error: catalogError } = useCatalog(shopId);
   const prices = useShopMoney(shopId, intl);
   const cart = useCart(shopId);
   const productId = useProductParam();
@@ -136,6 +136,11 @@ export default function CatalogView({ shopId }: { shopId: string }) {
       variant: line.variant,
       variantId: line.variantId ?? item.variantIds?.[item.variants.indexOf(line.variant)],
       quantity: line.quantity,
+      availableQuantity: item.variants.length > 0
+        ? catalogStockForVariant(item, line.variantId
+          ? item.variantIds?.indexOf(line.variantId) ?? -1
+          : item.variants.indexOf(line.variant))
+        : item.stockQuantity ?? 0,
     }] : [];
   });
   const cartCount = cartLines.reduce((sum, line) => sum + line.quantity, 0);
@@ -144,6 +149,16 @@ export default function CatalogView({ shopId }: { shopId: string }) {
   const initials = name.trim().slice(0, 1).toUpperCase() || "•";
 
   function addToCart(item: CatalogItem, variant: string, quantity: number, variantId = item.variantIds?.[item.variants.indexOf(variant)]) {
+    const variantIndex = variantId ? item.variantIds?.indexOf(variantId) ?? -1 : item.variants.indexOf(variant);
+    const availableQuantity = item.variants.length > 0
+      ? catalogStockForVariant(item, variantIndex)
+      : item.stockQuantity ?? 0;
+    const existingQuantity = cart.lines.find((line) => line.itemId === item.id &&
+      (variantId ? line.variantId === variantId || (!line.variantId && line.variant === variant) : line.variant === variant))?.quantity ?? 0;
+    if (availableQuantity <= 0 || existingQuantity + quantity > availableQuantity) {
+      notify(t("catalog.stockChanged"));
+      return;
+    }
     cart.add(item.id, variant, quantity, variantId);
     notify(t("catalog.added"));
   }
@@ -198,6 +213,11 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           <div className="cat-grid">
             {Array.from({ length: 8 }).map((_, i) => <div key={i} className="cat-skel" style={{ animationDelay: `${i * 70}ms` }} />)}
           </div>
+        ) : catalogError ? (
+          <div className="cat-empty" data-large>
+            <Package size={34} strokeWidth={1.5} />
+            {t("catalog.loadError")}
+          </div>
         ) : !catalogEnabled ? (
           <div className="cat-empty" data-large>
             <Package size={34} strokeWidth={1.5} />
@@ -205,51 +225,69 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           </div>
         ) : (
           <>
-            <div className="cat-toolbar">
-              <div className="cat-toolbar-row">
-                <div className="cat-search-wrap">
-                  <Search size={15} className="cat-search-icon" />
-                  <input className="input cat-search" type="search" placeholder={t("search")} aria-label={t("search")} value={search} onChange={(e) => setSearch(e.target.value)} />
-                  {search && (
-                    <button type="button" className="cat-search-clear" onClick={() => setSearch("")} aria-label={t("catalog.close")}><X size={14} /></button>
-                  )}
+            <div className="cat-browse">
+              <aside className="cat-sidebar" aria-label={t("catalog.categoriesLabel")}>
+                <div className="cat-sidebar-heading">
+                  <span>{t("catalog.categoriesLabel")}</span>
+                  <span className="cat-sidebar-total">{visible.length}</span>
                 </div>
-                <label className="cat-sort">
-                  <ArrowUpDown size={14} />
-                  <span className="cat-sort-label">{t("catalog.sortLabel")}</span>
-                  <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label={t("catalog.sortLabel")}>
-                    <option value="name">{t("catalog.sortName")}</option>
-                    <option value="priceAsc">{t("catalog.sortPriceAsc")}</option>
-                    <option value="priceDesc">{t("catalog.sortPriceDesc")}</option>
-                  </select>
-                </label>
-                <span className="cat-results" aria-live="polite">{t("catalog.itemCount", { n: filtered.length })}</span>
-              </div>
-              {categories.length > 1 && (
-                <div className="cat-chips" role="tablist" aria-label={t("catalog.categoriesLabel")}>
+                <nav className="cat-category-list" aria-label={t("catalog.categoriesLabel")}>
                   {categories.map(([cat, count]) => (
-                    <button key={cat} type="button" role="tab" aria-selected={category === cat} onClick={() => setCategory(cat)} className="cat-chip" data-active={category === cat || undefined}>
-                      {cat === "all" ? t("all") : cat}
-                      <span className="cat-chip-count">{count}</span>
+                    <button key={cat} type="button" aria-current={category === cat ? "true" : undefined}
+                      onClick={() => setCategory(cat)} className="cat-category" data-active={category === cat || undefined}>
+                      <span className="cat-category-name">{cat === "all" ? t("all") : cat}</span>
+                      <span className="cat-category-count">{count}</span>
                     </button>
                   ))}
-                </div>
-              )}
-            </div>
+                </nav>
+              </aside>
 
-            {filtered.length === 0 ? (
-              <div className="cat-empty">
-                <Package size={30} strokeWidth={1.5} />
-                {t("dashboard.noResults")}
-              </div>
-            ) : (
-              <div className="cat-grid">
-                {filtered.map((item, index) => (
-                  <CatalogCard key={item.id} item={item} locale={locale} prices={prices} index={index}
-                    onOpen={() => setProductParam(item.id)} onQuickAdd={() => quickAdd(item)} />
-                ))}
-              </div>
-            )}
+              <section className="cat-results-area" aria-label={t("catalog.title")}>
+                <div className="cat-toolbar">
+                  <div className="cat-toolbar-row">
+                    <div className="cat-search-wrap">
+                      <Search size={17} className="cat-search-icon" />
+                      <input className="input cat-search" type="search" placeholder={t("search")} aria-label={t("search")} value={search} onChange={(e) => setSearch(e.target.value)} />
+                      {search && (
+                        <button type="button" className="cat-search-clear" onClick={() => setSearch("")} aria-label={t("catalog.close")}><X size={15} /></button>
+                      )}
+                    </div>
+                    <label className="cat-sort">
+                      <ArrowUpDown size={16} className="cat-sort-icon" />
+                      <span className="cat-sort-label">{t("catalog.sortLabel")}</span>
+                      <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label={t("catalog.sortLabel")}>
+                        <option value="name">{t("catalog.sortName")}</option>
+                        <option value="priceAsc">{t("catalog.sortPriceAsc")}</option>
+                        <option value="priceDesc">{t("catalog.sortPriceDesc")}</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="cat-toolbar-meta">
+                    <span className="cat-active-category">{category === "all" ? t("all") : category}</span>
+                    <span className="cat-results" aria-live="polite">{t("catalog.itemCount", { n: filtered.length })}</span>
+                    {(search || category !== "all") && (
+                      <button type="button" className="cat-clear-filters" onClick={() => { setSearch(""); setCategory("all"); }}>
+                        <X size={13} /> {t("catalog.clearFilters")}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {filtered.length === 0 ? (
+                  <div className="cat-empty">
+                    <Package size={30} strokeWidth={1.5} />
+                    {t("dashboard.noResults")}
+                  </div>
+                ) : (
+                  <div className="cat-grid">
+                    {filtered.map((item, index) => (
+                      <CatalogCard key={item.id} item={item} locale={locale} prices={prices} index={index}
+                        onOpen={() => setProductParam(item.id)} onQuickAdd={() => quickAdd(item)} />
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
           </>
         )}
 
@@ -365,50 +403,87 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-hero[data-cover] .cat-channel { border-color: rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.94); color: #18231d; }
         .cat-hint { font-size: 0.72rem; color: var(--text-3); margin: 0; line-height: 1.45; }
 
-        /* ── Toolbar ── */
-        .cat-toolbar {
-          position: sticky; top: 0; z-index: 30;
-          margin: 0 0 1rem; padding: 0.65rem;
-          background: color-mix(in srgb, var(--bg-2) 94%, transparent);
-          backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-          border: 1px solid var(--border); border-radius: 10px;
+        /* ── Category navigation and toolbar ── */
+        .cat-browse { display: grid; grid-template-columns: 220px minmax(0, 1fr); align-items: start; gap: 1.1rem; }
+        .cat-sidebar {
+          position: sticky; top: 1rem; overflow: hidden; padding: 0.8rem;
+          background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px;
         }
-        .cat-toolbar-row { display: flex; gap: 0.6rem; align-items: center; }
+        .cat-sidebar-heading {
+          display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+          padding: 0.25rem 0.45rem 0.7rem; color: var(--text-1); font-size: 0.78rem; font-weight: 750;
+        }
+        .cat-sidebar-total {
+          min-width: 22px; padding: 2px 6px; border-radius: 6px; text-align: center;
+          background: var(--bg-3); color: var(--text-3); font-size: 0.68rem; font-variant-numeric: tabular-nums;
+        }
+        .cat-category-list { display: flex; flex-direction: column; gap: 3px; }
+        .cat-category {
+          display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+          width: 100%; min-width: 0; padding: 0.58rem 0.62rem; border: 1px solid transparent; border-radius: 7px;
+          background: transparent; color: var(--text-2); text-align: left; cursor: pointer;
+          font: inherit; font-size: 0.78rem; transition: background 0.16s, color 0.16s, border-color 0.16s;
+        }
+        .cat-category:hover { background: var(--bg-3); color: var(--text-1); }
+        .cat-category[data-active] {
+          background: var(--shop-accent-soft); border-color: color-mix(in srgb, var(--shop-accent) 28%, transparent);
+          color: var(--shop-accent); font-weight: 700;
+        }
+        .cat-category-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cat-category-count {
+          flex: 0 0 auto; min-width: 22px; padding: 2px 6px; border-radius: 5px;
+          background: var(--bg-3); color: var(--text-3); text-align: center;
+          font-size: 0.66rem; font-weight: 700; font-variant-numeric: tabular-nums;
+        }
+        .cat-category[data-active] .cat-category-count { background: color-mix(in srgb, var(--shop-accent) 14%, var(--bg-2)); color: var(--shop-accent); }
+        .cat-results-area { min-width: 0; }
+
+        .cat-toolbar {
+          position: sticky; top: 0; z-index: 30; margin: 0 0 1rem; padding: 0.8rem;
+          background: color-mix(in srgb, var(--bg-2) 96%, transparent);
+          backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+          border: 1px solid var(--border); border-radius: 10px;
+          box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 22%, transparent);
+        }
+        .cat-toolbar-row { display: flex; gap: 0.65rem; align-items: center; }
         .cat-search-wrap { position: relative; flex: 1; min-width: 0; }
-        .cat-search-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
-        .cat-search { padding-left: 2.6rem !important; padding-right: 2.4rem !important; border-radius: 8px !important; height: 42px; background: var(--bg); }
+        .cat-search-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--shop-accent); pointer-events: none; }
+        .cat-search {
+          width: 100%; height: 46px; padding-left: 2.8rem !important; padding-right: 2.6rem !important;
+          border-radius: 8px !important; background: var(--bg); font-size: 0.86rem;
+          transition: border-color 0.16s, box-shadow 0.16s;
+        }
+        .cat-search:focus { border-color: var(--shop-accent) !important; box-shadow: 0 0 0 3px var(--shop-accent-soft); }
         .cat-search::-webkit-search-cancel-button { display: none; }
         .cat-search-clear {
           position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-          width: 28px; height: 28px; border-radius: 6px; border: none; cursor: pointer;
-          display: flex; align-items: center; justify-content: center; background: var(--bg-3); color: var(--text-2);
+          width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--border); cursor: pointer;
+          display: flex; align-items: center; justify-content: center; background: var(--bg-2); color: var(--text-2);
+          transition: color 0.16s, border-color 0.16s, background 0.16s;
         }
+        .cat-search-clear:hover { color: var(--text-1); border-color: var(--shop-accent); }
         .cat-sort {
-          position: relative; display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
-          padding: 0 0.75rem; height: 42px; border-radius: 8px; cursor: pointer;
-          background: var(--bg-2); border: 1px solid var(--border); color: var(--text-2);
-          font-size: 0.76rem; font-weight: 600;
+          position: relative; display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto;
+          padding: 0 0.8rem; height: 46px; border-radius: 8px; cursor: pointer;
+          background: var(--bg); border: 1px solid var(--border); color: var(--text-2);
+          font-size: 0.76rem; font-weight: 650; transition: border-color 0.16s, box-shadow 0.16s;
         }
+        .cat-sort-icon { flex: 0 0 auto; color: var(--shop-accent); }
         .cat-sort select {
           appearance: none; -webkit-appearance: none; border: none; background: transparent; cursor: pointer;
-          color: var(--text-1); font: inherit; font-weight: 700; outline: none; padding: 0;
+          color: var(--text-1); font: inherit; font-weight: 700; outline: none; padding: 0 1rem 0 0; max-width: 220px;
         }
         .cat-sort select option { background: var(--bg-2); color: var(--text-1); }
-        .cat-sort:focus-within { border-color: var(--shop-accent); }
-        .cat-chips { display: flex; gap: 0.45rem; overflow-x: auto; margin-top: 0.65rem; padding-bottom: 2px; scrollbar-width: none; }
-        .cat-chips::-webkit-scrollbar { display: none; }
-        .cat-chip {
-          flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px;
-          padding: 0.4rem 0.55rem 0.4rem 0.8rem; border-radius: 7px; font-size: 0.77rem; font-weight: 600;
-          border: 1px solid var(--border); cursor: pointer; background: var(--bg-2); color: var(--text-2);
-          transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.18s;
+        .cat-sort:focus-within { border-color: var(--shop-accent); box-shadow: 0 0 0 3px var(--shop-accent-soft); }
+        .cat-toolbar-meta { display: flex; align-items: center; gap: 0.55rem; min-height: 1.25rem; margin-top: 0.6rem; }
+        .cat-active-category { min-width: 0; overflow: hidden; color: var(--text-1); font-size: 0.73rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+        .cat-results { flex: 0 0 auto; color: var(--text-3); font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
+        .cat-clear-filters {
+          display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 0.18rem 0.35rem;
+          border: 0; background: transparent; color: var(--shop-accent); cursor: pointer; font: inherit;
+          font-size: 0.7rem; font-weight: 700; white-space: nowrap;
         }
-        .cat-chip:hover { border-color: var(--shop-accent); }
-        .cat-chip:active { transform: scale(0.97); }
-        .cat-chip[data-active] { background: var(--shop-accent); border-color: var(--shop-accent); color: white; }
-        .cat-chip-count { font-size: 0.68rem; font-weight: 700; padding: 1px 7px; border-radius: 5px; background: var(--bg-3); color: var(--text-3); }
-        .cat-chip[data-active] .cat-chip-count { background: rgba(255, 255, 255, 0.18); color: white; }
-        .cat-results { flex: 0 0 auto; color: var(--text-3); font-size: 0.74rem; font-weight: 600; white-space: nowrap; }
+        .cat-clear-filters:hover { color: var(--shop-accent-hover); }
 
         /* ── Grid + cards ── */
         .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.85rem; }
@@ -436,6 +511,12 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           border: 1px solid var(--border); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
         }
         .cat-card-cat { top: 9px; left: 9px; max-width: calc(100% - 18px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cat-card-stock {
+          position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1;
+          padding: 0.4rem 0.7rem; border: 1px solid var(--border); border-radius: 6px;
+          background: color-mix(in srgb, var(--bg-2) 90%, transparent); color: var(--text-2);
+          font-size: 0.7rem; font-weight: 750; white-space: nowrap;
+        }
         .cat-card-count { bottom: 9px; right: 9px; }
         .cat-card-badges { position: absolute; bottom: 9px; left: 9px; display: flex; gap: 4px; }
         .cat-badge {
@@ -464,6 +545,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           background: var(--shop-accent); transition: background 0.16s, transform 0.16s;
         }
         .cat-card-add:hover { background: var(--shop-accent-hover); transform: translateY(-1px); }
+        .cat-card-add:disabled { background: var(--bg-3); color: var(--text-3); box-shadow: none; cursor: not-allowed; transform: none; }
         .cat-card-add:active { transform: scale(0.96); }
         .cat-card-add:focus-visible { outline: 2px solid var(--shop-accent); outline-offset: 2px; }
 
@@ -597,6 +679,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-variant:hover { border-color: var(--shop-accent); }
         .cat-variant:active { transform: scale(0.96); }
         .cat-variant[data-active] { border-color: var(--shop-accent); background: var(--shop-accent-soft); color: var(--shop-accent); }
+        .cat-variant:disabled { color: var(--text-3); background: var(--bg-3); border-color: var(--border); cursor: not-allowed; opacity: 0.65; }
         .cat-modal-fields { display: flex; flex-direction: column; gap: 6px; }
         .cat-modal-field { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; font-size: 0.82rem; padding: 0.6rem 0.7rem; border-radius: 6px; background: var(--bg-3); }
         .cat-modal-field span:first-child { color: var(--text-3); font-weight: 600; flex-shrink: 0; }
@@ -647,6 +730,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-line-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 4px; }
         .cat-line-row .cat-stepper { background: var(--bg-2); }
         .cat-line-price { font-size: 0.9rem; font-weight: 800; color: var(--text-1); font-variant-numeric: tabular-nums; }
+        .cat-line-stock, .cat-stock-warning { margin: 0.25rem 0 0; color: var(--red); font-size: 0.72rem; font-weight: 650; }
         .cat-line-remove {
           width: 30px; height: 30px; border-radius: 6px; border: none; cursor: pointer; flex-shrink: 0;
           display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-3);
@@ -731,12 +815,19 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           .cat-hero-logo { width: 56px; height: 56px; border-radius: 9px; font-size: 1.35rem; }
           .cat-hero-title { font-size: 1.55rem; }
           .cat-hero-contact { width: 100%; }
-          .cat-toolbar { top: 0; margin: 0 0 0.8rem; padding: 0.55rem; }
-          .cat-toolbar-row { flex-wrap: wrap; }
+          .cat-browse { grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
+          .cat-sidebar { position: static; padding: 0.65rem; }
+          .cat-sidebar-heading { padding: 0.1rem 0.35rem 0.55rem; }
+          .cat-category-list { flex-direction: row; overflow-x: auto; gap: 0.4rem; padding-bottom: 2px; scrollbar-width: none; }
+          .cat-category-list::-webkit-scrollbar { display: none; }
+          .cat-category { width: auto; min-width: max-content; max-width: 220px; flex: 0 0 auto; gap: 0.5rem; padding: 0.48rem 0.62rem; border-color: var(--border); }
+          .cat-toolbar { top: 0; margin: 0 0 0.75rem; padding: 0.65rem; }
+          .cat-toolbar-row { flex-wrap: wrap; gap: 0.5rem; }
           .cat-search-wrap { flex: 1 1 100%; }
-          .cat-sort { flex: 1 1 auto; justify-content: flex-start; }
-          .cat-results { margin-left: auto; }
-          .cat-sort-label { display: none; }
+          .cat-search { height: 44px; }
+          .cat-sort { width: 100%; height: 42px; justify-content: space-between; }
+          .cat-sort select { max-width: calc(100% - 6.5rem); }
+          .cat-toolbar-meta { margin-top: 0.45rem; }
           .cat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; }
           .cat-card { border-radius: 8px; }
           .cat-card-media { aspect-ratio: 1 / 1.04; }
@@ -768,6 +859,8 @@ export default function CatalogView({ shopId }: { shopId: string }) {
 
         @media (max-width: 380px) {
           .cat-wrap { padding-inline: 0.7rem; }
+          .cat-category { padding-inline: 0.5rem; font-size: 0.72rem; }
+          .cat-toolbar { padding: 0.55rem; }
           .cat-grid { gap: 0.5rem; }
           .cat-card-body { padding: 0.55rem; }
           .cat-card-add { width: 30px; height: 30px; }

@@ -15,6 +15,19 @@ export function saleDiscount(item: CatalogItem) {
   return Math.max(1, Math.round((1 - item.salePrice / item.compareAtPrice) * 100));
 }
 
+export function catalogStockForVariant(item: CatalogItem, index: number) {
+  if (item.stockQuantity === undefined) return 0;
+  if (item.variants.length === 0) return item.stockQuantity;
+  const variantId = item.variantIds?.[index];
+  return variantId ? item.variantStock?.[variantId] ?? 0 : 0;
+}
+
+export function catalogItemAvailable(item: CatalogItem) {
+  return item.variants.length > 0
+    ? item.variants.some((_, index) => catalogStockForVariant(item, index) > 0)
+    : (item.stockQuantity ?? 0) > 0;
+}
+
 export function fieldText(field: CatalogField, locale: Locale, t: (key: string) => string) {
   const label = field.labels?.[locale as never] || field.label;
   const value = typeof field.value === "boolean" ? t(field.value ? "yes" : "no") : field.values?.[locale] ?? String(field.value);
@@ -32,6 +45,10 @@ export default function CatalogCard({ item, locale, prices, index, onOpen, onQui
   const { t } = useI18n();
   const images = itemImages(item);
   const discount = saleDiscount(item);
+  const available = catalogItemAvailable(item);
+  const quickAddAvailable = item.variants.length === 1
+    ? catalogStockForVariant(item, 0) > 0
+    : available;
 
   return (
     <article className="cat-card" style={{ animationDelay: `${Math.min(index, 12) * 40}ms` }}>
@@ -44,6 +61,7 @@ export default function CatalogCard({ item, locale, prices, index, onOpen, onQui
         )}
         <div className="cat-card-shade" aria-hidden="true" />
         {item.category && <span className="cat-card-cat">{item.category}</span>}
+        {!available && <span className="cat-card-stock">{t("catalog.outOfStock")}</span>}
         {(discount > 0 || item.isNew) && (
           <div className="cat-card-badges">
             {discount > 0 && <span className="cat-badge" data-kind="sale">-{discount}%</span>}
@@ -88,8 +106,11 @@ export default function CatalogCard({ item, locale, prices, index, onOpen, onQui
               )}
             </span>
           ) : <span />}
-          <button type="button" className="cat-card-add" onClick={onQuickAdd} aria-label={`${t("catalog.addToCart")} — ${item.name}`}>
-            <Plus size={18} strokeWidth={2.5} />
+          <button
+            type="button" className="cat-card-add" onClick={onQuickAdd} disabled={!quickAddAvailable}
+            aria-label={`${t(quickAddAvailable ? "catalog.addToCart" : "catalog.outOfStock")} — ${item.name}`}
+          >
+            {quickAddAvailable ? <Plus size={18} strokeWidth={2.5} /> : <Package size={16} />}
           </button>
         </div>
       </div>

@@ -91,6 +91,8 @@ export interface CatalogItem {
   isNew: boolean;
   variants: string[];
   variantIds?: string[];
+  stockQuantity?: number;
+  variantStock?: Record<string, number>;
   fields: CatalogField[];
   hidden: boolean;
 }

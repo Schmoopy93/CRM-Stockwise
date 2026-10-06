@@ -301,8 +301,12 @@ service cloud.firestore {
         allow read: if true;
         allow create, update: if isMember(shopId)
           && request.resource.data.keys().hasOnly([
-            'name', 'category', 'imageUrl', 'images', 'salePrice', 'compareAtPrice', 'variants', 'variantIds', 'fields', 'hidden', 'createdAt', 'updatedAt'
+            'name', 'category', 'imageUrl', 'images', 'salePrice', 'compareAtPrice', 'variants', 'variantIds', 'stockQuantity', 'variantStock', 'fields', 'hidden', 'createdAt', 'updatedAt'
           ])
+          && (!('stockQuantity' in request.resource.data)
+            || (request.resource.data.stockQuantity is int && request.resource.data.stockQuantity >= 0))
+          && (!('variantStock' in request.resource.data)
+            || (request.resource.data.variantStock is map && request.resource.data.variantStock.size() <= 200))
           && (!('compareAtPrice' in request.resource.data)
             || (request.resource.data.compareAtPrice is number && request.resource.data.compareAtPrice >= 0))
           && (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp)

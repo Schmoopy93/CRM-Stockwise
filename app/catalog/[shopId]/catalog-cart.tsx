@@ -18,6 +18,7 @@ export interface ResolvedCartLine {
   variant: string;
   variantId?: string;
   quantity: number;
+  availableQuantity: number;
 }
 
 export default function CatalogCart({ lines, locale, prices, shopId, channels, onQuantity, onClear, onOrderPlaced, onClose, onNotify, onTrack }: {
@@ -46,6 +47,7 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
   const [placeError, setPlaceError] = useState("");
   const channelList = availableChannels(channels);
   const priced = lines.every((line) => line.item.salePrice !== undefined);
+  const stockAvailable = lines.every((line) => line.availableQuantity > 0 && line.quantity <= line.availableQuantity);
   const total = lines.reduce((sum, line) => sum + (line.item.salePrice ?? 0) * line.quantity, 0);
   const orderLines = lines.map((line) => ({
     name: line.item.name,
@@ -57,7 +59,7 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
   const message = placedMessage || baseMessage;
 
   async function place() {
-    if (placing || !name.trim() || !email.trim() || !phone.trim() || !address.trim() || !city.trim() || !priced || lines.length === 0) return;
+    if (placing || !name.trim() || !email.trim() || !phone.trim() || !address.trim() || !city.trim() || !priced || !stockAvailable || lines.length === 0) return;
     setPlacing(true); setPlaceError("");
     try {
       // Sent in the currency the customer was quoted, and tagged with it, so the
@@ -150,7 +152,7 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
         ) : (
           <>
             <ul className="cat-drawer-list">
-              {lines.map(({ item, variant, variantId, quantity }) => {
+              {lines.map(({ item, variant, variantId, quantity, availableQuantity }) => {
                 const image = itemImages(item)[0];
                 return (
                   <li key={`${item.id}-${variantId ?? variant}`} className="cat-line">
@@ -164,10 +166,13 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
                         <div className="cat-stepper" data-size="sm" role="group" aria-label={t("catalog.quantity")}>
                           <button type="button" onClick={() => onQuantity(item.id, variant, quantity - 1, variantId)} aria-label={t("catalog.decrease")}><Minus size={13} /></button>
                           <span>{quantity}</span>
-                          <button type="button" onClick={() => onQuantity(item.id, variant, quantity + 1, variantId)} disabled={quantity >= MAX_QUANTITY} aria-label={t("catalog.increase")}><Plus size={13} /></button>
+                          <button type="button" onClick={() => onQuantity(item.id, variant, quantity + 1, variantId)} disabled={quantity >= Math.min(MAX_QUANTITY, availableQuantity)} aria-label={t("catalog.increase")}><Plus size={13} /></button>
                         </div>
                         {item.salePrice !== undefined && <span className="cat-line-price">{prices.money(item.salePrice * quantity)}</span>}
                       </div>
+                      {(availableQuantity <= 0 || quantity > availableQuantity) && (
+                        <p className="cat-line-stock">{availableQuantity <= 0 ? t("catalog.outOfStock") : t("catalog.stockChanged")}</p>
+                      )}
                     </div>
                     <button type="button" className="cat-line-remove" onClick={() => onQuantity(item.id, variant, 0, variantId)} aria-label={`${t("catalog.remove")} — ${item.name}`}>
                       <Trash2 size={14} />
@@ -242,12 +247,13 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
                     </label>
                   </div>
                   <button
-                    type="submit" className="btn-primary cat-order-button" disabled={placing || !name.trim() || !email.trim() || !phone.trim() || !address.trim() || !city.trim() || !priced}
+                    type="submit" className="btn-primary cat-order-button" disabled={placing || !name.trim() || !email.trim() || !phone.trim() || !address.trim() || !city.trim() || !priced || !stockAvailable}
                   >
                     {placing ? <Loader2 size={15} className="cat-spin" /> : <Check size={15} />}
                     {placing ? t("catalog.orderPlacing") : t("catalog.orderPlace")}
                   </button>
                   {!priced && <p className="cat-hint cat-order-note">{t("catalog.orderPriceRequired")}</p>}
+                  {!stockAvailable && <p className="cat-order-error">{t("catalog.stockChanged")}</p>}
                   {placeError && <p className="cat-order-error">{placeError}</p>}
                 </form>
               )}
