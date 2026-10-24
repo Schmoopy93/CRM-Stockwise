@@ -52,7 +52,7 @@ export function CookieNotice() {
       </button>
       <style>{`
         @media (max-width: 480px) {
-          .cookie-notice { right: 80px; left: 12px !important; bottom: 12px !important; flex-wrap: wrap; }
+          .cookie-notice { right: 12px !important; left: 12px !important; bottom: 80px !important; flex-wrap: wrap; }
         }
       `}</style>
     </div>

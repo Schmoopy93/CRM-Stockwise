@@ -1088,6 +1088,8 @@ select.input { cursor: pointer; }
   .export-summary > div { flex: 1 1 110px; min-width: 0; }
   .receipt-header > div { min-width: 0; }
   .receipt-summary { align-items: flex-start !important; }
+  .analytics-panels { gap: 0.75rem !important; }
+  .analytics-panels > .glass { padding: 1.1rem !important; min-width: 0; }
   .login-card { padding: 1.25rem !important; }
   .login-mobile-logo { display: flex !important; }
   .login-left-panel { display: none !important; }

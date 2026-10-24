@@ -53,6 +53,8 @@ export function ConfirmDialog({
         style={{
           width: "100%",
           maxWidth: 420,
+          maxHeight: "calc(100dvh - 2rem)",
+          overflowY: "auto",
           background: "var(--bg-2)",
           border: "1px solid var(--border)",
           borderRadius: 20,
@@ -109,7 +111,7 @@ export function ConfirmDialog({
           </p>
         )}
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
           <button
             type="button"
             onClick={onCancel}

@@ -123,7 +123,7 @@ export default function ImageCropper({ src, fileName, aspect = 1, outputWidth = 
       onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
       style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem", background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}
     >
-      <div style={{ width: "100%", maxWidth: aspect > 1 ? 560 : 380, background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 20, padding: "1.25rem", boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}>
+      <div style={{ width: "100%", maxWidth: aspect > 1 ? 560 : 380, maxHeight: "calc(100dvh - 2rem)", overflowY: "auto", background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 20, padding: "1.25rem", boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
           <p style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-1)", margin: 0 }}>{t("cropper.title")}</p>
           <button onClick={onCancel} aria-label={t("back")} style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer", color: "var(--text-3)" }}>

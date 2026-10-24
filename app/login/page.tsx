@@ -307,8 +307,8 @@ export default function LoginPage() {
       )}
 
       {/* Footer */}
-      <footer style={{ position: "relative", zIndex: 1, borderTop: "1px solid var(--border)", padding: "1.5rem 2rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", flex: 1 }}>
+      <footer className="login-footer" style={{ position: "relative", zIndex: 1, borderTop: "1px solid var(--border)", padding: "1.5rem 2rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, rowGap: 6, justifyContent: "center", flexWrap: "wrap", flex: 1, minWidth: 0, textAlign: "center" }}>
           <div style={{ width: 22, height: 22, borderRadius: 6, overflow: "hidden" }}><Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={22} height={22} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /></div>
           <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-3)" }}>{t("brand")}</span>
           <span style={{ fontSize: "0.78rem", color: "var(--border)" }}>·</span>
@@ -341,6 +341,7 @@ export default function LoginPage() {
           }
           .login-hero { padding: 2.6rem 1.25rem 2.25rem; }
           .login-features-wrap { padding-bottom: 3.5rem !important; }
+          .login-footer { padding: 1.25rem 1rem !important; }
         }
       `}</style>
     </div>

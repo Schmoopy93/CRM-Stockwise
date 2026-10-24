@@ -76,7 +76,7 @@ export default function CustomerForm({ shopId, customer, onSaved, onClose }: Pro
     >
       <form
         onSubmit={(e) => { e.preventDefault(); if (!saving) submit(); }}
-        style={{ width: "100%", maxWidth: 460, maxHeight: "85vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.9rem", background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 20, padding: "1.25rem", boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}
+        style={{ width: "100%", maxWidth: 460, maxHeight: "85dvh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.9rem", background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 20, padding: "1.25rem", boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <p style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-1)", margin: 0 }}>

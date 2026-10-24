@@ -522,12 +522,12 @@ export default function AnalyticsPage() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: 220, overflow: "auto" }}>
               {lowStock.map((p) => (
-                <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid var(--border)" }}>
-                  <div>
-                    <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-1)", margin: 0 }}>{p.name}</p>
+                <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", padding: "0.5rem 0", borderBottom: "1px solid var(--border)" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-1)", margin: 0, overflowWrap: "anywhere" }}>{p.name}</p>
                     <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: "1px 0 0" }}>{t("analytics.minStock")} {p.minStock}</p>
                   </div>
-                  <span style={{ fontWeight: 700, color: "var(--amber)", fontSize: "1.1rem" }}>{p.totalQuantity}</span>
+                  <span style={{ fontWeight: 700, color: "var(--amber)", fontSize: "1.1rem", flexShrink: 0 }}>{p.totalQuantity}</span>
                 </div>
               ))}
             </div>
@@ -547,16 +547,16 @@ export default function AnalyticsPage() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: 220, overflow: "auto" }}>
               {deadStock.map((p) => (
-                <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid var(--border)" }}>
-                  <div>
-                    <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-1)", margin: 0 }}>{p.name}</p>
+                <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", padding: "0.5rem 0", borderBottom: "1px solid var(--border)" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-1)", margin: 0, overflowWrap: "anywhere" }}>{p.name}</p>
                     <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: "1px 0 0" }}>
                       {p.tiedValue > 0
                         ? t("analytics.deadStockHint", { value: money(p.tiedValue, { minimumFractionDigits: 2 }) })
                         : t("analytics.deadStockNoValue")}
                     </p>
                   </div>
-                  <span style={{ fontWeight: 700, color: "var(--amber)", fontSize: "1.1rem" }}>{p.totalQuantity}</span>
+                  <span style={{ fontWeight: 700, color: "var(--amber)", fontSize: "1.1rem", flexShrink: 0 }}>{p.totalQuantity}</span>
                 </div>
               ))}
             </div>

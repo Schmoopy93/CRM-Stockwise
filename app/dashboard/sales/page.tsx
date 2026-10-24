@@ -187,8 +187,8 @@ export default function SalesPage() {
 
   return (
     <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.5rem", maxWidth: 640 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
+        <div style={{ minWidth: 0 }}>
           <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{t("sales.title")}</h1>
           <p style={{ fontSize: "0.82rem", color: "var(--text-2)", marginTop: 4 }}>{t("sales.subtitle")}</p>
         </div>

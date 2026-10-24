@@ -577,8 +577,8 @@ export default function CustomerAccount({ shopId }: { shopId: string }) {
                     <ul style={{ display: "flex", flexDirection: "column", gap: 6, margin: 0, padding: "0.75rem 0", listStyle: "none", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}>
                       {selectedOrder.lines.map((line, index) => (
                         <li key={`${line.productId}-${line.variantId ?? line.variantLabel}-${index}`} style={{ display: "flex", justifyContent: "space-between", gap: 8, color: "var(--text-2)", fontSize: "0.77rem" }}>
-                          <span>{line.productName}{line.variantLabel ? ` · ${line.variantLabel}` : ""} × {line.quantity}</span>
-                          {typeof line.unitPrice === "number" && <span>{formatCatalogPrice(line.unitPrice * line.quantity, intl, selectedOrder.currency ?? BASE_CURRENCY)}</span>}
+                          <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{line.productName}{line.variantLabel ? ` · ${line.variantLabel}` : ""} × {line.quantity}</span>
+                          {typeof line.unitPrice === "number" && <span style={{ flexShrink: 0 }}>{formatCatalogPrice(line.unitPrice * line.quantity, intl, selectedOrder.currency ?? BASE_CURRENCY)}</span>}
                         </li>
                       ))}
                     </ul>

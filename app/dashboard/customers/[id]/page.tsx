@@ -125,7 +125,7 @@ export default function CustomerDetailPage() {
             </div>
             <div style={{ minWidth: 0 }}>
               <h1 style={{ fontSize: "1.25rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{customer.name}</h1>
-              <p style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: "0.75rem", color: "var(--text-3)", margin: "4px 0 0" }}>
+              <p style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: "0.75rem", color: "var(--text-3)", margin: "4px 0 0", minWidth: 0, overflowWrap: "anywhere" }}>
                 {customer.contact && <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Phone size={11} />{customer.contact}</span>}
                 {customer.email && (
                   <a href={`mailto:${customer.email}`} style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--text-3)", textDecoration: "none" }}>
