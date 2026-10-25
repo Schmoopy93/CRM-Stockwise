@@ -1,19 +1,19 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 type Props = {
   page: number;
   totalPages: number;
   totalItems: number;
   shown: number;
-  hasMore: boolean;
+  hasMore?: boolean;       // kept for API compat, no longer used in UI
   loading?: boolean;
-  onLoadMore: () => void;
+  onLoadMore?: () => void; // kept for API compat, no longer used in UI
   onGoToPage: (page: number) => void;
   labels: {
-    loadMore: string;
-    loading: string;
+    loadMore?: string;
+    loading?: string;
     showing: string;
     of: string;
     page: string;
@@ -31,9 +31,7 @@ export default function ListPagination({
   totalPages,
   totalItems,
   shown,
-  hasMore,
-  loading = false,
-  onLoadMore,
+  loading: _loading,
   onGoToPage,
   labels,
 }: Props) {
@@ -53,13 +51,6 @@ export default function ListPagination({
       </p>
 
       <div className="list-pagination-actions">
-        {hasMore && (
-          <button className="btn-secondary list-pagination-more" onClick={onLoadMore} disabled={loading}>
-            {loading ? <Loader2 size={14} className="spin" /> : null}
-            {loading ? labels.loading : labels.loadMore}
-          </button>
-        )}
-
         {totalPages > 1 && (
           <nav className="list-pagination-pages" aria-label={labels.page}>
             <button

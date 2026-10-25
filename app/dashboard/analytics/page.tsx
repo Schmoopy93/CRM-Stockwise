@@ -307,7 +307,7 @@ export default function AnalyticsPage() {
     }
     return Object.values(counts)
       .sort((a, b) => b.total - a.total)
-      .slice(0, 8);
+      .slice(0, 5);
   }, [events, products]);
 
   // Low stock
@@ -495,10 +495,25 @@ export default function AnalyticsPage() {
           ) : topMovers.length === 0 ? (
             <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "2rem 0" }}>{t("analytics.noData")}</p>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={topMovers} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
+            <ResponsiveContainer width="100%" height={230}>
+              <BarChart data={topMovers} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }} barCategoryGap="28%">
                 <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
-                <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: "var(--text-2)" }} axisLine={false} tickLine={false} width={90} />
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  tick={({ x, y, payload }) => {
+                    const label: string = payload.value.length > 20 ? payload.value.slice(0, 19) + "…" : payload.value;
+                    return (
+                      <text x={x} y={y} dy={4} textAnchor="end" fill="var(--text-2)" fontSize={10}>
+                        {label}
+                      </text>
+                    );
+                  }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={115}
+                  interval={0}
+                />
                 <Tooltip
                   contentStyle={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
                 />
