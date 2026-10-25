@@ -354,6 +354,8 @@
   "customers.contactHint": "Telefon oder @Name — das wichtigste Feld, so erreichst du den Kunden",
   "customers.contactPlaceholder": "+49 151 23456789",
   "customers.createNamed": "„{name}“ als Kunden hinzufügen",
+  "customers.deleteConfirm": "Kunden „{name}“ löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+  "customers.deleteConfirmTitle": "Kunde löschen",
   "customers.deleteError": "Der Kunde wurde nicht gelöscht.",
   "customers.editTitle": "Kunde bearbeiten",
   "customers.email": "E-Mail",

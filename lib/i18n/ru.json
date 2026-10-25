@@ -354,6 +354,8 @@
   "customers.contactHint": "Телефон или @ник — самое нужное поле, так вы связываетесь с клиентом",
   "customers.contactPlaceholder": "+7 900 123-45-67",
   "customers.createNamed": "Добавить «{name}» как клиента",
+  "customers.deleteConfirm": "Удалить клиента «{name}»? Это действие нельзя отменить.",
+  "customers.deleteConfirmTitle": "Удалить клиента",
   "customers.deleteError": "Клиент не был удалён.",
   "customers.editTitle": "Изменить клиента",
   "customers.email": "Эл. почта",

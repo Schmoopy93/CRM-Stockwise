@@ -9,6 +9,7 @@ import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { deleteCustomer } from "@/lib/actions";
 import { formatCatalogPrice } from "@/lib/catalog-channels";
 import CustomerForm from "@/components/CustomerForm";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   ArrowLeft,
   Banknote,
@@ -47,6 +48,7 @@ export default function CustomerDetailPage() {
   );
 
   const [formOpen, setFormOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
 
@@ -112,6 +114,21 @@ export default function CustomerDetailPage() {
 
   return (
     <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      <ConfirmDialog
+        open={confirmDelete}
+        title={t("customers.deleteConfirmTitle")}
+        description={t("customers.deleteConfirm", { name: customer.name })}
+        confirmText={t("delete")}
+        cancelText={t("cancel")}
+        destructive
+        confirmDisabled={deleting}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          void remove();
+        }}
+        onCancel={() => setConfirmDelete(false)}
+      />
+
       <Link href="/dashboard/customers" className="pform-back" style={{ alignSelf: "flex-start" }}>
         <ArrowLeft size={14} />
         {t("customers.backToList")}
@@ -143,7 +160,7 @@ export default function CustomerDetailPage() {
             </button>
             <button
               type="button"
-              onClick={remove}
+              onClick={() => setConfirmDelete(true)}
               disabled={deleting}
               style={{ display: "flex", alignItems: "center", gap: 5, padding: "0.4rem 0.8rem", fontSize: "0.78rem", background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 9, color: "var(--red)", cursor: deleting ? "default" : "pointer", opacity: deleting ? 0.6 : 1 }}
             >

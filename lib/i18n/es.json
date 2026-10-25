@@ -354,6 +354,8 @@
   "customers.contactHint": "Teléfono o @usuario — el campo más útil, así contactas con el cliente",
   "customers.contactPlaceholder": "+34 600 123 456",
   "customers.createNamed": "Añadir «{name}» como cliente",
+  "customers.deleteConfirm": "¿Eliminar al cliente «{name}»? Esta acción no se puede deshacer.",
+  "customers.deleteConfirmTitle": "Eliminar cliente",
   "customers.deleteError": "No se ha eliminado el cliente.",
   "customers.editTitle": "Editar cliente",
   "customers.email": "Correo electrónico",

@@ -384,21 +384,21 @@ export default function AnalyticsPage() {
 
       {/* Stats row */}
       <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-      <div className="analytics-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "1rem" }}>
+      <div className="analytics-stats analytics-stats-main" style={{ display: "grid", gap: "1rem" }}>
         {[
           { icon: <Package size={16} />, label: t("analytics.products"), value: products.length, color: "#6366f1", bg: "rgba(99,102,241,0.1)", isLoading: false },
           { icon: <Activity size={16} />, label: t("analytics.changes"), value: events.length, color: "#22d3ee", bg: "rgba(34,211,238,0.1)", isLoading: true },
           { icon: <TrendingUp size={16} />, label: t("analytics.received"), value: totalIn, color: "var(--green)", bg: "var(--green-dim)", isLoading: true },
           { icon: <TrendingDown size={16} />, label: t("analytics.issued"), value: totalOut, color: lowStock.length > 0 ? "var(--amber)" : "var(--red)", bg: lowStock.length > 0 ? "var(--amber-dim)" : "var(--red-dim)", isLoading: true },
-          { icon: <DollarSign size={16} />, label: t("analytics.revenue"), value: money(totalRevenue, { minimumFractionDigits: 2 }), color: "#a855f7", bg: "rgba(168,85,247,0.1)", isLoading: false },
-          { icon: <Coins size={16} />, label: profitStats.margin !== null ? t("analytics.profitMargin", { pct: profitStats.margin }) : t("analytics.profit"), value: money(profitStats.profit, { minimumFractionDigits: 2 }), color: "var(--green)", bg: "var(--green-dim)", isLoading: false },
-        ].map(({ icon, label, value, color, bg, isLoading }) => (
-          <div key={label} className="glass" style={{ padding: "1.1rem 1.25rem", display: "flex", alignItems: "center", gap: "0.875rem" }}>
+          { icon: <DollarSign size={16} />, label: t("analytics.revenue"), value: money(totalRevenue, { minimumFractionDigits: 2 }), color: "#a855f7", bg: "rgba(168,85,247,0.1)", isLoading: false, wide: true },
+          { icon: <Coins size={16} />, label: profitStats.margin !== null ? t("analytics.profitMargin", { pct: profitStats.margin }) : t("analytics.profit"), value: money(profitStats.profit, { minimumFractionDigits: 2 }), color: "var(--green)", bg: "var(--green-dim)", isLoading: false, wide: true },
+        ].map(({ icon, label, value, color, bg, isLoading, wide }) => (
+          <div key={label} className={`glass analytics-stat${wide ? " analytics-stat-wide" : ""}`} style={{ padding: "1.1rem 1.25rem", display: "flex", alignItems: "center", gap: "0.875rem" }}>
             <div style={{ width: 36, height: 36, background: bg, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0 }}>
               {icon}
             </div>
-            <div>
-              <p style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0, color: "var(--text-1)", lineHeight: 1 }}>
+            <div className="analytics-stat-copy">
+              <p className="analytics-stat-value" style={{ margin: 0, color: "var(--text-1)" }}>
                 {eventsLoading && isLoading ? "—" : value}
               </p>
               <p style={{ fontSize: "0.72rem", color: "var(--text-2)", margin: "2px 0 0" }}>{label}</p>

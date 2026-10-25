@@ -357,6 +357,8 @@
   "customers.contactHint": "Telefon ili @ime — najvažnije polje, jer je tako kontaktiraš kupca",
   "customers.contactPlaceholder": "+381 64 123 4567",
   "customers.createNamed": "Dodaj „{name}“ kao kupca",
+  "customers.deleteConfirm": "Obriši kupca „{name}“? Ova radnja je nepovratna.",
+  "customers.deleteConfirmTitle": "Obriši kupca",
   "customers.deleteError": "Kupac nije obrisan.",
   "customers.editTitle": "Izmeni kupca",
   "customers.email": "Email",

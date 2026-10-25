@@ -354,6 +354,8 @@
   "customers.contactHint": "Telefono o @nome — il campo più utile, è così che li raggiungi",
   "customers.contactPlaceholder": "+39 333 123 4567",
   "customers.createNamed": "Aggiungi «{name}» come cliente",
+  "customers.deleteConfirm": "Eliminare il cliente «{name}»? Questa azione è irreversibile.",
+  "customers.deleteConfirmTitle": "Elimina cliente",
   "customers.deleteError": "Il cliente non è stato eliminato.",
   "customers.editTitle": "Modifica cliente",
   "customers.email": "Email",

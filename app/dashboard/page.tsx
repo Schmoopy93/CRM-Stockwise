@@ -281,15 +281,15 @@ export default function DashboardPage() {
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(160px, 1fr))`, gap: "0.875rem" }} className="dashboard-stats">
         {stats.map(({ icon: Icon, label, value, color, bg }) => (
-          <div key={label} style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.25rem 1.4rem", display: "flex", alignItems: "center", gap: "1rem", transition: "border-color 0.2s" }}
+          <div key={label} className="dashboard-stat" style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.25rem 1.4rem", display: "flex", alignItems: "center", gap: "1rem", transition: "border-color 0.2s" }}
             onMouseOver={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = color + "44"; }}
             onMouseOut={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)"; }}
           >
             <div style={{ width: 44, height: 44, background: bg, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <Icon size={19} color={color} strokeWidth={2} />
             </div>
-            <div>
-              <p style={{ fontSize: "1.65rem", fontWeight: 800, margin: 0, color: "var(--text-1)", lineHeight: 1, letterSpacing: "-0.02em" }}>{value}</p>
+            <div className="dashboard-stat-copy">
+              <p className="dashboard-stat-value" style={{ margin: 0, color: "var(--text-1)" }}>{value}</p>
               <p style={{ fontSize: "0.73rem", color: "var(--text-3)", margin: "4px 0 0", fontWeight: 500 }}>{label}</p>
             </div>
           </div>

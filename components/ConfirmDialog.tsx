@@ -1,7 +1,8 @@
 "use client";
 
 import { AlertTriangle, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export type ConfirmDialogProps = {
   open: boolean;
@@ -26,9 +27,17 @@ export function ConfirmDialog({
   onCancel,
   confirmDisabled = false,
 }: ConfirmDialogProps) {
-  if (!open) return null;
+  /* `.fade-up` keeps a transform after its entry animation, so a fixed child
+     would be clipped to that container. Rendering into body keeps the overlay
+     on the viewport. */
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  return (
+  if (!open || !mounted) return null;
+
+  return createPortal(
     <div
       onClick={(event) => {
         if (event.target === event.currentTarget) onCancel();
@@ -149,6 +158,7 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

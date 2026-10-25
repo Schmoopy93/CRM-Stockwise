@@ -357,6 +357,8 @@
   "customers.contactHint": "Phone or @handle — the most useful field, since it is how you reach them",
   "customers.contactPlaceholder": "+1 555 123 4567",
   "customers.createNamed": "Add “{name}” as a customer",
+  "customers.deleteConfirm": "Delete customer “{name}”? This action cannot be undone.",
+  "customers.deleteConfirmTitle": "Delete customer",
   "customers.deleteError": "The customer was not deleted.",
   "customers.editTitle": "Edit customer",
   "customers.email": "Email",
