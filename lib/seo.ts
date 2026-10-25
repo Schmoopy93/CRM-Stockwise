@@ -22,12 +22,12 @@ export const LOCALES = Object.keys(LOCALE_TAGS) as Locale[];
 export const OG_IMAGE = "/og.png";
 
 const TRANSLATIONS: Record<Locale, Record<string, string>> = {
-  sr: { title: "Stockwise — Upravljanje zalihama, prijem robe i prodaja u realnom vremenu", description: "Pratite stanje artikla, primajte robu, evidentirajte prodaju i analizirajte kretanje zaliha. Napravite besplatan javni katalog svoje radnje i podelite ga na Instagramu.", keywords: "upravljanje zalihama, evidencija robe, prijem robe, prodavnica, mali biznis, katalog radnje, programska oprema za radnju, CRM, analiza zaliha" },
-  en: { title: "Stockwise — Inventory, stock receiving and sales in real time", description: "Track product stock, receive deliveries, record sales and analyse stock movement. Create a free public catalog for your shop and share it on Instagram.", keywords: "inventory management, stock control, inventory software, small business inventory, shop catalog, product catalog, retail inventory, stock analytics" },
-  ru: { title: "Stockwise — Учёт товаров, приёмка и продажи в реальном времени", description: "Следите за остатками товаров, принимайте поставки, фиксируйте продажи и анализируйте движение запасов. Создайте бесплатный публичный каталог вашего магазина и поделитесь им в Instagram.", keywords: "управление запасами, учёт товаров, приёмка товара, программа для учёта товаров, складской учёт, каталог магазина, каталог товаров, аналитика запасов" },
-  de: { title: "Stockwise — Lagerverwaltung, Wareneingang und Verkauf in Echtzeit", description: "Verwalten Sie Ihren Lagerbestand, empfangen Sie Lieferungen, erfassen Sie Verkäufe und analysieren Sie Bestandsbewegungen. Erstellen Sie einen kostenlosen öffentlichen Katalog für Ihr Geschäft und teilen Sie ihn auf Instagram.", keywords: "Lagerverwaltung, Lagerbestand, Wareneingang, Bestandsverwaltung Software, Geschäftskatalog, Produktkatalog, Einzelhandel Bestand, Bestandsanalyse" },
-  es: { title: "Stockwise — Inventario, recepción de mercancía y ventas en tiempo real", description: "Controla el stock de tus productos, recibe mercancía, registra ventas y analiza el movimiento de inventario. Crea un catálogo público gratuito para tu tienda y compártelo en Instagram.", keywords: "gestión de inventario, control de stock, software de inventario, inventario para pymes, catálogo de tienda, catálogo de productos, inventario minorista, análisis de stock" },
-  it: { title: "Stockwise — Inventario, ricevimento merci e vendite in tempo reale", description: "Monitora il magazzino dei tuoi prodotti, ricevi le consegne, registra le vendite e analizza il movimento dell inventario. Crea un catalogo pubblico gratuito per il tuo negozio e condividilo su Instagram.", keywords: "gestione magazzino, controllo scorte, software gestione magazzino, magazzino per piccole imprese, catalogo negozio, catalogo prodotti, inventario retail, analisi scorte" },
+  sr: { title: "Logixia — Upravljanje zalihama, prijem robe i prodaja u realnom vremenu", description: "Pratite stanje artikla, primajte robu, evidentirajte prodaju i analizirajte kretanje zaliha. Napravite besplatan javni katalog svoje radnje i podelite ga na Instagramu.", keywords: "upravljanje zalihama, evidencija robe, prijem robe, prodavnica, mali biznis, katalog radnje, programska oprema za radnju, CRM, analiza zaliha" },
+  en: { title: "Logixia — Inventory, stock receiving and sales in real time", description: "Track product stock, receive deliveries, record sales and analyse stock movement. Create a free public catalog for your shop and share it on Instagram.", keywords: "inventory management, stock control, inventory software, small business inventory, shop catalog, product catalog, retail inventory, stock analytics" },
+  ru: { title: "Logixia — Учёт товаров, приёмка и продажи в реальном времени", description: "Следите за остатками товаров, принимайте поставки, фиксируйте продажи и анализируйте движение запасов. Создайте бесплатный публичный каталог вашего магазина и поделитесь им в Instagram.", keywords: "управление запасами, учёт товаров, приёмка товара, программа для учёта товаров, складской учёт, каталог магазина, каталог товаров, аналитика запасов" },
+  de: { title: "Logixia — Lagerverwaltung, Wareneingang und Verkauf in Echtzeit", description: "Verwalten Sie Ihren Lagerbestand, empfangen Sie Lieferungen, erfassen Sie Verkäufe und analysieren Sie Bestandsbewegungen. Erstellen Sie einen kostenlosen öffentlichen Katalog für Ihr Geschäft und teilen Sie ihn auf Instagram.", keywords: "Lagerverwaltung, Lagerbestand, Wareneingang, Bestandsverwaltung Software, Geschäftskatalog, Produktkatalog, Einzelhandel Bestand, Bestandsanalyse" },
+  es: { title: "Logixia — Inventario, recepción de mercancía y ventas en tiempo real", description: "Controla el stock de tus productos, recibe mercancía, registra ventas y analiza el movimiento de inventario. Crea un catálogo público gratuito para tu tienda y compártelo en Instagram.", keywords: "gestión de inventario, control de stock, software de inventario, inventario para pymes, catálogo de tienda, catálogo de productos, inventario minorista, análisis de stock" },
+  it: { title: "Logixia — Inventario, ricevimento merci e vendite in tempo reale", description: "Monitora il magazzino dei tuoi prodotti, ricevi le consegne, registra le vendite e analizza il movimento dell inventario. Crea un catalogo pubblico gratuito per il tuo negozio e condividilo su Instagram.", keywords: "gestione magazzino, controllo scorte, software gestione magazzino, magazzino per piccole imprese, catalogo negozio, catalogo prodotti, inventario retail, analisi scorte" },
 };
 
 /** The English dictionary is the fallback for any missing key. */
@@ -43,7 +43,7 @@ export function localeFromParam(value: string | string[] | undefined): Locale {
 }
 
 /** Header name proxy.ts writes the resolved locale into. */
-export const LOCALE_HEADER = "x-stokwise-locale";
+export const LOCALE_HEADER = "x-logixia-locale";
 
 export const LOCALE_COOKIE = "inventory-locale";
 
@@ -91,7 +91,7 @@ export function buildMetadata({ locale, path = "/", title, description, noindex 
     title,
     description,
     keywords: tr(locale, "keywords").split(",").map((k) => k.trim()).filter(Boolean),
-    applicationName: "Stockwise",
+    applicationName: "Logixia",
     referrer: "origin-when-cross-origin",
     alternates: {
       canonical,
@@ -100,10 +100,10 @@ export function buildMetadata({ locale, path = "/", title, description, noindex 
     openGraph: {
       type: "website",
       url: urlFor(locale),
-      siteName: "Stockwise",
+      siteName: "Logixia",
       locale: og,
       alternateLocale: LOCALES.filter((l) => l !== locale).map((l) => LOCALE_TAGS[l].og),
-      images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Stockwise" }],
+      images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Logixia" }],
       ...(title ? { title } : {}),
       ...(description ? { description } : {}),
     },
@@ -126,8 +126,8 @@ export function seoCopy(locale: Locale): { title: string; description: string } 
 
 /**
  * Title without the brand prefix, for pages that sit under the root layout's
- * `%s — Stockwise` template (which would otherwise repeat the brand).
+ * `%s — Logixia` template (which would otherwise repeat the brand).
  */
 export function seoTitle(locale: Locale): string {
-  return tr(locale, "title").replace(/^Stockwise\s*[—–-]\s*/, "");
+  return tr(locale, "title").replace(/^Logixia\s*[—–-]\s*/, "");
 }

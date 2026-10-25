@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "demo": "node demo/record-demo.mjs",
+    "demo:setup": "node demo/record-demo.mjs --setup",
     "test:stock": "node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/stock-invariants.test.ts",
     "test:import": "node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/product-import.test.ts",
     "test:currency": "node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/currency.test.ts",
@@ -43,6 +45,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
     "firebase-tools": "^15.32.0",
+    "playwright": "^1.64.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

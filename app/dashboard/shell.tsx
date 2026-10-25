@@ -208,7 +208,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <button className="mobile-menu-button" type="button" aria-label={mobileNavOpen ? t("nav.closeMenu") : t("nav.openMenu")} aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((open) => !open)}>
           {mobileNavOpen ? <X size={21} /> : <Menu size={21} />}
         </button>
-        <span className="mobile-brand"><Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={20} height={20} style={{ width: 20, height: 20, borderRadius: 5, objectFit: "cover", verticalAlign: "-5px", marginRight: 4 }} />{t("brand")}</span>
+        <span className="mobile-brand">
+          <Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={20} height={20} style={{ width: 20, height: 20, borderRadius: 5, objectFit: "cover", marginRight: 4 }} />
+          <span className="brand-wordmark brand-wordmark-mobile">{t("brand")}</span>
+        </span>
         <span className="mobile-user-name">{profile?.displayName ?? "—"}</span>
       </header>
 
@@ -220,7 +223,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <div style={{ width: 32, height: 32, borderRadius: 8, overflow: "hidden", boxShadow: "0 4px 12px var(--accent-glow)", flexShrink: 0 }}>
             <Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={32} height={32} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           </div>
-          <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-1)" }}>{t("brand")}</span>
+          <span className="brand-wordmark brand-wordmark-sidebar">{t("brand")}</span>
         </div>
 
         <NotificationWidget shopId={profile?.shopId} />

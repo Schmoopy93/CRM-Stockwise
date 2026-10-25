@@ -6,8 +6,8 @@ import { db } from "./firebase";
 import { CatalogOrder, Product } from "./types";
 import { useI18n } from "./i18n-context";
 
-const MESSAGE_READ_EVENT = "stockwise-order-message-read";
-const CONVERSATION_READ_EVENT = "stockwise-shop-conversation-read";
+const MESSAGE_READ_EVENT = "logixia-order-message-read";
+const CONVERSATION_READ_EVENT = "logixia-shop-conversation-read";
 
 function readMessageMarker(shopId: string, orderId: string) {
   try {

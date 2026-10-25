@@ -42,6 +42,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# demo recorder
+/demo/.profile/
+/demo/recordings/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

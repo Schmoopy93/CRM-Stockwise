@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Unbounded } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { I18nProvider } from "@/lib/i18n-context";
@@ -8,9 +8,16 @@ import { BASE_URL, buildMetadata, localeFromHeaders, seoCopy } from "@/lib/seo";
 import { CookieNotice } from "@/components/CookieNotice";
 
 const inter = Inter({
-  subsets: ["latin", "cyrillic"],
+  subsets: ["latin", "latin-ext", "cyrillic"],
   display: "swap",
   preload: true,
+  variable: "--font-inter",
+});
+
+const unbounded = Unbounded({
+  subsets: ["latin", "latin-ext", "cyrillic"],
+  display: "swap",
+  variable: "--font-display",
 });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -22,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
     // The template must win over buildMetadata's plain string title.
     title: {
       default: title,
-      template: "%s — Stockwise",
+      template: "%s — Logixia",
     },
     icons: {
       icon: "/favicon.ico",
@@ -53,7 +60,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang={locale} suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${inter.variable} ${inter.className} ${unbounded.variable}`}>
         <ThemeProvider>
           <I18nProvider>
             <AuthProvider>{children}</AuthProvider>

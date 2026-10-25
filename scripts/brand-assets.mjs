@@ -2,8 +2,8 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
 
-const srcFile = readdirSync("vibe_images").find((f) => f.startsWith("stockwise-icon"));
-if (!srcFile) throw new Error("stockwise-icon source not found in vibe_images/");
+const srcFile = readdirSync("vibe_images").find((f) => f.startsWith("logixia-icon"));
+if (!srcFile) throw new Error("logixia-icon source not found in vibe_images/");
 const SRC = join("vibe_images", srcFile);
 
 await sharp(SRC).resize(512, 512).png().toFile("public/android-chrome-512x512.png");
@@ -52,7 +52,7 @@ const svg = Buffer.from(`
     </radialGradient>
   </defs>
   <rect width="1200" height="630" fill="url(#glow)"/>
-  <text x="440" y="300" font-family="Segoe UI, Arial, sans-serif" font-size="104" font-weight="800" fill="#f0f0f5" letter-spacing="-2">Stockwise</text>
+  <text x="440" y="300" font-family="Segoe UI, Arial, sans-serif" font-size="104" font-weight="800" fill="#f0f0f5" letter-spacing="-2">Logixia</text>
   <text x="446" y="368" font-family="Segoe UI, Arial, sans-serif" font-size="38" font-weight="500" fill="#a5b4fc">Inventory and sales — in real time</text>
 </svg>`);
 await sharp({ create: { width: 1200, height: 630, channels: 4, background: "#0f0f14" } })

@@ -13,7 +13,7 @@ const EMAIL_API_KEY = defineSecret("EMAIL_API_KEY");
 const EMAIL_SENDER = defineString("EMAIL_SENDER", {
   description: "Verified Brevo sender address that order notifications come from",
 });
-const EMAIL_FROM_NAME = defineString("EMAIL_FROM_NAME", { default: "Stockwise" });
+const EMAIL_FROM_NAME = defineString("EMAIL_FROM_NAME", { default: "Logixia" });
 const APP_URL = defineString("APP_URL", { default: "https://crm-inventory-chi.vercel.app" });
 
 function escapeHtml(value: unknown): string {

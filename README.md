@@ -1,6 +1,6 @@
-# Stockwise
+# Logixia
 
-Stockwise je web aplikacija za upravljanje zalihama, prodajom, kupcima i porudžbinama za male prodavnice i online prodavce. Radnja koristi privatnu kontrolnu tablu za svakodnevni rad, a po želji može da objavi javni katalog proizvoda na posebnom linku.
+Logixia je web aplikacija za upravljanje zalihama, prodajom, kupcima i porudžbinama za male prodavnice i online prodavce. Radnja koristi privatnu kontrolnu tablu za svakodnevni rad, a po želji može da objavi javni katalog proizvoda na posebnom linku.
 
 Aplikacija je napravljena pomoću Next.js App Router-a, React-a, TypeScript-a i Firebase-a. Podaci se čuvaju u Cloud Firestore-u, prijava zaposlenih koristi Firebase Authentication i Google, dok kupci za privatne porudžbine i razgovore koriste prijavu email linkom.
 
@@ -63,7 +63,7 @@ Aplikacija je napravljena pomoću Next.js App Router-a, React-a, TypeScript-a i 
 - Porudžbina se pojavljuje prodavnici u odeljku **Porudžbine** sa podacima kupca, stavkama, valutom i stanjem obrade.
 - Radnja može da potvrdi ili otkaže porudžbinu. Pri isporuci se količine skidaju sa zalihe i kreira se povezana prodaja.
 - Isporuka se može nastaviti nakon greške bez duplog skidanja već obrađenih stavki.
-- Porudžbina se ne naplaćuje unutar aplikacije; plaćanje i dogovor sa kupcem obavlja prodavnica van Stockwise-a.
+- Porudžbina se ne naplaćuje unutar aplikacije; plaćanje i dogovor sa kupcem obavlja prodavnica van Logixia-a.
 
 ### Kupci (CRM)
 
@@ -296,7 +296,7 @@ Objavu Next.js aplikacije pokrenite na hostingu koji podržava Next.js i postavi
 
 ## Poznate granice funkcionalnosti
 
-- Stockwise ne obrađuje kartična plaćanja i ne upravlja dostavom; porudžbina je zahtev koji prodavnica dalje obrađuje.
+- Logixia ne obrađuje kartična plaćanja i ne upravlja dostavom; porudžbina je zahtev koji prodavnica dalje obrađuje.
 - WhatsApp, Telegram i Instagram kanali otvaraju direktnu komunikaciju ka prodavnici; slanje porudžbine nije isto što i potvrda kupovine preko tih servisa.
 - Browser obaveštenja rade samo u podržanom pregledaču i uz odobrenu dozvolu. Push/email obaveštenja kada je aplikacija zatvorena nisu podešena.
 - Pre-porudžbinski chat može se sakriti iz prikaza jedne strane, ali se poruke ne brišu trajno.

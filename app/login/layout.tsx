@@ -5,11 +5,11 @@ import type { Locale } from "@/lib/i18n-context";
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await localeFromHeaders();
   return {
-    // The root layout already appends "— Stockwise" via the title template.
+    // The root layout already appends "— Logixia" via the title template.
     ...buildMetadata({ locale, path: "/login", title: seoTitle(locale), description: seoCopy(locale).description }),
-    authors: [{ name: "Stockwise", url: BASE_URL }],
-    creator: "Stockwise",
-    publisher: "Stockwise",
+    authors: [{ name: "Logixia", url: BASE_URL }],
+    creator: "Logixia",
+    publisher: "Logixia",
     category: "Business Software",
     verification: {
       // google: "your-google-site-verification-token",
@@ -32,7 +32,7 @@ export default async function LoginLayout({ children }: { children: React.ReactN
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    name: "Stockwise",
+    name: "Logixia",
     url: BASE_URL,
     description: seoCopy(locale).description,
     applicationCategory: "BusinessApplication",
@@ -45,7 +45,7 @@ export default async function LoginLayout({ children }: { children: React.ReactN
   const organizationLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "Stockwise",
+    name: "Logixia",
     url: BASE_URL,
     logo: `${BASE_URL}/android-chrome-512x512.png`,
   };
