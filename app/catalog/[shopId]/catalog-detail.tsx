@@ -147,8 +147,8 @@ export default function CatalogDetail({ item, locale, prices, shopId, canPurchas
 
           {item.variants.length > 0 && (
             <div className="cat-modal-group">
-              <p className="cat-modal-section">{needsVariant ? t("catalog.chooseVariant") : t("catalog.variants")}</p>
-              <div className="cat-variant-list" role="radiogroup" aria-label={t("catalog.variants")}>
+              <p className="cat-modal-section">{needsVariant ? t("catalog.chooseVariant") : t("product.variants")}</p>
+              <div className="cat-variant-list" role="radiogroup" aria-label={t("product.variants")}>
                 {item.variants.map((label, optionIndex) => (
                   <button key={item.variantIds?.[optionIndex] ?? `${label}-${optionIndex}`} type="button" role="radio" aria-checked={variantIndex === optionIndex}
                     className="cat-variant" data-active={variantIndex === optionIndex || undefined}

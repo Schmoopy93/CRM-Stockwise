@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Logixia — brochure</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #0B0B12; }
+  body {
+    color: #F4F4F8;
+    font-family: "Segoe UI", Arial, sans-serif;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page {
+    width: 210mm;
+    height: 297mm;
+    padding: 12mm 14mm 10mm;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #0B0B12;
+  }
+  .header { display: flex; align-items: center; gap: 3mm; }
+  .header img { width: 10mm; height: 10mm; display: block; border-radius: 2mm; }
+  .brand { display: flex; flex-direction: column; gap: 0.6mm; }
+  .brand-name { font-size: 15pt; font-weight: 700; letter-spacing: 0.2pt; }
+  .brand-tag { font-size: 6.2pt; letter-spacing: 0.7pt; color: #A7A7B8; text-transform: uppercase; }
+  .header-url { margin-left: auto; font-size: 7.5pt; color: #B49CFF; text-decoration: none; }
+
+  .hero { margin-top: 8mm; }
+  .hero h1 {
+    margin: 0;
+    font-size: 33pt;
+    line-height: 1.1;
+    letter-spacing: -0.4pt;
+    font-weight: 700;
+    max-width: 168mm;
+  }
+  .hero h1 .accent { color: #B49CFF; }
+  .hero-sub {
+    margin: 4mm 0 0;
+    font-size: 9.8pt;
+    line-height: 1.55;
+    color: #A7A7B8;
+    max-width: 158mm;
+  }
+  .chips { display: flex; gap: 2mm; margin-top: 4.5mm; }
+  .chip {
+    border: 0.3mm solid #2E2E44;
+    background: #151522;
+    color: #E9E9F2;
+    border-radius: 999px;
+    padding: 1.6mm 3.4mm;
+    font-size: 7.2pt;
+    white-space: nowrap;
+  }
+
+  .preview {
+    margin-top: 6mm;
+    background: #121220;
+    border: 0.3mm solid #2A2A3C;
+    border-radius: 3mm;
+    padding: 4.5mm 5mm;
+    display: flex;
+    gap: 6mm;
+  }
+  .preview-main { flex: 1; }
+  .preview-top { display: flex; align-items: center; justify-content: space-between; }
+  .preview-title { font-size: 8pt; color: #F4F4F8; font-weight: 600; }
+  .preview-note { font-size: 6.2pt; color: #6F6F85; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; margin-top: 3.5mm; }
+  .stat {
+    background: #18182A;
+    border: 0.3mm solid #26263A;
+    border-radius: 2mm;
+    padding: 2.6mm 3mm;
+  }
+  .stat-label { font-size: 6.4pt; color: #A7A7B8; }
+  .stat-value { margin-top: 1.2mm; font-size: 14pt; font-weight: 700; line-height: 1; }
+  .stat-value small { font-size: 7pt; font-weight: 400; color: #A7A7B8; }
+  .stat-sub { margin-top: 1.4mm; font-size: 6.2pt; color: #B49CFF; }
+  .chart {
+    width: 58mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  .bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2.6mm;
+    height: 21mm;
+    border-bottom: 0.3mm solid #2A2A3C;
+    padding-bottom: 1.6mm;
+  }
+  .bars i {
+    flex: 1;
+    background: #6D5EF5;
+    border-radius: 0.6mm 0.6mm 0 0;
+    display: block;
+  }
+  .bars i.hot { background: #B49CFF; }
+  .chart-note { margin-top: 1.6mm; font-size: 6.2pt; color: #6F6F85; }
+
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .section-title { font-size: 17pt; font-weight: 700; margin: 0; letter-spacing: -0.2pt; }
+  .section-sub { font-size: 8.2pt; color: #A7A7B8; margin: 0; }
+
+  .features { margin-top: 7mm; }
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3mm;
+    margin-top: 3.5mm;
+  }
+  .feature {
+    background: #151522;
+    border: 0.3mm solid #2A2A3C;
+    border-radius: 2.5mm;
+    padding: 3.2mm 3.6mm 3.4mm;
+  }
+  .feature-num { font-size: 6.4pt; font-weight: 700; color: #B49CFF; letter-spacing: 0.4pt; }
+  .feature-title { margin-top: 1.2mm; font-size: 10.2pt; font-weight: 700; }
+  .feature-desc { margin-top: 1.4mm; font-size: 7.6pt; line-height: 1.45; color: #A7A7B8; }
+
+  .steps { margin-top: 6.5mm; }
+  .step-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; margin-top: 3.5mm; }
+  .step {
+    background: #151522;
+    border: 0.3mm solid #2A2A3C;
+    border-radius: 2.5mm;
+    padding: 3mm 3.6mm;
+    display: flex;
+    gap: 3mm;
+    align-items: flex-start;
+  }
+  .step-num {
+    font-size: 15pt;
+    font-weight: 700;
+    color: #6D5EF5;
+    line-height: 1;
+  }
+  .step-title { font-size: 9.4pt; font-weight: 700; }
+  .step-desc { margin-top: 1mm; font-size: 7.4pt; line-height: 1.45; color: #A7A7B8; }
+
+  .cta {
+    margin-top: 6.5mm;
+    background: #6D5EF5;
+    border-radius: 3mm;
+    padding: 5mm 6mm;
+    display: flex;
+    align-items: center;
+    gap: 8mm;
+  }
+  .cta-copy { flex: 1; }
+  .cta-eyebrow { font-size: 6.4pt; font-weight: 700; letter-spacing: 0.7pt; color: #EDE9FE; }
+  .cta-title { margin-top: 1.4mm; font-size: 16.5pt; font-weight: 700; color: #FFFFFF; }
+  .cta-sub { margin-top: 1.2mm; font-size: 8pt; color: #EDE9FE; }
+  .cta-link {
+    font-size: 9.5pt;
+    font-weight: 700;
+    color: #FFFFFF;
+    text-decoration: none;
+    background: rgba(255, 255, 255, 0.14);
+    border: 0.3mm solid rgba(255, 255, 255, 0.32);
+    border-radius: 999px;
+    padding: 2.8mm 5mm;
+    white-space: nowrap;
+  }
+
+  .footer {
+    margin-top: auto;
+    padding-top: 4mm;
+    display: flex;
+    justify-content: space-between;
+    font-size: 6.4pt;
+    color: #6F6F85;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="header">
+    <img src="../../../public/android-chrome-512x512.png" alt="" />
+    <div class="brand">
+      <span class="brand-name">Logixia</span>
+      <span class="brand-tag">Stock management · in real time</span>
+    </div>
+    <a class="header-url" href="https://crm-inventory-chi.vercel.app">crm-inventory-chi.vercel.app</a>
+  </header>
+
+  <section class="hero">
+    <h1>All your store's inventory <span class="accent">in one place.</span></h1>
+    <p class="hero-sub">Track stock levels, receive goods, analyse movements and export reports — for you and your team.</p>
+    <div class="chips">
+      <span class="chip">Free to start</span>
+      <span class="chip">No installation</span>
+      <span class="chip">Works on your phone</span>
+    </div>
+  </section>
+
+  <section class="preview">
+    <div class="preview-main">
+      <div class="preview-top">
+        <span class="preview-title">Overview</span>
+        <span class="preview-note">Interface preview</span>
+      </div>
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-label">Revenue</div>
+          <div class="stat-value">128,450 <small>RSD</small></div>
+          <div class="stat-sub">+12.4% this month</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Sales</div>
+          <div class="stat-value">34</div>
+          <div class="stat-sub">this month</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Products</div>
+          <div class="stat-value">128</div>
+          <div class="stat-sub">in the catalog</div>
+        </div>
+      </div>
+    </div>
+    <div class="chart">
+      <div class="bars">
+        <i style="height:51%"></i>
+        <i style="height:69%"></i>
+        <i style="height:43%"></i>
+        <i style="height:84%"></i>
+        <i style="height:60%"></i>
+        <i class="hot" style="height:100%"></i>
+        <i style="height:76%"></i>
+      </div>
+      <div class="chart-note">Last 7 days</div>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="section-head">
+      <h2 class="section-title">Everything your store needs</h2>
+      <p class="section-sub">From the first product to clear reports.</p>
+    </div>
+    <div class="feature-grid">
+      <article class="feature">
+        <div class="feature-num">01</div>
+        <div class="feature-title">Products and stock</div>
+        <p class="feature-desc">Categories, images, SKUs, prices, variants and custom fields — all in one place.</p>
+      </article>
+      <article class="feature">
+        <div class="feature-num">02</div>
+        <div class="feature-title">Receiving goods</div>
+        <p class="feature-desc">Search or scan barcodes; stock levels update immediately.</p>
+      </article>
+      <article class="feature">
+        <div class="feature-num">03</div>
+        <div class="feature-title">Sales and reversals</div>
+        <p class="feature-desc">Sales by customer and channel, automatic stock and easy reversal.</p>
+      </article>
+      <article class="feature">
+        <div class="feature-num">04</div>
+        <div class="feature-title">Orders and customers</div>
+        <p class="feature-desc">Order statuses, partial fulfilment and customer conversations.</p>
+      </article>
+      <article class="feature">
+        <div class="feature-num">05</div>
+        <div class="feature-title">Public catalog</div>
+        <p class="feature-desc">Share the link on Instagram; customers pick variants and order or ask.</p>
+      </article>
+      <article class="feature">
+        <div class="feature-num">06</div>
+        <div class="feature-title">Analytics and reports</div>
+        <p class="feature-desc">Stock, sales, revenue and top products; import, export and PDF reports.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="steps">
+    <div class="section-head">
+      <h2 class="section-title">How it works</h2>
+      <p class="section-sub">From first setup to a clear view of your business — in three steps.</p>
+    </div>
+    <div class="step-grid">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div>
+          <div class="step-title">Create your store</div>
+          <p class="step-desc">Sign up with Google and get your Shop ID right away.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div>
+          <div class="step-title">Add your products</div>
+          <p class="step-desc">Enter products, receive stock and connect your team in a few clicks.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div>
+          <div class="step-title">Track your results</div>
+          <p class="step-desc">Sell, scan and follow revenue and stock through clear reports.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="cta-copy">
+      <div class="cta-eyebrow">READY TO START</div>
+      <div class="cta-title">Open your store today.</div>
+      <div class="cta-sub">Registration is free. No installation — it works on your phone.</div>
+    </div>
+    <a class="cta-link" href="https://crm-inventory-chi.vercel.app">crm-inventory-chi.vercel.app →</a>
+  </section>
+
+  <footer class="footer">
+    <span>Logixia · Stock management in real time</span>
+    <span>crm-inventory-chi.vercel.app</span>
+  </footer>
+</div>
+</body>
+</html>
