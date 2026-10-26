@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useCustomers, useOrders, useShopConversations, useStornoedSaleIds } from "@/lib/hooks";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
-import { fulfillCatalogOrder, updateOrderStatus, linkOrderToCustomer } from "@/lib/actions";
+import { fulfillCatalogOrder, fulfillOrderLines, updateOrderStatus, linkOrderToCustomer } from "@/lib/actions";
+import { outstandingLineIndices } from "@/lib/orders";
 import { formatCatalogPrice } from "@/lib/catalog-channels";
 import { BASE_CURRENCY } from "@/lib/currency";
-import { OrderStatus } from "@/lib/types";
+import { CatalogOrder, OrderStatus } from "@/lib/types";
 import { useNewOrderNotifications } from "@/lib/notifications";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -34,8 +35,8 @@ const OPEN_STATUSES = new Set<OrderStatus>(["new", "confirmed", "fulfilling"]);
 
 const NEXT_STATUS: Record<OrderStatus, { status: OrderStatus; key: string } | null> = {
   new: { status: "confirmed", key: "orders.confirm" },
-  confirmed: { status: "fulfilled", key: "orders.fulfill" },
-  fulfilling: { status: "fulfilled", key: "orders.resumeFulfill" },
+  confirmed: null,
+  fulfilling: null,
   fulfilled: null,
   cancelled: null,
 };
@@ -65,6 +66,7 @@ export default function OrdersPage() {
   const [openConversations, setOpenConversations] = useState<Set<string>>(() => new Set());
   const [confirmCancelOrder, setConfirmCancelOrder] = useState<string | null>(null);
   const [confirmHideConversation, setConfirmHideConversation] = useState<string | null>(null);
+  const [selectedLines, setSelectedLines] = useState<Record<string, number[]>>({});
   const [hidingConversation, setHidingConversation] = useState(false);
   const [conversationActionError, setConversationActionError] = useState("");
   const visibleConversations = conversations.filter((conversation) => !conversation.hiddenByShop);
@@ -147,11 +149,7 @@ export default function OrdersPage() {
       return next;
     });
     try {
-      if (status === "fulfilled") {
-        await fulfillCatalogOrder(profile.shopId, orderId, profile.uid, profile.displayName);
-      } else {
-        await updateOrderStatus(profile.shopId, orderId, status);
-      }
+      await updateOrderStatus(profile.shopId, orderId, status);
     } catch (cause) {
       setActionErrors((current) => ({
         ...current,
@@ -161,6 +159,62 @@ export default function OrdersPage() {
       setBusyIds((current) => {
         const next = new Set(current);
         next.delete(orderId);
+        return next;
+      });
+    }
+  }
+
+  function selectionFor(order: CatalogOrder): number[] {
+    const outstanding = outstandingLineIndices(order.lines, order.fulfilledLineIndices ?? []);
+    const stored = selectedLines[order.id];
+    if (!stored) return outstanding;
+    const selectable = new Set(outstanding);
+    return stored.filter((index) => selectable.has(index));
+  }
+
+  function toggleLine(order: CatalogOrder, index: number) {
+    const selection = selectionFor(order);
+    const next = selection.includes(index)
+      ? selection.filter((value) => value !== index)
+      : [...selection, index].sort((a, b) => a - b);
+    setSelectedLines((current) => ({ ...current, [order.id]: next }));
+  }
+
+  async function fulfillSelected(order: CatalogOrder) {
+    if (!profile) return;
+    const outstanding = outstandingLineIndices(order.lines, order.fulfilledLineIndices ?? []);
+    const selection = selectionFor(order);
+    if (outstanding.length > 0 && selection.length === 0) {
+      setActionErrors((current) => ({ ...current, [order.id]: t("errors.ORDER_NO_LINES_SELECTED") }));
+      return;
+    }
+
+    setBusyIds((current) => new Set(current).add(order.id));
+    setActionErrors((current) => {
+      const next = { ...current };
+      delete next[order.id];
+      return next;
+    });
+    try {
+      if (outstanding.length === 0) {
+        await fulfillCatalogOrder(profile.shopId, order.id, profile.uid, profile.displayName);
+      } else {
+        await fulfillOrderLines(profile.shopId, order.id, selection, profile.uid, profile.displayName);
+      }
+      setSelectedLines((current) => {
+        const next = { ...current };
+        delete next[order.id];
+        return next;
+      });
+    } catch (cause) {
+      setActionErrors((current) => ({
+        ...current,
+        [order.id]: translateError(cause, t, "orders.updateFailed"),
+      }));
+    } finally {
+      setBusyIds((current) => {
+        const next = new Set(current);
+        next.delete(order.id);
         return next;
       });
     }
@@ -441,6 +495,16 @@ export default function OrdersPage() {
             const busy = busyIds.has(order.id);
             const completedLines = Math.min(order.fulfilledLineIndices?.length ?? 0, order.lines.length);
             const progress = order.lines.length > 0 ? Math.round((completedLines / order.lines.length) * 100) : 0;
+            const outstanding = outstandingLineIndices(order.lines, order.fulfilledLineIndices ?? []);
+            const selection = selectionFor(order);
+            const selectable = order.status === "confirmed" || order.status === "fulfilling";
+            const fulfillLabel = outstanding.length === 0
+              ? "orders.resumeFulfill"
+              : selection.length < outstanding.length
+                ? "orders.fulfillSelected"
+                : order.status === "fulfilling"
+                  ? "orders.resumeFulfill"
+                  : "orders.fulfill";
             const saleStornoed = Boolean(order.saleId && stornoedSaleIds.has(order.saleId));
             const channelLabel = order.channel === "catalog"
               ? t("orders.source.catalog")
@@ -532,20 +596,41 @@ export default function OrdersPage() {
                       {t("orders.items")}
                     </h2>
                     <ul style={{ display: "flex", flexDirection: "column", gap: "0.45rem", listStyle: "none", margin: 0, padding: 0 }}>
-                      {order.lines.map((line, index) => (
-                        <li key={`${line.productId}-${line.variantId ?? line.variantLabel}-${index}`} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.79rem" }}>
-                          <span style={{ minWidth: 0, color: "var(--text-1)", overflowWrap: "anywhere" }}>
-                            {line.productName}
-                            {line.variantLabel && <span style={{ color: "var(--text-3)" }}> · {line.variantLabel}</span>}
-                            <span style={{ color: "var(--text-3)" }}> × {line.quantity}</span>
-                          </span>
-                          {typeof line.unitPrice === "number" && (
-                            <span style={{ flexShrink: 0, color: "var(--text-2)", fontVariantNumeric: "tabular-nums" }}>
-                              {formatCatalogPrice(line.unitPrice * line.quantity, intl, order.currency ?? BASE_CURRENCY)}
+                      {order.lines.map((line, index) => {
+                        const fulfilled = (order.fulfilledLineIndices ?? []).includes(index);
+                        const lineLabel = `${line.productName}${line.variantLabel ? ` · ${line.variantLabel}` : ""}`;
+                        return (
+                          <li key={`${line.productId}-${line.variantId ?? line.variantLabel}-${index}`} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.79rem" }}>
+                            <span style={{ display: "flex", alignItems: "flex-start", gap: 7, minWidth: 0 }}>
+                              {selectable && (
+                                <input
+                                  type="checkbox"
+                                  checked={!fulfilled && selection.includes(index)}
+                                  disabled={fulfilled || busy}
+                                  onChange={() => toggleLine(order, index)}
+                                  aria-label={lineLabel}
+                                  style={{ marginTop: 2, flexShrink: 0, accentColor: "var(--accent)", cursor: fulfilled || busy ? "default" : "pointer" }}
+                                />
+                              )}
+                              <span style={{ minWidth: 0, color: fulfilled ? "var(--text-3)" : "var(--text-1)", overflowWrap: "anywhere" }}>
+                                {line.productName}
+                                {line.variantLabel && <span style={{ color: "var(--text-3)" }}> · {line.variantLabel}</span>}
+                                <span style={{ color: "var(--text-3)" }}> × {line.quantity}</span>
+                                {selectable && fulfilled && (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 7, color: "var(--green)", fontWeight: 650 }}>
+                                    <CheckCircle2 size={12} /> {t("orders.lineFulfilled")}
+                                  </span>
+                                )}
+                              </span>
                             </span>
-                          )}
-                        </li>
-                      ))}
+                            {typeof line.unitPrice === "number" && (
+                              <span style={{ flexShrink: 0, color: "var(--text-2)", fontVariantNumeric: "tabular-nums" }}>
+                                {formatCatalogPrice(line.unitPrice * line.quantity, intl, order.currency ?? BASE_CURRENCY)}
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 </div>
@@ -596,6 +681,13 @@ export default function OrdersPage() {
                   </div>
                 )}
 
+                {selectable && order.lines.length > 1 && (
+                  <p style={{ display: "flex", alignItems: "flex-start", gap: 6, margin: "0.8rem 0 0", fontSize: "0.74rem", lineHeight: 1.5, color: "var(--text-3)" }}>
+                    <ClipboardList size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+                    {t("orders.partialHint")}
+                  </p>
+                )}
+
                 {actionErrors[order.id] && (
                   <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 7, marginTop: "0.8rem", color: "var(--red)", fontSize: "0.77rem" }}>
                     <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -603,7 +695,7 @@ export default function OrdersPage() {
                   </div>
                 )}
 
-                {(next || order.status === "new" || order.status === "confirmed") && (
+                {(next || selectable) && (
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.9rem", paddingTop: "0.8rem", borderTop: "1px solid var(--border)" }}>
                     {next && (
                       <button
@@ -613,8 +705,25 @@ export default function OrdersPage() {
                         onClick={() => void changeStatus(order.id, next.status)}
                         style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 36, padding: "0.45rem 0.8rem", fontSize: "0.78rem", opacity: busy ? 0.65 : 1 }}
                       >
-                        {busy ? <span className="spinner" aria-hidden="true" /> : next.status === "fulfilled" ? <PackageCheck size={14} /> : <CheckCircle2 size={14} />}
+                        {busy ? <span className="spinner" aria-hidden="true" /> : <CheckCircle2 size={14} />}
                         {t(next.key)}
+                      </button>
+                    )}
+                    {selectable && (
+                      <button
+                        className="btn-primary"
+                        type="button"
+                        disabled={busy || (outstanding.length > 0 && selection.length === 0)}
+                        onClick={() => void fulfillSelected(order)}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 36, padding: "0.45rem 0.8rem", fontSize: "0.78rem", opacity: busy || (outstanding.length > 0 && selection.length === 0) ? 0.55 : 1 }}
+                      >
+                        {busy ? <span className="spinner" aria-hidden="true" /> : <PackageCheck size={14} />}
+                        {t(fulfillLabel)}
+                        {outstanding.length > 1 && (
+                          <span style={{ fontSize: "0.7rem", fontWeight: 650, opacity: 0.8 }}>
+                            {selection.length}/{outstanding.length}
+                          </span>
+                        )}
                       </button>
                     )}
                     {(order.status === "new" || order.status === "confirmed") && (

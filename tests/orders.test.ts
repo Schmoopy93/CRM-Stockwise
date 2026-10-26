@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MAX_ORDER_LINES, MAX_ORDER_QUANTITY, newOrderCode, normalizeOrderInput, orderTotal } from "../lib/orders.ts";
+import { MAX_ORDER_LINES, MAX_ORDER_QUANTITY, newOrderCode, normalizeFulfillmentIndices, normalizeOrderInput, orderTotal, outstandingLineIndices } from "../lib/orders.ts";
 
 const line = {
   productId: "product-a",
@@ -48,4 +48,23 @@ test("rejects invalid line counts and quantities rather than silently changing a
     ...input,
     lines: [{ ...line, quantity: MAX_ORDER_QUANTITY + 1 }],
   }), /ORDER_QUANTITY_INVALID/);
+});
+
+test("a fulfillment pass names unique, in-range whole lines", () => {
+  assert.deepEqual(normalizeFulfillmentIndices(3, [2, 0, 2]), [0, 2]);
+  assert.deepEqual(normalizeFulfillmentIndices(1, [0]), [0]);
+  assert.throws(() => normalizeFulfillmentIndices(3, []), /ORDER_NO_LINES_SELECTED/);
+  assert.throws(() => normalizeFulfillmentIndices(3, [3]), /ORDER_LINE_INVALID/);
+  assert.throws(() => normalizeFulfillmentIndices(3, [-1]), /ORDER_LINE_INVALID/);
+  assert.throws(() => normalizeFulfillmentIndices(3, [0.5]), /ORDER_LINE_INVALID/);
+  assert.throws(() => normalizeFulfillmentIndices(0, [0]), /ORDER_LINES_INVALID/);
+});
+
+test("outstanding lines drop what earlier passes already shipped", () => {
+  const lines = [line, line, line];
+  assert.deepEqual(outstandingLineIndices(lines), [0, 1, 2]);
+  assert.deepEqual(outstandingLineIndices(lines, [0, 2]), [1]);
+  assert.deepEqual(outstandingLineIndices(lines, [0, 1, 2]), []);
+  // A corrupt marker must not hide a line that still needs to ship.
+  assert.deepEqual(outstandingLineIndices(lines, [7, 1.5]), [0, 1, 2]);
 });

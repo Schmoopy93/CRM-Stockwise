@@ -12,15 +12,23 @@ import { BASE_CURRENCY, isSupportedCurrency } from "@/lib/currency";
 import { trackCatalogEvent } from "@/lib/actions";
 import { useAuth } from "@/lib/auth-context";
 import { CatalogItem, CatalogStatEvent, ShopCatalogSettings } from "@/lib/types";
-import { ArrowUpDown, MessageCircle, Package, Search, ShoppingBag, Sparkles, X } from "lucide-react";
+import { ArrowUpDown, Check, ChevronDown, LayoutGrid, MessageCircle, Package, Search, ShoppingBag, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { setProductParam, useCart, useProductParam } from "./catalog-store";
-import CatalogCard, { catalogStockForVariant, fieldText } from "./catalog-card";
+import CatalogCard, { catalogItemAvailable, catalogStockForVariant, fieldText } from "./catalog-card";
 import CatalogDetail from "./catalog-detail";
 import CatalogCart, { ResolvedCartLine } from "./catalog-cart";
 import OrderChannels, { availableChannels } from "./order-channels";
+import CatalogFilterSheet, { CatalogFilterControls } from "./catalog-filters";
+import CatalogCategorySheet from "./catalog-category-picker";
+import {
+  CATALOG_PAGE_SIZE,
+  CatalogSort,
+  matchesCatalogQuery,
+  orderedPriceBounds,
+  parsePriceInput,
+  parseSortParam,
+} from "./catalog-filter";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
-
-type SortKey = "name" | "priceAsc" | "priceDesc";
 
 function comparePrice(a: CatalogItem, b: CatalogItem, direction: 1 | -1) {
   if (a.salePrice === undefined) return b.salePrice === undefined ? 0 : 1;
@@ -42,7 +50,22 @@ export default function CatalogView({ shopId }: { shopId: string }) {
   const productId = useProductParam();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
-  const [sort, setSort] = useState<SortKey>("name");
+  const [sort, setSort] = useState<CatalogSort>("name");
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const filterSignature = JSON.stringify([search, category, sort, inStockOnly, minPrice, maxPrice]);
+  // Changing any filter starts a fresh page; doing it during render avoids an
+  // extra pass that would briefly show the old batch.
+  const [shown, setShown] = useState(CATALOG_PAGE_SIZE);
+  const [shownFor, setShownFor] = useState(filterSignature);
+  if (shownFor !== filterSignature) {
+    setShownFor(filterSignature);
+    setShown(CATALOG_PAGE_SIZE);
+  }
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [filtersReady, setFiltersReady] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [toast, setToast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -96,6 +119,56 @@ export default function CatalogView({ shopId }: { shopId: string }) {
 
   const closeDetail = useCallback(() => setProductParam(null), []);
   const closeCart = useCallback(() => setCartOpen(false), []);
+  const closeFilters = useCallback(() => setFiltersOpen(false), []);
+  const closeCategories = useCallback(() => setCategoriesOpen(false), []);
+  const toggleStock = useCallback(() => setInStockOnly((value) => !value), []);
+  const clearFilters = useCallback(() => {
+    setSearch("");
+    setCategory("all");
+    setInStockOnly(false);
+    setMinPrice("");
+    setMaxPrice("");
+  }, []);
+  const clearExtraFilters = useCallback(() => {
+    setInStockOnly(false);
+    setMinPrice("");
+    setMaxPrice("");
+  }, []);
+
+  // Filters live in the URL so a shared link opens the same view and a reload
+  // keeps what the shopper picked. The product modal's `p` param is preserved.
+  useEffect(() => {
+    const readFilters = () => {
+      const params = new URLSearchParams(window.location.search);
+      const nextCategory = params.get("cat");
+      setSearch(params.get("q") ?? "");
+      setCategory(nextCategory && nextCategory !== "all" ? nextCategory : "all");
+      setSort(parseSortParam(params.get("sort")));
+      setInStockOnly(params.get("stock") === "1");
+      setMinPrice(params.get("min") ?? "");
+      setMaxPrice(params.get("max") ?? "");
+      setFiltersReady(true);
+    };
+    readFilters();
+    window.addEventListener("popstate", readFilters);
+    return () => window.removeEventListener("popstate", readFilters);
+  }, [shopId]);
+
+  useEffect(() => {
+    if (!filtersReady) return;
+    const url = new URL(window.location.href);
+    const setOrDelete = (key: string, value: string) => {
+      if (value) url.searchParams.set(key, value);
+      else url.searchParams.delete(key);
+    };
+    setOrDelete("q", search.trim());
+    setOrDelete("cat", category === "all" ? "" : category);
+    setOrDelete("sort", sort === "name" ? "" : sort);
+    setOrDelete("stock", inStockOnly ? "1" : "");
+    setOrDelete("min", minPrice.trim());
+    setOrDelete("max", maxPrice.trim());
+    if (url.href !== window.location.href) window.history.replaceState(null, "", url);
+  }, [filtersReady, search, category, sort, inStockOnly, minPrice, maxPrice]);
 
   const name = shop?.name ?? "";
   const catalogEnabled = shop?.catalogEnabled === true;
@@ -106,18 +179,18 @@ export default function CatalogView({ shopId }: { shopId: string }) {
 
   const visible = useMemo(() => items.filter((item) => !item.hidden), [items]);
   const itemsById = useMemo(() => new Map(visible.map((item) => [item.id, item])), [visible]);
-  const categories = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const item of visible) if (item.category) counts.set(item.category, (counts.get(item.category) ?? 0) + 1);
-    return [["all", visible.length] as const, ...Array.from(counts.entries())];
-  }, [visible]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const matches = visible.filter((item) => {
-      if (category !== "all" && item.category !== category) return false;
-      if (!q) return true;
-      const searchable = [
+  const parsedPriceMin = parsePriceInput(minPrice);
+  const parsedPriceMax = parsePriceInput(maxPrice);
+  const priceBounds = orderedPriceBounds(parsedPriceMin, parsedPriceMax);
+  const hasPrices = useMemo(() => visible.some((item) => item.salePrice !== undefined), [visible]);
+  const priceFilterActive = hasPrices && (priceBounds.min !== undefined || priceBounds.max !== undefined);
+  const toCurrency = prices.toCurrency;
+
+  const searchableById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of visible) {
+      map.set(item.id, [
         item.name,
         item.category,
         ...item.variants,
@@ -125,13 +198,52 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           const { label, value } = fieldText(field, locale, t);
           return [label, value];
         }),
-      ].join(" ").toLowerCase();
-      return searchable.includes(q);
-    });
+      ].join(" "));
+    }
+    return map;
+  }, [visible, locale, t]);
+
+  // Everything except the category itself: the sidebar counts stay truthful
+  // while a search, stock or price filter is active.
+  const base = useMemo(() => visible.filter((item) => {
+    if (!matchesCatalogQuery(searchableById.get(item.id) ?? "", search)) return false;
+    if (inStockOnly && !catalogItemAvailable(item)) return false;
+    if (priceFilterActive) {
+      if (item.salePrice === undefined) return false;
+      const price = toCurrency(item.salePrice);
+      if (priceBounds.min !== undefined && price < priceBounds.min) return false;
+      if (priceBounds.max !== undefined && price > priceBounds.max) return false;
+    }
+    return true;
+  }), [visible, searchableById, search, inStockOnly, priceFilterActive, priceBounds.min, priceBounds.max, toCurrency]);
+
+  const categories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of base) if (item.category) counts.set(item.category, (counts.get(item.category) ?? 0) + 1);
+    if (category !== "all" && !counts.has(category)) counts.set(category, 0);
+    const collator = new Intl.Collator(locale, { sensitivity: "base", numeric: true });
+    const ordered = Array.from(counts.entries()).sort(([a], [b]) => collator.compare(a, b));
+    return [["all", base.length] as const, ...ordered];
+  }, [base, category, locale]);
+
+  const filtered = useMemo(() => {
+    const matches = category === "all" ? base : base.filter((item) => item.category === category);
     if (sort === "priceAsc") return [...matches].sort((a, b) => comparePrice(a, b, 1));
     if (sort === "priceDesc") return [...matches].sort((a, b) => comparePrice(a, b, -1));
     return matches;
-  }, [visible, search, category, sort, locale, t]);
+  }, [base, category, sort]);
+
+  const displayedItems = filtered.slice(0, shown);
+  const remaining = Math.max(0, filtered.length - displayedItems.length);
+  const activeCategoryCount = categories.find(([cat]) => cat === category)?.[1] ?? 0;
+  const hasNonCategoryFilters = search.trim() !== "" || inStockOnly || minPrice.trim() !== "" || maxPrice.trim() !== "";
+  const extraFilterCount = (inStockOnly ? 1 : 0) + (priceFilterActive ? 1 : 0);
+  const numberFormat = new Intl.NumberFormat(intl, { maximumFractionDigits: 2 });
+  const priceChip = priceBounds.min !== undefined && priceBounds.max !== undefined
+    ? `${numberFormat.format(priceBounds.min)}–${numberFormat.format(priceBounds.max)} ${prices.currency}`
+    : priceBounds.min !== undefined
+      ? `≥ ${numberFormat.format(priceBounds.min)} ${prices.currency}`
+      : `≤ ${numberFormat.format(priceBounds.max ?? 0)} ${prices.currency}`;
 
   const selected = productId ? itemsById.get(productId) ?? null : null;
   const cartLines: ResolvedCartLine[] = cart.lines.flatMap((line) => {
@@ -246,20 +358,53 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         ) : (
           <>
             <div className="cat-browse">
+              <button type="button" className="cat-category-picker" aria-haspopup="dialog" aria-expanded={categoriesOpen}
+                aria-label={`${t("catalog.categoriesLabel")}: ${category === "all" ? t("all") : category}, ${activeCategoryCount}`}
+                onClick={() => setCategoriesOpen(true)}>
+                <span className="cat-category-picker-icon" aria-hidden="true"><LayoutGrid size={16} /></span>
+                <span className="cat-category-picker-text">
+                  <span className="cat-category-picker-label">{t("catalog.categoriesLabel")}</span>
+                  <span className="cat-category-picker-value">{category === "all" ? t("all") : category}</span>
+                </span>
+                <span className="cat-category-picker-count">{activeCategoryCount}</span>
+                <ChevronDown size={16} className="cat-category-picker-arrow" aria-hidden="true" />
+              </button>
               <aside className="cat-sidebar" aria-label={t("catalog.categoriesLabel")}>
                 <div className="cat-sidebar-heading">
                   <span>{t("catalog.categoriesLabel")}</span>
                   <span className="cat-sidebar-total">{visible.length}</span>
                 </div>
                 <nav className="cat-category-list" aria-label={t("catalog.categoriesLabel")}>
-                  {categories.map(([cat, count]) => (
-                    <button key={cat} type="button" aria-current={category === cat ? "true" : undefined}
-                      onClick={() => setCategory(cat)} className="cat-category" data-active={category === cat || undefined}>
-                      <span className="cat-category-name">{cat === "all" ? t("all") : cat}</span>
-                      <span className="cat-category-count">{count}</span>
-                    </button>
-                  ))}
+                  {categories.map(([cat, count]) => {
+                    const active = category === cat;
+                    const label = cat === "all" ? t("all") : cat;
+                    return (
+                      <button key={cat} type="button" aria-pressed={active}
+                        aria-label={`${label}, ${count}`}
+                        onClick={() => setCategory(cat)} className="cat-category" data-active={active || undefined}>
+                        <span className="cat-category-name">{label}</span>
+                        {active && <Check size={13} aria-hidden="true" className="cat-category-check" />}
+                        <span className="cat-category-count">{count}</span>
+                      </button>
+                    );
+                  })}
                 </nav>
+                <div className="cat-sidebar-filters">
+                  <div className="cat-filter-heading">
+                    <span>{t("catalog.filters")}</span>
+                    {extraFilterCount > 0 && <span className="cat-sidebar-total">{extraFilterCount}</span>}
+                  </div>
+                  <CatalogFilterControls
+                    inStockOnly={inStockOnly}
+                    onToggleStock={toggleStock}
+                    showPrice={hasPrices}
+                    currency={prices.currency}
+                    minPrice={minPrice}
+                    maxPrice={maxPrice}
+                    onMinPrice={setMinPrice}
+                    onMaxPrice={setMaxPrice}
+                  />
+                </div>
               </aside>
 
               <section className="cat-results-area" aria-label={t("catalog.title")}>
@@ -267,26 +412,67 @@ export default function CatalogView({ shopId }: { shopId: string }) {
                   <div className="cat-toolbar-row">
                     <div className="cat-search-wrap">
                       <Search size={17} className="cat-search-icon" />
-                      <input className="input cat-search" type="search" placeholder={t("search")} aria-label={t("search")} value={search} onChange={(e) => setSearch(e.target.value)} />
+                      <input className="input cat-search" type="search" placeholder={t("search")} aria-label={t("search")} value={search} onChange={(e) => setSearch(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Escape" && search) { e.preventDefault(); setSearch(""); } }} />
                       {search && (
                         <button type="button" className="cat-search-clear" onClick={() => setSearch("")} aria-label={t("catalog.close")}><X size={15} /></button>
                       )}
                     </div>
-                    <label className="cat-sort">
-                      <ArrowUpDown size={16} className="cat-sort-icon" />
-                      <span className="cat-sort-label">{t("catalog.sortLabel")}</span>
-                      <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label={t("catalog.sortLabel")}>
-                        <option value="name">{t("catalog.sortName")}</option>
-                        <option value="priceAsc">{t("catalog.sortPriceAsc")}</option>
-                        <option value="priceDesc">{t("catalog.sortPriceDesc")}</option>
-                      </select>
-                    </label>
+                    <div className="cat-toolbar-controls">
+                      <label className="cat-sort">
+                        <ArrowUpDown size={16} className="cat-sort-icon" />
+                        <span className="cat-sort-label">{t("catalog.sortLabel")}</span>
+                        <select value={sort} onChange={(e) => setSort(e.target.value as CatalogSort)} aria-label={t("catalog.sortLabel")}>
+                          <option value="name">{t("catalog.sortName")}</option>
+                          <option value="priceAsc">{t("catalog.sortPriceAsc")}</option>
+                          <option value="priceDesc">{t("catalog.sortPriceDesc")}</option>
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        className="cat-filter-trigger"
+                        data-active={extraFilterCount > 0 || undefined}
+                        aria-haspopup="dialog"
+                        aria-expanded={filtersOpen}
+                        onClick={() => setFiltersOpen(true)}
+                      >
+                        <SlidersHorizontal size={16} />
+                        {t("catalog.filters")}
+                        {extraFilterCount > 0 && <span className="cat-filter-badge">{extraFilterCount}</span>}
+                      </button>
+                    </div>
                   </div>
                   <div className="cat-toolbar-meta">
-                    <span className="cat-active-category">{category === "all" ? t("all") : category}</span>
-                    <span className="cat-results" aria-live="polite">{t("catalog.itemCount", { n: filtered.length })}</span>
-                    {(search || category !== "all") && (
-                      <button type="button" className="cat-clear-filters" onClick={() => { setSearch(""); setCategory("all"); }}>
+                    {category === "all" ? (
+                      <span className="cat-active-category">{t("all")}</span>
+                    ) : (
+                      <button type="button" className="cat-active-category cat-active-category-reset" onClick={() => setCategory("all")}
+                        aria-label={t("catalog.clearCategory")} title={t("catalog.clearCategory")}>
+                        <span className="cat-active-category-name">{category}</span>
+                        <X size={11} aria-hidden="true" />
+                      </button>
+                    )}
+                    <span className="cat-results" aria-live="polite">
+                      {remaining > 0
+                        ? t("catalog.showingCount", { shown: displayedItems.length, total: filtered.length })
+                        : t("catalog.itemCount", { n: filtered.length })}
+                    </span>
+                    {(inStockOnly || priceFilterActive) && (
+                      <div className="cat-filter-chips">
+                        {inStockOnly && (
+                          <button type="button" className="cat-filter-chip" onClick={() => setInStockOnly(false)}>
+                            {t("catalog.onlyAvailable")} <X size={11} />
+                          </button>
+                        )}
+                        {priceFilterActive && (
+                          <button type="button" className="cat-filter-chip" onClick={() => { setMinPrice(""); setMaxPrice(""); }}>
+                            {priceChip} <X size={11} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {hasNonCategoryFilters && (
+                      <button type="button" className="cat-clear-filters" onClick={clearFilters}>
                         <X size={13} /> {t("catalog.clearFilters")}
                       </button>
                     )}
@@ -296,16 +482,41 @@ export default function CatalogView({ shopId }: { shopId: string }) {
                 {filtered.length === 0 ? (
                   <div className="cat-empty">
                     <Package size={30} strokeWidth={1.5} />
-                    {t("dashboard.noResults")}
+                    {category === "all" ? t("dashboard.noResults") : t("catalog.noCategoryResults", { category })}
+                    <div className="cat-empty-actions">
+                      {category !== "all" && (
+                        <button type="button" className="cat-empty-action" onClick={() => setCategory("all")}>
+                          <X size={13} /> {t("catalog.clearCategory")}
+                        </button>
+                      )}
+                      {hasNonCategoryFilters && (
+                        <button type="button" className="cat-empty-action" onClick={clearFilters}>
+                          <X size={13} /> {t("catalog.clearFilters")}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ) : (
-                  <div className="cat-grid">
-                    {filtered.map((item, index) => (
-                      <CatalogCard key={item.id} item={item} locale={locale} prices={prices} index={index}
-                        canAddToCart={showCustomerActions}
-                        onOpen={() => setProductParam(item.id)} onQuickAdd={() => quickAdd(item)} />
-                    ))}
-                  </div>
+                  <>
+                    <div className="cat-grid">
+                      {displayedItems.map((item, index) => (
+                        <CatalogCard key={item.id} item={item} locale={locale} prices={prices} index={index}
+                          canAddToCart={showCustomerActions}
+                          onOpen={() => setProductParam(item.id)} onQuickAdd={() => quickAdd(item)} />
+                      ))}
+                    </div>
+                    {remaining > 0 && (
+                      <div className="cat-more">
+                        <button type="button" className="cat-more-btn" onClick={() => setShown((value) => value + CATALOG_PAGE_SIZE)}>
+                          <ChevronDown size={16} />
+                          {t("catalog.showMore", { n: Math.min(CATALOG_PAGE_SIZE, remaining) })}
+                        </button>
+                        <span className="cat-more-count">
+                          {t("catalog.showingCount", { shown: displayedItems.length, total: filtered.length })}
+                        </span>
+                      </div>
+                    )}
+                  </>
                 )}
               </section>
             </div>
@@ -335,8 +546,8 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         </footer>
       </div>
 
-      {showCustomerActions && cartCount > 0 && !cartOpen && (
-        <button type="button" className="cat-cart-bar" onClick={() => setCartOpen(true)}>
+      {showCustomerActions && cartCount > 0 && (
+        <button type="button" className="cat-cart-bar" tabIndex={cartOpen ? -1 : undefined} aria-hidden={cartOpen || undefined} onClick={() => setCartOpen(true)}>
           <span className="cat-cart-bar-icon">
             <ShoppingBag size={18} />
             <span className="cat-cart-bar-badge">{cartCount}</span>
@@ -374,6 +585,27 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           onClose={closeCart}
           onNotify={notify}
           onTrack={track}
+        />
+      )}
+
+      {categoriesOpen && (
+        <CatalogCategorySheet categories={categories} category={category} onSelect={setCategory} onClose={closeCategories} />
+      )}
+
+      {filtersOpen && (
+        <CatalogFilterSheet
+          onClose={closeFilters}
+          onClear={clearExtraFilters}
+          canClear={extraFilterCount > 0}
+          resultCount={filtered.length}
+          inStockOnly={inStockOnly}
+          onToggleStock={toggleStock}
+          showPrice={hasPrices}
+          currency={prices.currency}
+          minPrice={minPrice}
+          maxPrice={maxPrice}
+          onMinPrice={setMinPrice}
+          onMaxPrice={setMaxPrice}
         />
       )}
 
@@ -466,7 +698,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         /* ── Category navigation and toolbar ── */
         .cat-browse { display: grid; grid-template-columns: 220px minmax(0, 1fr); align-items: start; gap: 1.1rem; }
         .cat-sidebar {
-          position: sticky; top: 1rem; overflow: hidden; padding: 0.8rem;
+          position: sticky; top: 1rem; max-height: calc(100dvh - 2rem); overflow-x: hidden; overflow-y: auto; padding: 0.8rem;
           background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px;
         }
         .cat-sidebar-heading {
@@ -490,12 +722,87 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           color: var(--shop-accent); font-weight: 700;
         }
         .cat-category-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cat-category-check { flex: 0 0 auto; color: var(--shop-accent); }
+        .cat-category:focus-visible { outline: 2px solid var(--shop-accent); outline-offset: 2px; }
         .cat-category-count {
           flex: 0 0 auto; min-width: 22px; padding: 2px 6px; border-radius: 5px;
           background: var(--bg-3); color: var(--text-3); text-align: center;
           font-size: 0.66rem; font-weight: 700; font-variant-numeric: tabular-nums;
         }
         .cat-category[data-active] .cat-category-count { background: color-mix(in srgb, var(--shop-accent) 14%, var(--bg-2)); color: var(--shop-accent); }
+        .cat-category-picker {
+          display: none; align-items: center; gap: 0.6rem; width: 100%; padding: 0.55rem 0.65rem;
+          border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2);
+          color: var(--text-1); font: inherit; text-align: left; cursor: pointer;
+          transition: border-color 0.16s, background 0.16s;
+        }
+        .cat-category-picker:hover { border-color: var(--shop-accent); }
+        .cat-category-picker-icon {
+          display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+          width: 34px; height: 34px; border-radius: 8px;
+          background: var(--shop-accent-soft); color: var(--shop-accent);
+        }
+        .cat-category-picker-text { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+        .cat-category-picker-label {
+          color: var(--text-3); font-size: 0.62rem; font-weight: 750; letter-spacing: 0.05em; text-transform: uppercase;
+        }
+        .cat-category-picker-value {
+          overflow: hidden; color: var(--text-1); font-size: 0.84rem; font-weight: 700;
+          text-overflow: ellipsis; white-space: nowrap;
+        }
+        .cat-category-picker-count {
+          flex: 0 0 auto; min-width: 24px; padding: 2px 6px; border-radius: 6px;
+          background: var(--bg-3); color: var(--text-3); text-align: center;
+          font-size: 0.68rem; font-weight: 700; font-variant-numeric: tabular-nums;
+        }
+        .cat-category-picker-arrow { flex: 0 0 auto; color: var(--text-3); }
+        .cat-sidebar-filters {
+          display: flex; flex-direction: column; gap: 0.55rem;
+          margin-top: 0.55rem; padding-top: 0.7rem; border-top: 1px solid var(--border);
+        }
+        .cat-filter-heading {
+          display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+          padding: 0 0.45rem; color: var(--text-1); font-size: 0.78rem; font-weight: 750;
+        }
+        .cat-filter-controls { display: flex; flex-direction: column; gap: 0.6rem; }
+        .cat-stock-toggle {
+          display: flex; align-items: center; gap: 8px; width: 100%; padding: 0.5rem 0.62rem;
+          border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--text-2);
+          font: inherit; font-size: 0.78rem; font-weight: 650; text-align: left; cursor: pointer;
+          transition: background 0.16s, color 0.16s, border-color 0.16s;
+        }
+        .cat-stock-toggle:hover { background: var(--bg-3); color: var(--text-1); }
+        .cat-stock-toggle[data-active] {
+          color: var(--shop-accent); background: var(--shop-accent-soft);
+          border-color: color-mix(in srgb, var(--shop-accent) 28%, transparent); font-weight: 700;
+        }
+        .cat-stock-check {
+          display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+          width: 17px; height: 17px; border-radius: 5px; border: 1.5px solid var(--border-hover);
+          background: var(--bg-2); color: #fff; transition: background 0.16s, border-color 0.16s;
+        }
+        .cat-stock-toggle[data-active] .cat-stock-check { background: var(--shop-accent); border-color: var(--shop-accent); }
+        .cat-price-filter { display: flex; flex-direction: column; gap: 0.4rem; padding: 0 0.45rem; }
+        .cat-price-label {
+          display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem;
+          margin: 0; color: var(--text-2); font-size: 0.72rem; font-weight: 650;
+        }
+        .cat-price-currency { color: var(--text-3); font-size: 0.63rem; font-weight: 750; letter-spacing: 0.04em; }
+        .cat-price-inputs { display: flex; align-items: flex-end; gap: 0.35rem; }
+        .cat-price-field { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+        .cat-price-field > span { color: var(--text-3); font-size: 0.62rem; font-weight: 650; }
+        .cat-price-input {
+          width: 100%; min-height: 36px; padding: 0.35rem 0.5rem !important; border-radius: 6px;
+          font-size: 0.76rem; font-variant-numeric: tabular-nums;
+        }
+        .cat-price-input:focus { border-color: var(--shop-accent) !important; box-shadow: 0 0 0 3px var(--shop-accent-soft); }
+        .cat-price-dash { padding-bottom: 9px; color: var(--text-3); font-size: 0.72rem; }
+        .cat-stock-toggle:focus-visible, .cat-filter-trigger:focus-visible, .cat-filter-chip:focus-visible,
+        .cat-more-btn:focus-visible, .cat-empty-action:focus-visible, .cat-active-category-reset:focus-visible,
+        .cat-category-picker:focus-visible, .cat-category-option:focus-visible,
+        .cat-filter-clear:focus-visible, .cat-filter-apply:focus-visible {
+          outline: 2px solid var(--shop-accent); outline-offset: 2px;
+        }
         .cat-results-area { min-width: 0; }
 
         .cat-toolbar {
@@ -506,6 +813,31 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 22%, transparent);
         }
         .cat-toolbar-row { display: flex; gap: 0.65rem; align-items: center; }
+        .cat-toolbar-controls { display: flex; align-items: center; gap: 0.65rem; }
+        .cat-filter-trigger {
+          display: none; align-items: center; justify-content: center; gap: 7px; flex: 0 0 auto;
+          height: 42px; padding: 0 0.8rem; border: 1px solid var(--border); border-radius: 8px;
+          background: var(--bg); color: var(--text-2); font: inherit; font-size: 0.76rem; font-weight: 700;
+          cursor: pointer; transition: background 0.16s, color 0.16s, border-color 0.16s;
+        }
+        .cat-filter-trigger:hover { color: var(--shop-accent); border-color: var(--shop-accent); }
+        .cat-filter-trigger[data-active] {
+          color: var(--shop-accent); background: var(--shop-accent-soft);
+          border-color: color-mix(in srgb, var(--shop-accent) 30%, var(--border));
+        }
+        .cat-filter-badge {
+          display: inline-flex; align-items: center; justify-content: center; min-width: 18px;
+          height: 18px; padding: 0 5px; border-radius: 5px;
+          background: var(--shop-accent); color: #fff; font-size: 0.62rem; font-weight: 750;
+        }
+        .cat-filter-chips { display: none; flex-wrap: wrap; gap: 0.35rem; }
+        .cat-filter-chip {
+          display: inline-flex; align-items: center; gap: 5px; padding: 0.22rem 0.45rem;
+          border: 1px solid color-mix(in srgb, var(--shop-accent) 26%, var(--border)); border-radius: 5px;
+          background: var(--shop-accent-soft); color: var(--shop-accent); font: inherit;
+          font-size: 0.67rem; font-weight: 650; cursor: pointer;
+        }
+        .cat-filter-chip:hover { border-color: var(--shop-accent); }
         .cat-search-wrap { position: relative; flex: 1; min-width: 0; }
         .cat-search-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--shop-accent); pointer-events: none; }
         .cat-search {
@@ -535,8 +867,18 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         }
         .cat-sort select option { background: var(--bg-2); color: var(--text-1); }
         .cat-sort:focus-within { border-color: var(--shop-accent); box-shadow: 0 0 0 3px var(--shop-accent-soft); }
-        .cat-toolbar-meta { display: flex; align-items: center; gap: 0.55rem; min-height: 1.25rem; margin-top: 0.6rem; }
-        .cat-active-category { min-width: 0; overflow: hidden; color: var(--text-1); font-size: 0.73rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+        .cat-toolbar-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0.55rem; min-height: 1.25rem; margin-top: 0.6rem; }
+        .cat-active-category { min-width: 0; color: var(--text-1); font-size: 0.73rem; font-weight: 700; }
+        .cat-active-category-reset {
+          display: inline-flex; align-items: center; gap: 5px; max-width: min(240px, 100%);
+          margin: -0.18rem 0; padding: 0.18rem 0.45rem; border: 1px solid var(--border); border-radius: 999px;
+          background: var(--bg); color: var(--text-1); font: inherit; font-size: 0.7rem; font-weight: 700;
+          cursor: pointer; transition: color 0.16s, border-color 0.16s, background 0.16s;
+        }
+        .cat-active-category-reset:hover {
+          border-color: var(--shop-accent); background: var(--shop-accent-soft); color: var(--shop-accent);
+        }
+        .cat-active-category-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .cat-results { flex: 0 0 auto; color: var(--text-3); font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
         .cat-clear-filters {
           display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 0.18rem 0.35rem;
@@ -547,6 +889,17 @@ export default function CatalogView({ shopId }: { shopId: string }) {
 
         /* ── Grid + cards ── */
         .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.85rem; }
+        .cat-more { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; margin-top: 1.25rem; }
+        .cat-more-btn {
+          display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+          min-height: 44px; padding: 0.6rem 1.15rem; border-radius: 8px;
+          border: 1px solid color-mix(in srgb, var(--shop-accent) 30%, var(--border));
+          background: var(--bg-2); color: var(--shop-accent); font: inherit;
+          font-size: 0.82rem; font-weight: 750; cursor: pointer;
+          transition: background 0.16s, border-color 0.16s, transform 0.16s;
+        }
+        .cat-more-btn:hover { background: var(--shop-accent-soft); border-color: var(--shop-accent); transform: translateY(-1px); }
+        .cat-more-count { color: var(--text-3); font-size: 0.7rem; font-weight: 600; }
         .cat-card {
           position: relative; display: flex; flex-direction: column; height: 100%;
           background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
@@ -614,6 +967,15 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           border: 1px dashed var(--border); border-radius: 10px; color: var(--text-3); font-size: 0.875rem; text-align: center; padding: 1rem;
         }
         .cat-empty[data-large] { min-height: 42vh; }
+        .cat-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.45rem; }
+        .cat-empty-action {
+          display: inline-flex; align-items: center; gap: 6px; margin-top: 0.2rem;
+          padding: 0.45rem 0.7rem; border: 1px solid var(--border); border-radius: 6px;
+          background: var(--bg-2); color: var(--text-1); font: inherit;
+          font-size: 0.76rem; font-weight: 650; cursor: pointer;
+          transition: color 0.16s, border-color 0.16s;
+        }
+        .cat-empty-action:hover { color: var(--shop-accent); border-color: var(--shop-accent); }
         .cat-skel { aspect-ratio: 1 / 1.32; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--border); animation: pulse 1.4s ease-in-out infinite; }
 
         /* ── Footer ── */
@@ -681,6 +1043,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           box-shadow: 0 24px 72px rgba(0, 0, 0, 0.32);
           animation: catModalIn 0.24s ease;
         }
+        .cat-modal:focus, .cat-drawer:focus, .cat-filter-sheet:focus { outline: none; }
         .cat-modal-close {
           position: absolute; top: 12px; right: 12px; z-index: 6; flex-shrink: 0;
           width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
@@ -882,6 +1245,64 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         }
         .cat-toast[data-visible] { opacity: 1; transform: translate(-50%, 0); }
 
+        /* ── Mobile filter sheet ── */
+        .cat-filter-overlay { align-items: flex-end; padding: 0; }
+        .cat-filter-sheet {
+          width: 100%; max-height: 88dvh; overflow-y: auto;
+          padding: 0 1rem max(1rem, env(safe-area-inset-bottom));
+          background: var(--bg-2); border: 1px solid var(--border); border-radius: 14px 14px 0 0;
+          box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.25); animation: catSheetIn 0.24s ease;
+        }
+        .cat-filter-head {
+          position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between;
+          gap: 1rem; padding: 0.9rem 0 0.7rem; background: var(--bg-2); border-bottom: 1px solid var(--border);
+        }
+        .cat-filter-title { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text-1); font-size: 1rem; font-weight: 750; }
+        .cat-filter-title > svg { color: var(--shop-accent); }
+        .cat-filter-sheet-body { padding: 1rem 0 0.25rem; }
+        .cat-filter-sheet-body .cat-stock-toggle { padding: 0.7rem 0.75rem; font-size: 0.86rem; }
+        .cat-filter-sheet-body .cat-price-filter { padding: 0; gap: 0.55rem; }
+        .cat-filter-sheet-body .cat-price-input { min-height: 44px; font-size: 0.85rem; }
+        .cat-filter-foot { display: flex; gap: 0.55rem; margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
+        .cat-filter-clear, .cat-filter-apply {
+          min-height: 46px; border-radius: 8px; font: inherit; font-size: 0.84rem; font-weight: 750; cursor: pointer;
+        }
+        .cat-filter-clear { flex: 1; border: 1px solid var(--border); background: var(--bg-3); color: var(--text-2); }
+        .cat-filter-clear:hover:not(:disabled) { color: var(--text-1); border-color: var(--border-hover); }
+        .cat-filter-clear:disabled { opacity: 0.45; cursor: default; }
+        .cat-filter-apply { flex: 1.4; border: 1px solid transparent; background: var(--shop-accent); color: #fff; }
+        .cat-filter-apply:hover { background: var(--shop-accent-hover); }
+
+        /* ── Category picker sheet ── */
+        .cat-category-sheet { display: flex; flex-direction: column; overflow: hidden; }
+        .cat-category-sheet-list {
+          flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0.45rem 0 0.15rem;
+        }
+        .cat-category-option {
+          display: flex; align-items: center; gap: 0.6rem; width: 100%; padding: 0.72rem 0.5rem;
+          border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text-2);
+          font: inherit; font-size: 0.86rem; text-align: left; cursor: pointer;
+          transition: background 0.16s, color 0.16s, border-color 0.16s;
+        }
+        .cat-category-option:hover { background: var(--bg-3); color: var(--text-1); }
+        .cat-category-option[data-active] {
+          background: var(--shop-accent-soft); border-color: color-mix(in srgb, var(--shop-accent) 26%, transparent);
+          color: var(--shop-accent); font-weight: 700;
+        }
+        .cat-category-option-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cat-category-option-count {
+          flex: 0 0 auto; min-width: 24px; padding: 2px 6px; border-radius: 6px; text-align: center;
+          background: var(--bg-3); color: var(--text-3); font-size: 0.7rem; font-weight: 700; font-variant-numeric: tabular-nums;
+        }
+        .cat-category-option[data-active] .cat-category-option-count {
+          background: color-mix(in srgb, var(--shop-accent) 14%, var(--bg-2)); color: var(--shop-accent);
+        }
+        .cat-category-option-mark {
+          display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+          width: 19px; height: 19px; border: 1.5px solid var(--border-hover); border-radius: 50%; color: #fff;
+        }
+        .cat-category-option[data-active] .cat-category-option-mark { background: var(--shop-accent); border-color: var(--shop-accent); }
+
         @media (min-width: 761px) {
           .cat-modal { flex-direction: row; }
           .cat-modal-slider { width: 52%; aspect-ratio: auto; min-height: 500px; }
@@ -917,17 +1338,19 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           .cat-buy-row { gap: 0.5rem; }
           .cat-stepper button { width: 34px; }
           .cat-browse { grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
-          .cat-sidebar { position: static; padding: 0.65rem; }
-          .cat-sidebar-heading { padding: 0.1rem 0.35rem 0.55rem; }
-          .cat-category-list { flex-direction: row; overflow-x: auto; gap: 0.4rem; padding-bottom: 2px; scrollbar-width: none; }
-          .cat-category-list::-webkit-scrollbar { display: none; }
-          .cat-category { width: auto; min-width: max-content; max-width: 220px; flex: 0 0 auto; gap: 0.5rem; padding: 0.48rem 0.62rem; border-color: var(--border); }
+          .cat-sidebar { display: none; }
+          .cat-category-picker { display: flex; }
+          .cat-toolbar-meta > .cat-active-category:not(.cat-active-category-reset) { display: none; }
           .cat-toolbar { top: 0; margin: 0 0 0.75rem; padding: 0.65rem; }
           .cat-toolbar-row { flex-wrap: wrap; gap: 0.5rem; }
+          .cat-toolbar-controls { width: 100%; gap: 0.5rem; }
           .cat-search-wrap { flex: 1 1 100%; }
           .cat-search { height: 44px; }
-          .cat-sort { width: 100%; height: 42px; justify-content: space-between; }
+          .cat-sort { flex: 1; width: auto; min-width: 0; height: 42px; justify-content: space-between; }
           .cat-sort select { max-width: calc(100% - 6.5rem); }
+          .cat-filter-trigger { display: inline-flex; }
+          .cat-filter-chips { display: flex; }
+          .cat-sidebar-filters { display: none; }
           .cat-toolbar-meta { margin-top: 0.45rem; }
           .cat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; }
           .cat-card { border-radius: 8px; }
@@ -965,7 +1388,6 @@ export default function CatalogView({ shopId }: { shopId: string }) {
 
         @media (max-width: 380px) {
           .cat-wrap { padding-inline: 0.7rem; }
-          .cat-category { padding-inline: 0.5rem; font-size: 0.72rem; }
           .cat-toolbar { padding: 0.55rem; }
           .cat-grid { gap: 0.5rem; }
           .cat-card-body { padding: 0.55rem; }

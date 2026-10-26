@@ -4,6 +4,7 @@ import {
   collectTags,
   contactKey,
   customerMatches,
+  favoriteProducts,
   MAX_CUSTOMER_TAGS,
   MAX_TAG_LENGTH,
   normalizeCustomer,
@@ -12,7 +13,7 @@ import {
   sameContact,
   sortCustomers,
 } from "../lib/customers.ts";
-import type { Customer } from "../lib/types.ts";
+import type { Customer, Sale } from "../lib/types.ts";
 
 function makeCustomer(overrides: Partial<Customer> = {}): Customer {
   return {
@@ -26,6 +27,25 @@ function makeCustomer(overrides: Partial<Customer> = {}): Customer {
     updatedAt: null,
     ...overrides,
   };
+}
+
+function makeSale(lines: Sale["lines"], id = "s1"): Sale {
+  return {
+    id,
+    lines,
+    total: lines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0),
+    channel: "store",
+    buyerName: "Ana",
+    buyerContact: "+381641234567",
+    note: "",
+    actorUid: "staff",
+    actorName: "Staff",
+    createdAt: null,
+  };
+}
+
+function saleLine(productId: string, productName: string, quantity: number, unitPrice: number): Sale["lines"][number] {
+  return { productId, productName, variantId: `${productId}-v`, variantLabel: "M", quantity, unitPrice };
 }
 
 test("a name is required and everything else is optional", () => {
@@ -141,4 +161,23 @@ test("the tag filter row is built from the data, most used first", () => {
     { tag: "wholesale", count: 1 },
   ]);
   assert.deepEqual(collectTags([]), []);
+});
+
+test("favorite products aggregate units and spending across standing sales", () => {
+  const favorites = favoriteProducts([
+    makeSale([saleLine("jacket", "Jacket", 2, 50), saleLine("scarf", "Scarf", 1, 20)], "s1"),
+    makeSale([saleLine("jacket", "Jacket", 1, 45), saleLine("boots", "Boots", 1, 200)], "s2"),
+  ]);
+  // The jacket wins on units even though the boots earned more.
+  assert.deepEqual(favorites.map((item) => item.productId), ["jacket", "boots", "scarf"]);
+  assert.deepEqual(favorites[0], { productId: "jacket", name: "Jacket", units: 3, spent: 145 });
+  assert.deepEqual(favorites[1], { productId: "boots", name: "Boots", units: 1, spent: 200 });
+});
+
+test("favorite products are capped and empty when nothing was sold", () => {
+  const many = Array.from({ length: 8 }, (_, index) =>
+    makeSale([saleLine(`p${index}`, `Product ${index}`, 1, 10)], `s${index}`)
+  );
+  assert.equal(favoriteProducts(many).length, 5);
+  assert.deepEqual(favoriteProducts([]), []);
 });

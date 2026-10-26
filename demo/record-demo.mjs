@@ -13,7 +13,7 @@
  *   --headed           show the browser while recording
  *   --no-captions      no lower-third captions in the video
  *   --skip-catalog     omit the merchant public-catalog preview scene
- *   --skip-customer    omit the signed-out customer recording
+ *   --skip-customer    omit the signed-out mobile and customer recordings
  *   --profile <dir>    browser profile directory (default demo/.profile)
  *   --out <dir>        recording output directory (default demo/recordings)
  *
@@ -22,9 +22,16 @@
  * as a write (the single exception is opening a customer conversation, which
  * records a read receipt).
  *
- * Two videos are recorded: the merchant tour with the signed-in profile, then
- * the customer tour in a throwaway profile (catalog, variants, cart, checkout,
- * passwordless account). They are merged into one MP4 when ffmpeg is available.
+ * Scenes adapt to the demo shop's data: the low-stock panel is shown when at
+ * least one product sits at or below its minimum, and line-item fulfillment is
+ * demonstrated when a confirmed/fulfilling order exists. Both are skipped on a
+ * shop with none, so the same script records any demo dataset.
+ *
+ * Three segments are recorded: the merchant tour with the signed-in profile, a
+ * short mobile pass through the catalog filter sheet, and the customer tour in
+ * a throwaway profile (catalog, variants, cart, checkout, passwordless
+ * account). The mobile clip is scaled into the 16:9 canvas and all parts are
+ * merged into one MP4 when ffmpeg is available.
  */
 
 import fs from "node:fs";
@@ -41,6 +48,13 @@ const ROOT = path.resolve(HERE, "..");
 const SR = JSON.parse(fs.readFileSync(path.join(ROOT, "lib/i18n/sr.json"), "utf8"));
 const SAMPLE_IMAGE = path.join(ROOT, "public/og.png");
 const RUN_ID = Date.now().toString(36).slice(-5).toUpperCase();
+const LOW_STOCK_HINT = SR["notify.lowStockBadge"].replace("{n}", "").trim();
+const ORDER_ACTION_LABELS = [
+  SR["orders.confirm"],
+  SR["orders.fulfill"],
+  SR["orders.fulfillSelected"],
+  SR["orders.resumeFulfill"],
+];
 
 const opts = parseArgs(process.argv.slice(2));
 if (opts.help) {
@@ -60,6 +74,7 @@ const SHOP_ID = String(opts["shop-id"] ?? process.env.DEMO_SHOP_ID ?? "cMSZnwTNX
 const PROFILE_DIR = path.resolve(ROOT, String(opts.profile ?? "demo/.profile"));
 const OUT_DIR = path.resolve(ROOT, String(opts.out ?? "demo/recordings"));
 const VIEWPORT = { width: 1920, height: 1080 };
+const MOBILE_VIEWPORT = { width: 430, height: 932 };
 
 let cursor = { x: VIEWPORT.width / 2, y: VIEWPORT.height / 2 };
 let sampleProduct = "";
@@ -92,13 +107,13 @@ async function loadPlaywright() {
   }
 }
 
-async function openContext(chromium, { record, headed, profileDir = PROFILE_DIR }) {
+async function openContext(chromium, { record, headed, profileDir = PROFILE_DIR, viewport = VIEWPORT }) {
   fs.mkdirSync(profileDir, { recursive: true });
   if (record) fs.mkdirSync(OUT_DIR, { recursive: true });
 
   const options = {
     headless: !headed,
-    viewport: VIEWPORT,
+    viewport,
     locale: "sr-RS",
     timezoneId: "Europe/Belgrade",
     colorScheme: "dark",
@@ -106,7 +121,7 @@ async function openContext(chromium, { record, headed, profileDir = PROFILE_DIR 
     acceptDownloads: false,
     args: ["--disable-blink-features=AutomationControlled"],
     ignoreDefaultArgs: ["--enable-automation"],
-    ...(record ? { recordVideo: { dir: OUT_DIR, size: VIEWPORT } } : {}),
+    ...(record ? { recordVideo: { dir: OUT_DIR, size: viewport } } : {}),
   };
 
   // Google sign-in tends to distrust Playwright's bundled Chromium, so prefer
@@ -159,6 +174,7 @@ async function installOverlays(context, { seedCookieNotice = true } = {}) {
           "#demo-outro[data-show='1']{opacity:1}",
           "#demo-outro .demo-outro-brand{font-family:var(--font-display),'Segoe UI',sans-serif;font-size:42px;font-weight:700;letter-spacing:-.05em;background:linear-gradient(110deg,#f0f0f5 15%,#818cf8 90%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}",
           "#demo-outro .demo-outro-sub{color:#8b8b9e;font-family:Inter,'Segoe UI',sans-serif;font-size:14px}",
+          "@media (max-width:760px){#demo-caption{top:14px;bottom:auto;left:12px;right:12px;transform:none;justify-content:center;font-size:13px;padding:9px 14px;border-radius:12px}}",
         ].join("");
         document.documentElement.appendChild(style);
 
@@ -540,13 +556,30 @@ async function sceneDashboard(page) {
 
   const lowStockWidget = page
     .locator(".app-sidebar button[aria-expanded]")
-    .filter({ hasText: /na niskom stanju/i })
+    .filter({ hasText: LOW_STOCK_HINT })
     .first();
   if (await lowStockWidget.count()) {
     await click(page, lowStockWidget);
-    await sleep(750);
-    await caption(page, "Obaveštenja o artiklima na niskom stanju");
-    await sleep(1000);
+    await sleep(850);
+    await caption(page, "Artikli ispod minimuma — proaktivno upozorenje");
+    await sleep(950);
+    const lowStockItem = page.locator('.app-sidebar a[href^="/dashboard/products/"]').first();
+    if (await lowStockItem.count()) {
+      await glide(page, lowStockItem);
+      await caption(page, "Stanje i minimum za svaki artikal");
+      await sleep(1000);
+    }
+    const enableDesktop = page.locator(".app-sidebar button").filter({ hasText: SR["notify.enableDesktop"] }).first();
+    const desktopEnabled = page.locator(".app-sidebar").getByText(SR["notify.desktopEnabled"], { exact: false }).first();
+    if (await enableDesktop.count()) {
+      await hover(page, enableDesktop);
+      await caption(page, "Desktop obaveštenje se uključuje jednim klikom");
+      await sleep(900);
+    } else if (await desktopEnabled.count()) {
+      await glide(page, desktopEnabled);
+      await caption(page, "Desktop obaveštenja su uključena");
+      await sleep(800);
+    }
     await click(page, lowStockWidget);
     await sleep(500);
   }
@@ -1071,6 +1104,8 @@ async function sceneProducts(page) {
     await click(page, minStock);
     await minStock.fill("3");
     await sleep(450);
+    await caption(page, "Minimalno stanje pokreće upozorenje pre nego što ponestane");
+    await sleep(950);
   }
 
   const priceFields = [
@@ -1375,11 +1410,11 @@ async function sceneOrders(page) {
     }
 
     const statusButton = firstOrder
-      .getByRole("button", { name: new RegExp(`^(${SR["orders.confirm"]}|${SR["orders.fulfill"]})$`) })
+      .getByRole("button", { name: new RegExp(`^(${ORDER_ACTION_LABELS.join("|")})`) })
       .first();
     if (await statusButton.count()) {
       await hover(page, statusButton);
-      await caption(page, "Obrada: potvrda, isporuka i skinuto stanje");
+      await caption(page, "Obrada: potvrda, delimična isporuka i skinuto stanje");
       await sleep(950);
     }
 
@@ -1406,6 +1441,47 @@ async function sceneOrders(page) {
       await bringIntoView(attachCustomer);
       await glide(page, attachCustomer);
       await sleep(650);
+    }
+  }
+
+  const partialOrder = page
+    .locator("article.glass")
+    .filter({ has: page.locator('input[type="checkbox"]') })
+    .first();
+  if (await partialOrder.count()) {
+    await bringIntoView(partialOrder);
+    await glide(page, partialOrder);
+    await sleep(650);
+    await caption(page, "Parcijalna isporuka — birate stavke koje šaljete sada");
+    await sleep(1100);
+
+    const lineBoxes = partialOrder.locator('input[type="checkbox"]:not([disabled])');
+    const lineBoxCount = await lineBoxes.count();
+    const fulfillButton = partialOrder.locator("button.btn-primary").first();
+
+    if (lineBoxCount > 1) {
+      await click(page, lineBoxes.first());
+      await sleep(850);
+      await caption(page, "Ostatak ostaje u porudžbini za kasniju isporuku");
+      await sleep(1100);
+    }
+    if (await fulfillButton.count()) {
+      await hover(page, fulfillButton);
+      await caption(page, "Dugme prati izbor i broj preostalih stavki");
+      await sleep(1000);
+    }
+    if (lineBoxCount > 1) {
+      await click(page, lineBoxes.first());
+      await sleep(450);
+    }
+
+    const fulfillmentProgress = partialOrder.locator('[role="progressbar"]').first();
+    if (await fulfillmentProgress.count()) {
+      await bringIntoView(fulfillmentProgress);
+      const done = await fulfillmentProgress.getAttribute("aria-valuenow").catch(() => null);
+      await glide(page, fulfillmentProgress);
+      await caption(page, done ? `Isporuka u toku — ${done}% obrađeno` : "Isporuka u toku — napredak po stavkama");
+      await sleep(1100);
     }
   }
 
@@ -1478,6 +1554,7 @@ async function sceneCustomers(page) {
   const search = page.locator(`input[aria-label="${SR["customers.searchPlaceholder"]}"]`).first();
   const firstCustomer = page.locator("a[href^='/dashboard/customers/']").first();
   let firstCustomerName = "";
+  let featuredCustomer = "";
   if (await firstCustomer.count()) {
     firstCustomerName = (await firstCustomer.locator("p").first().textContent().catch(() => ""))?.trim() ?? "";
   }
@@ -1492,6 +1569,8 @@ async function sceneCustomers(page) {
   const sort = page.locator(`select[aria-label="${SR["products.sortLabel"]}"]`).first();
   if (await sort.count()) {
     await selectValue(page, sort, "spent");
+    await sleep(450);
+    featuredCustomer = (await page.locator("a[href^='/dashboard/customers/']").first().getAttribute("href").catch(() => "")) ?? "";
     await caption(page, "Sortiranje po potrošnji i datumu");
     await sleep(750);
     await selectValue(page, sort, "name");
@@ -1568,8 +1647,11 @@ async function sceneCustomers(page) {
     await sleep(700);
   }
 
-  if (await firstCustomer.count()) {
-    await click(page, firstCustomer);
+  const profileLink = featuredCustomer
+    ? page.locator(`a[href="${featuredCustomer}"]`).first()
+    : firstCustomer;
+  if (await profileLink.count()) {
+    await click(page, profileLink);
     await page.waitForURL("**/dashboard/customers/**", { timeout: 15000 }).catch(() => {});
     await sleep(1500);
     await caption(page, "Profil kupca, kontakt i istorija kupovine");
@@ -1593,6 +1675,30 @@ async function sceneCustomers(page) {
       await caption(page, "Brisanje kupca je trajno — ne potvrđujemo ga");
       await sleep(900);
     }
+
+    for (const labelKey of ["customers.averagePurchase", "customers.lastPurchase"]) {
+      const tile = page.locator(".glass").filter({ hasText: SR[labelKey] }).first();
+      if (await tile.count()) {
+        await glide(page, tile, { steps: 14, delay: 7 });
+        await sleep(350);
+      }
+    }
+    await caption(page, "Prosečna kupovina i datum poslednje kupovine");
+    await sleep(1000);
+
+    const favoritesHeading = page.getByRole("heading", { name: SR["customers.favorites.title"], exact: true }).first();
+    if (await favoritesHeading.count()) {
+      await bringIntoView(favoritesHeading);
+      await caption(page, "Omiljeni artikli — količina, potrošnja i udeo");
+      await sleep(1050);
+      const favoritesSection = favoritesHeading.locator("xpath=..");
+      const favoriteRow = favoritesSection.locator("li").first();
+      if (await favoriteRow.count()) {
+        await glide(page, favoriteRow);
+        await sleep(1000);
+      }
+    }
+
     const activity = page.getByRole("heading", { name: SR["customers.activity.title"], exact: true }).first();
     if (await activity.count()) {
       await bringIntoView(activity);
@@ -1605,6 +1711,129 @@ async function sceneCustomers(page) {
     await sleep(1300);
     await scrollTop(page);
   }
+}
+
+async function demoCatalogFilters(page) {
+  const sidebar = page.locator(".cat-sidebar-filters").first();
+  if (!(await sidebar.count())) return;
+
+  await bringIntoView(sidebar);
+  await caption(page, "Filteri kataloga — dostupnost i cena");
+  await sleep(850);
+
+  const stockToggle = sidebar.locator(".cat-stock-toggle").first();
+  if (await stockToggle.count()) {
+    await click(page, stockToggle);
+    await sleep(850);
+    await caption(page, "„Samo dostupno“ odmah skriva artikle bez zaliha");
+    await sleep(1000);
+  }
+
+  const priceInputs = sidebar.locator(".cat-price-input");
+  if ((await priceInputs.count()) >= 2) {
+    await typeInto(page, priceInputs.nth(0), "500");
+    await typeInto(page, priceInputs.nth(1), "3000");
+    await caption(page, "Opseg cene — od 500 do 3.000");
+    await sleep(1000);
+  }
+
+  const clearFilters = page.locator(".cat-clear-filters").first();
+  if (await clearFilters.count()) {
+    await hover(page, clearFilters);
+    await caption(page, "Svi aktivni filteri se čiste jednim klikom");
+    await sleep(950);
+    await click(page, clearFilters);
+    await sleep(800);
+  }
+
+  // A lower bound above every price empties the grid; the empty state offers a
+  // one-click way back, which is worth showing on camera.
+  if ((await priceInputs.count()) >= 2) {
+    await typeInto(page, priceInputs.nth(0), "999999");
+    const empty = page.locator(".cat-empty").first();
+    await empty.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+    await bringIntoView(empty);
+    await caption(page, "Prazno stanje objašnjava filter i nudi povratak");
+    await sleep(1100);
+    const reset = empty.locator(".cat-empty-action").first();
+    if (await reset.count()) {
+      await click(page, reset);
+      await sleep(800);
+      await caption(page, "Katalog je ponovo kompletan");
+      await sleep(900);
+    }
+  }
+  await scrollTop(page);
+}
+
+async function sceneMobileFilters(page) {
+  if (!SHOP_ID) return;
+  cursor = { x: MOBILE_VIEWPORT.width / 2, y: MOBILE_VIEWPORT.height / 2 };
+  await page.goto(`${BASE_URL}/catalog/${SHOP_ID}`, { waitUntil: "domcontentloaded" });
+  const hero = page.locator(".cat-hero-title").first();
+  await hero.waitFor({ state: "visible", timeout: 30000 });
+  await sleep(1600);
+  await caption(page, "Javni katalog na telefonu");
+  await glide(page, hero);
+  await sleep(800);
+
+  const trigger = page.locator(".cat-filter-trigger").first();
+  if (!(await trigger.count())) return;
+  await click(page, trigger);
+  const sheet = page.locator(".cat-filter-sheet").first();
+  await sheet.waitFor({ state: "visible", timeout: 10000 });
+  await sleep(900);
+  await caption(page, "Filter panel — dostupnost i cena");
+  await sleep(950);
+
+  const stock = sheet.locator(".cat-stock-toggle").first();
+  if (await stock.count()) {
+    await click(page, stock);
+    await sleep(700);
+  }
+  const inputs = sheet.locator(".cat-price-input");
+  if ((await inputs.count()) >= 2) {
+    await typeInto(page, inputs.nth(0), "500");
+    await typeInto(page, inputs.nth(1), "3000");
+    await caption(page, "Opseg cene bez napuštanja panela");
+    await sleep(1000);
+  }
+  const apply = page.locator(".cat-filter-apply").first();
+  if (await apply.count()) {
+    await click(page, apply);
+    await sleep(900);
+  }
+  await caption(page, "Filteri se primenjuju jednim dodirom");
+  await sleep(1000);
+
+  const chip = page.locator(".cat-filter-chip").first();
+  if (await chip.count()) {
+    await hover(page, chip);
+    await sleep(700);
+    await click(page, chip);
+    await sleep(750);
+    await caption(page, "Aktivni filter se uklanja čipom");
+    await sleep(950);
+  }
+
+  await click(page, trigger);
+  await sheet.waitFor({ state: "visible", timeout: 10000 });
+  await sleep(700);
+  const clear = sheet.locator(".cat-filter-clear").first();
+  if ((await clear.count()) && !(await clear.isDisabled())) {
+    await hover(page, clear);
+    await caption(page, "Jedan klik čisti sve filtere");
+    await sleep(950);
+    await click(page, clear);
+    await sleep(550);
+  }
+  const applyAgain = page.locator(".cat-filter-apply").first();
+  if (await applyAgain.count()) {
+    await click(page, applyAgain);
+    await sleep(900);
+  }
+  await caption(page, "Spremno za svaki telefon");
+  await sleep(1300);
 }
 
 async function sceneCatalog(page) {
@@ -1665,6 +1894,8 @@ async function sceneCatalog(page) {
     await selectValue(page, sort, "name");
     await sleep(400);
   }
+
+  await demoCatalogFilters(page);
 
   const inStockCard = page.locator(".cat-card:has(.cat-card-add:not([disabled])) .cat-card-hit").first();
   const card = (await inStockCard.count()) ? inStockCard : page.locator(".cat-card-hit").first();
@@ -1783,6 +2014,8 @@ async function sceneCustomerCatalog(page) {
     await selectValue(page, sort, "name");
     await sleep(400);
   }
+
+  await demoCatalogFilters(page);
 
   const inStockCard = page.locator(".cat-card:has(.cat-card-add:not([disabled])) .cat-card-hit").first();
   const card = (await inStockCard.count()) ? inStockCard : page.locator(".cat-card-hit").first();
@@ -2198,8 +2431,8 @@ async function runSetup(chromium) {
   }
 }
 
-async function recordSegment(chromium, { label, scenes, profileDir = PROFILE_DIR, seedCookieNotice = true }) {
-  const context = await openContext(chromium, { record: true, headed: HEADED, profileDir });
+async function recordSegment(chromium, { label, scenes, profileDir = PROFILE_DIR, seedCookieNotice = true, viewport = VIEWPORT }) {
+  const context = await openContext(chromium, { record: true, headed: HEADED, profileDir, viewport });
   const page = context.pages()[0] ?? (await context.newPage());
   const video = page.video();
   let failed = false;
@@ -2255,8 +2488,8 @@ function runFfmpeg(args, { tolerateFailure = false } = {}) {
   }
 }
 
-function encodeMp4(source, target) {
-  runFfmpeg([
+function encodeMp4(source, target, { mobile = false } = {}) {
+  const args = [
     "-y",
     "-i", source,
     "-an",
@@ -2264,9 +2497,12 @@ function encodeMp4(source, target) {
     "-preset", "medium",
     "-crf", "20",
     "-pix_fmt", "yuv420p",
-    "-movflags", "+faststart",
-    target,
-  ]);
+  ];
+  // The mobile clip is portrait; scale it to the full video height and center
+  // it on the dark canvas so it concatenates with the desktop segments.
+  if (mobile) args.push("-vf", "scale=-2:1080,pad=1920:1080:(ow-iw)/2:0:color=0x0f0f14,setsar=1");
+  args.push("-movflags", "+faststart", target);
+  runFfmpeg(args);
 }
 
 function concatMp4(parts, target, { copy }) {
@@ -2311,11 +2547,13 @@ function durationOf(file) {
 }
 
 function keepWebmParts(sources, base) {
-  const files = sources.filter((source) => fs.existsSync(source)).map((source, index) => {
-    const target = sources.length === 1 ? `${base}.webm` : `${base}-${index === 0 ? "prodavac" : "kupac"}.webm`;
-    fs.renameSync(source, target);
-    return target;
-  });
+  const files = sources
+    .filter(({ file }) => fs.existsSync(file))
+    .map(({ file, label }, index) => {
+      const target = sources.length === 1 ? `${base}.webm` : `${base}-${label ?? index + 1}.webm`;
+      fs.renameSync(file, target);
+      return target;
+    });
   return { file: files[0] ?? "", extra: files.slice(1) };
 }
 
@@ -2328,21 +2566,23 @@ function mergeRecordings(sources, stamp) {
   const encoded = [];
   try {
     if (sources.length === 1) {
+      const [only] = sources;
       const target = `${base}.mp4`;
-      encodeMp4(sources[0], target);
-      fs.rmSync(sources[0], { force: true });
+      encodeMp4(only.file, target, { mobile: only.mobile });
+      fs.rmSync(only.file, { force: true });
       return { file: target };
     }
 
-    sources.forEach((source, index) => {
-      const target = `${base}-${index === 0 ? "prodavac" : "kupac"}.mp4`;
-      encodeMp4(source, target);
+    sources.forEach(({ file, label, mobile }, index) => {
+      const target = `${base}-${label ?? index + 1}.mp4`;
+      encodeMp4(file, target, { mobile });
       encoded.push(target);
     });
     const target = `${base}.mp4`;
     const merged = concatMp4(encoded, target, { copy: true }) || concatMp4(encoded, target, { copy: false });
     if (!merged) throw new Error("spajanje nije uspelo");
-    for (const file of [...encoded, ...sources]) fs.rmSync(file, { force: true });
+    for (const { file } of sources) fs.rmSync(file, { force: true });
+    for (const file of encoded) fs.rmSync(file, { force: true });
     return { file: target };
   } catch (error) {
     for (const file of encoded) fs.rmSync(file, { force: true });
@@ -2402,11 +2642,30 @@ async function main() {
   if (!merchant) {
     process.exit(1);
   }
-  sources.push(merchant);
+  sources.push({ file: merchant, label: "prodavac" });
 
-  let customerProfile = "";
   if (!SKIP_CUSTOMER) {
-    customerProfile = fs.mkdtempSync(path.join(os.tmpdir(), "logixia-demo-customer-"));
+    const mobileProfile = fs.mkdtempSync(path.join(os.tmpdir(), "logixia-demo-mobile-"));
+    console.log("[demo] Snimam mobilnu scenu filtera ...");
+    try {
+      const mobile = await recordSegment(chromium, {
+        label: "Mobilni",
+        profileDir: mobileProfile,
+        seedCookieNotice: true,
+        viewport: MOBILE_VIEWPORT,
+        scenes: [["Mobilni filteri", sceneMobileFilters]],
+      });
+      if (mobile) sources.push({ file: mobile, label: "mobilni", mobile: true });
+      else console.warn("[demo] Mobilna scena nije snimljena; nastavljam bez nje.");
+    } finally {
+      try {
+        fs.rmSync(mobileProfile, { recursive: true, force: true });
+      } catch {
+        /* Chrome may still hold a lock; the OS temp folder can be cleaned later */
+      }
+    }
+
+    const customerProfile = fs.mkdtempSync(path.join(os.tmpdir(), "logixia-demo-customer-"));
     console.log("[demo] Snimam kupčevu turu (bez prijave) ...");
     try {
       const customer = await recordSegment(chromium, {
@@ -2419,8 +2678,8 @@ async function main() {
           ["Odjava", sceneOutro],
         ],
       });
-      if (customer) sources.push(customer);
-      else console.warn("[demo] Kupčeva tura nije snimljena; koristim samo prodavčev deo.");
+      if (customer) sources.push({ file: customer, label: "kupac" });
+      else console.warn("[demo] Kupčeva tura nije snimljena; koristim ostale delove.");
     } finally {
       try {
         fs.rmSync(customerProfile, { recursive: true, force: true });

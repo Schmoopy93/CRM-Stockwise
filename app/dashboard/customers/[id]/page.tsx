@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useCustomer, useCustomerActivity, useShopMoney } from "@/lib/hooks";
+import { favoriteProducts } from "@/lib/customers";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { deleteCustomer } from "@/lib/actions";
 import { formatCatalogPrice } from "@/lib/catalog-channels";
@@ -13,12 +14,15 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   ArrowLeft,
   Banknote,
+  CalendarClock,
   Mail,
   Pencil,
   Phone,
   Receipt,
   ShoppingBag,
+  Star,
   Trash2,
+  TrendingUp,
 } from "lucide-react";
 
 type Entry =
@@ -83,6 +87,9 @@ export default function CustomerDetailPage() {
   // currency the customer was quoted in, so it must be formatted and never
   // converted. Mixing the two rules in one place is what makes this readable.
   const spentOnSales = standingSales.reduce((sum, sale) => sum + sale.total, 0);
+  const averagePurchase = standingSales.length > 0 ? spentOnSales / standingSales.length : 0;
+  const lastPurchase = standingSales.find((sale) => sale.createdAt)?.createdAt ?? null;
+  const favorites = useMemo(() => favoriteProducts(standingSales), [standingSales]);
 
   async function remove() {
     if (!shopId) return;
@@ -188,8 +195,10 @@ export default function CustomerDetailPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "0.75rem" }}>
         {[
           { label: t("customers.totalSpent"), value: money(spentOnSales), icon: <Banknote size={15} /> },
+          { label: t("customers.averagePurchase"), value: standingSales.length > 0 ? money(averagePurchase) : "—", icon: <TrendingUp size={15} /> },
           { label: t("customers.salesCount", { n: standingSales.length }), value: String(standingSales.length), icon: <Receipt size={15} /> },
           { label: t("customers.ordersCount", { n: orders.length }), value: String(orders.length), icon: <ShoppingBag size={15} /> },
+          { label: t("customers.lastPurchase"), value: lastPurchase ? lastPurchase.toLocaleDateString(intl) : "—", icon: <CalendarClock size={15} /> },
         ].map((tile) => (
           <div key={tile.label} className="glass" style={{ padding: "0.75rem 0.9rem", borderRadius: 12 }}>
             <p style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.7rem", fontWeight: 600, color: "var(--text-3)", margin: 0 }}>
@@ -200,6 +209,35 @@ export default function CustomerDetailPage() {
           </div>
         ))}
       </div>
+
+      <section className="glass" style={{ padding: "1rem 1.1rem", borderRadius: 14 }}>
+        <h2 style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.9rem", fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
+          <Star size={15} color="var(--accent-2)" />
+          {t("customers.favorites.title")}
+        </h2>
+        {favorites.length === 0 ? (
+          <p style={{ margin: "0.6rem 0 0", fontSize: "0.78rem", color: "var(--text-3)" }}>{t("customers.favorites.empty")}</p>
+        ) : (
+          <ul style={{ display: "flex", flexDirection: "column", gap: "0.7rem", listStyle: "none", margin: "0.8rem 0 0", padding: 0 }}>
+            {favorites.map((favorite) => {
+              const share = spentOnSales > 0 ? Math.round((favorite.spent / spentOnSales) * 100) : 0;
+              return (
+                <li key={favorite.productId}>
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap", fontSize: "0.8rem" }}>
+                    <span style={{ fontWeight: 650, color: "var(--text-1)", overflowWrap: "anywhere", minWidth: 0 }}>{favorite.name}</span>
+                    <span style={{ color: "var(--text-2)", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+                      {t("customers.favorites.units", { n: favorite.units })} · {money(favorite.spent)} · {share}%
+                    </span>
+                  </div>
+                  <div style={{ height: 4, borderRadius: 99, overflow: "hidden", background: "var(--bg-3)", marginTop: 5 }}>
+                    <div style={{ width: `${Math.min(100, Math.max(0, share))}%`, height: "100%", background: "var(--accent-2)", borderRadius: 99 }} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <div>
         <h2 style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-1)", margin: "0 0 0.6rem" }}>{t("customers.activity.title")}</h2>

@@ -10,43 +10,87 @@ import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import { useProducts, useOrders } from "@/lib/hooks";
 import { useCustomerMessageNotifications, useLowStockNotifications } from "@/lib/notifications";
+import { lowStockProducts } from "@/lib/stock-alerts";
 import { signOut } from "@/lib/actions";
 import { useI18n } from "@/lib/i18n-context";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
-import { LayoutGrid, Package, PackagePlus, BarChart2, Download, LogOut, ChevronRight, Upload, ClipboardList, Menu, X, ShoppingBag, AlertTriangle, Receipt, Users, Bell, MessageCircle } from "lucide-react";
+import { LayoutGrid, Package, PackagePlus, BarChart2, Download, LogOut, ChevronRight, Upload, ClipboardList, Menu, X, ShoppingBag, AlertTriangle, Receipt, Users, Bell, MessageCircle, CheckCircle2 } from "lucide-react";
 
 function NotificationWidget({ shopId }: { shopId: string | undefined }) {
-  const { products } = useProducts(shopId);
+  const { products, loading } = useProducts(shopId);
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  useLowStockNotifications(products);
-  const low = products
-    .filter((p) => p.minStock > 0 && p.totalQuantity <= p.minStock)
-    .sort((a, b) => (a.totalQuantity / Math.max(a.minStock, 1)) - (b.totalQuantity / Math.max(b.minStock, 1)));
-  if (low.length === 0) return null;
+  const { toasts, dismissToast, permission, requestPermission } = useLowStockNotifications(shopId, products, loading);
+  const low = lowStockProducts(products);
+
   return (
-    <div>
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
-        style={{ width: "100%", margin: "0 0 0.5rem", background: "var(--amber-dim)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, padding: "0.625rem 0.75rem", fontSize: "0.75rem", color: "var(--amber)", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, textAlign: "left" }}>
-        <AlertTriangle size={13} style={{ flexShrink: 0 }} />
-        {t("notify.lowStockBadge", { n: low.length })}
-        <ChevronRight size={13} style={{ marginLeft: "auto", transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} />
-      </button>
-      {open && (
-        <div style={{ margin: "0 0 0.5rem", background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 10, padding: "0.4rem", display: "flex", flexDirection: "column", gap: 2, maxHeight: 240, overflowY: "auto" }}>
-          {low.map((p) => (
-            <Link key={p.id} href={`/dashboard/products/${p.id}`} onClick={() => setOpen(false)}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "0.45rem 0.5rem", borderRadius: 7, textDecoration: "none", color: "var(--text-1)", fontSize: "0.75rem" }}
-              onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg-2)")}
-              onMouseOut={(e) => (e.currentTarget.style.background = "transparent")}>
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
-              <span style={{ color: p.totalQuantity === 0 ? "var(--red)" : "var(--amber)", fontWeight: 700, flexShrink: 0 }}>{p.totalQuantity}/{p.minStock}</span>
-            </Link>
-          ))}
+    <>
+      {low.length > 0 && (
+        <div>
+          <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+            style={{ width: "100%", margin: "0 0 0.5rem", background: "var(--amber-dim)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, padding: "0.625rem 0.75rem", fontSize: "0.75rem", color: "var(--amber)", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, textAlign: "left" }}>
+            <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+            {t("notify.lowStockBadge", { n: low.length })}
+            <ChevronRight size={13} style={{ marginLeft: "auto", transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} />
+          </button>
+          {open && (
+            <div style={{ margin: "0 0 0.5rem", background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 10, padding: "0.4rem", display: "flex", flexDirection: "column", gap: 2, maxHeight: 280, overflowY: "auto" }}>
+              {low.map(({ product: p, level }) => (
+                <Link key={p.id} href={`/dashboard/products/${p.id}`} onClick={() => setOpen(false)}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "0.45rem 0.5rem", borderRadius: 7, textDecoration: "none", color: "var(--text-1)", fontSize: "0.75rem" }}
+                  onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg-2)")}
+                  onMouseOut={(e) => (e.currentTarget.style.background = "transparent")}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                    <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: level === "out" ? "var(--red)" : "var(--amber)", flexShrink: 0 }} />
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                  </span>
+                  <span style={{ color: level === "out" ? "var(--red)" : "var(--amber)", fontWeight: 700, flexShrink: 0 }}>{p.totalQuantity}/{p.minStock}</span>
+                </Link>
+              ))}
+              <div style={{ borderTop: "1px solid var(--border)", marginTop: 4, paddingTop: 6 }}>
+                {permission === "default" && (
+                  <button type="button" onClick={() => void requestPermission()}
+                    style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "0.4rem 0.5rem", background: "transparent", border: "1px solid var(--border)", borderRadius: 7, color: "var(--text-2)", fontSize: "0.72rem", fontWeight: 600, cursor: "pointer" }}>
+                    <Bell size={12} />
+                    {t("notify.enableDesktop")}
+                  </button>
+                )}
+                {permission === "granted" && (
+                  <p style={{ display: "flex", alignItems: "center", gap: 5, margin: 0, padding: "0.2rem 0.35rem", color: "var(--green)", fontSize: "0.7rem" }}>
+                    <CheckCircle2 size={12} /> {t("notify.desktopEnabled")}
+                  </p>
+                )}
+                {permission === "denied" && (
+                  <p style={{ margin: 0, padding: "0.2rem 0.35rem", color: "var(--text-3)", fontSize: "0.68rem", lineHeight: 1.4 }}>
+                    {t("notify.desktopBlocked")}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
-    </div>
+      {toasts.length > 0 && typeof document !== "undefined" && createPortal(
+        <div aria-live="polite" style={{ position: "fixed", right: "1.25rem", bottom: "1.25rem", zIndex: 999, display: "flex", flexDirection: "column", gap: "0.5rem", width: "min(360px, calc(100vw - 2rem))" }}>
+          {toasts.map((toast) => (
+            <div key={toast.id} className="fade-up" style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "0.8rem", border: `1px solid color-mix(in srgb, ${toast.level === "out" ? "var(--red)" : "var(--amber)"} 35%, var(--border))`, borderRadius: 12, background: "var(--bg-2)", boxShadow: "0 8px 28px rgba(0,0,0,0.22)" }}>
+              <AlertTriangle size={17} color={toast.level === "out" ? "var(--red)" : "var(--amber)"} style={{ flexShrink: 0, marginTop: 1 }} />
+              <Link href={`/dashboard/products/${toast.productId}`} onClick={() => dismissToast(toast.id)}
+                style={{ minWidth: 0, flex: 1, color: "var(--text-1)", textDecoration: "none", fontSize: "0.8rem" }}>
+                <span style={{ display: "block", fontWeight: 700 }}>{toast.title}</span>
+                <span style={{ display: "block", marginTop: 2, fontWeight: 500, color: "var(--text-3)", lineHeight: 1.4 }}>{toast.body}</span>
+              </Link>
+              <button type="button" onClick={() => dismissToast(toast.id)} aria-label={t("catalog.close")}
+                style={{ display: "grid", placeItems: "center", width: 27, height: 27, flex: "0 0 auto", border: 0, borderRadius: 7, background: "var(--bg-3)", color: "var(--text-2)", cursor: "pointer" }}>
+                <X size={14} />
+              </button>
+            </div>
+          ))}
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 

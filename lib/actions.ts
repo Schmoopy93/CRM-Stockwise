@@ -31,7 +31,7 @@ import {
 import { auth, db } from "@/lib/firebase";
 import { uploadProductImage, uploadShopImage } from "@/lib/cloudinary";
 import { applyStockDelta } from "@/lib/stock-invariants";
-import { normalizeOrderInput, newOrderCode, orderTotal, type OrderInput } from "@/lib/orders";
+import { normalizeFulfillmentIndices, normalizeOrderInput, newOrderCode, orderTotal, type OrderInput } from "@/lib/orders";
 import { normalizeCustomer, type CustomerInput } from "@/lib/customers";
 import { getLocalizedOptionValue } from "@/lib/product-field-options";
 import { CatalogChannels } from "@/lib/catalog-channels";
@@ -323,6 +323,30 @@ export async function fulfillCatalogOrder(
   actorUid: string,
   actorName: string
 ) {
+  return fulfillOrderLinesInternal(shopId, orderId, actorUid, actorName, null);
+}
+
+/** Ships only the lines the shop selects now; the remaining lines stay in the
+ * order and can be sent later. Stock moves per line immediately, while the sale
+ * is recorded once the whole order is fulfilled, so a half-shipped order is
+ * never counted as revenue. */
+export async function fulfillOrderLines(
+  shopId: string,
+  orderId: string,
+  lineIndices: number[],
+  actorUid: string,
+  actorName: string
+) {
+  return fulfillOrderLinesInternal(shopId, orderId, actorUid, actorName, lineIndices);
+}
+
+async function fulfillOrderLinesInternal(
+  shopId: string,
+  orderId: string,
+  actorUid: string,
+  actorName: string,
+  selection: number[] | null
+) {
   const orderRef = doc(db, "shops", shopId, "orders", orderId);
   const initialSnap = await getDoc(orderRef);
   if (!initialSnap.exists()) throw new Error("ORDER_NOT_FOUND");
@@ -336,6 +360,9 @@ export async function fulfillCatalogOrder(
     throw new Error("ORDER_LINES_INVALID");
   }
   const lines: CatalogOrder["lines"] = initialData.lines;
+  const selected = selection === null
+    ? lines.map((_, index) => index)
+    : normalizeFulfillmentIndices(lines.length, selection);
 
   const variantIds = await Promise.all(lines.map(async (line) => {
     if (line.variantId) return line.variantId;
@@ -369,7 +396,7 @@ export async function fulfillCatalogOrder(
   // later change to the product's purchase price cannot rewrite past profit.
   const costByProduct = new Map<string, number>();
 
-  for (let index = 0; index < lines.length; index += 1) {
+  for (const index of selected) {
     const line = lines[index];
     await runTransaction(db, async (tx) => {
       const currentOrder = await tx.get(orderRef);
@@ -436,7 +463,32 @@ export async function fulfillCatalogOrder(
     });
   }
 
+  // A partial pass stops here: the shipped lines are already out of stock, but
+  // the order is only turned into a sale once every line has left the shelf.
+  const latestSnap = await getDoc(orderRef);
+  if (!latestSnap.exists()) throw new Error("ORDER_NOT_FOUND");
+  const latestData = latestSnap.data();
+  if (latestData.status === "fulfilled") return latestData.saleId as string | undefined;
+  const completed = Array.isArray(latestData.fulfilledLineIndices)
+    ? latestData.fulfilledLineIndices.filter((index: unknown): index is number => Number.isSafeInteger(index))
+    : [];
+  if (lines.some((_, index) => !completed.includes(index))) return undefined;
+
   const saleRef = doc(db, "shops", shopId, "sales", `order-${orderId}`);
+  // Lines shipped in an earlier pass are not part of this pass's transactions,
+  // so their purchase price is read here instead of being left for analytics to
+  // guess from the product's current cost.
+  const missingCostIds = [...new Set(saleLines.map((line) => line.productId))]
+    .filter((productId) => !costByProduct.has(productId));
+  const productSnaps = await Promise.all(
+    missingCostIds.map((productId) => getDoc(doc(db, "shops", shopId, "products", productId)))
+  );
+  for (const snap of productSnaps) {
+    const costPrice = snap.data()?.costPrice;
+    if (typeof costPrice === "number" && Number.isFinite(costPrice) && costPrice >= 0) {
+      costByProduct.set(snap.id, costPrice);
+    }
+  }
   const saleLinesWithCost: SaleLine[] = saleLines.map((line) => {
     const unitCost = costByProduct.get(line.productId);
     return typeof unitCost === "number" ? { ...line, unitCost } : line;

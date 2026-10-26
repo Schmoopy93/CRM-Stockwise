@@ -10,6 +10,7 @@ import type { PriceTools } from "@/lib/currency";
 import { CatalogItem, CatalogStatEvent } from "@/lib/types";
 import { catalogLink, MAX_QUANTITY } from "./catalog-store";
 import { catalogItemAvailable, catalogStockForVariant, fieldText, itemImages, saleDiscount } from "./catalog-card";
+import { useDialogFocus } from "./use-dialog-focus";
 
 export default function CatalogDetail({ item, locale, prices, shopId, canPurchase, onClose, onAdd, onNotify, onTrack }: {
   item: CatalogItem;
@@ -28,6 +29,7 @@ export default function CatalogDetail({ item, locale, prices, shopId, canPurchas
   const variant = item.variants[variantIndex] ?? "";
   const [quantity, setQuantity] = useState(1);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useDialogFocus<HTMLDivElement>();
   const images = itemImages(item);
   const discount = saleDiscount(item);
   const needsVariant = item.variants.length > 0 && variantIndex < 0;
@@ -75,7 +77,7 @@ export default function CatalogDetail({ item, locale, prices, shopId, canPurchas
       role="dialog" aria-modal="true" aria-label={item.name}
       className="cat-overlay"
     >
-      <div className="cat-modal">
+      <div className="cat-modal" ref={dialogRef} tabIndex={-1}>
         <button onClick={onClose} aria-label={t("catalog.close")} className="cat-modal-close">
           <X size={16} />
         </button>

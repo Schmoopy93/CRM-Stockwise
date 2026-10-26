@@ -1,9 +1,9 @@
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { defineSecret, defineString } from "firebase-functions/params";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 
 initializeApp();
 
@@ -135,5 +135,147 @@ export const notifyNewOrder = onDocumentCreated(
     }
 
     logger.info("Order notification emailed", { shopId, orderId, code });
+  }
+);
+
+type StockAlertLevel = "ok" | "low" | "out";
+
+/** Mirrors `lib/stock-alerts.ts`: minStock 0 means the shop does not track a
+ * minimum, so such a product never alerts, even at zero. */
+function stockAlertLevel(minStock: number, totalQuantity: number): StockAlertLevel {
+  if (minStock <= 0) return "ok";
+  if (totalQuantity <= 0) return "out";
+  if (totalQuantity <= minStock) return "low";
+  return "ok";
+}
+
+/**
+ * Emails the shop owner when a product crosses into low or out of stock.
+ *
+ * The last level this function emailed about is kept in
+ * `shops/{shopId}/stockAlertState/{productId}` and claimed in a transaction
+ * before sending, so a retried or duplicated trigger cannot send the same alert
+ * twice. That subcollection is operator-only: the client has its own
+ * localStorage marker and no rules grant access to this one.
+ */
+export const notifyLowStock = onDocumentUpdated(
+  {
+    document: "shops/{shopId}/products/{productId}",
+    region: "europe-west1",
+    secrets: [EMAIL_API_KEY],
+  },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+
+    const minStock = Number(after.minStock ?? 0);
+    const totalQuantity = Number(after.totalQuantity ?? 0);
+    if (!Number.isFinite(minStock) || !Number.isFinite(totalQuantity)) return;
+
+    const beforeLevel = stockAlertLevel(Number(before.minStock ?? 0), Number(before.totalQuantity ?? 0));
+    const afterLevel = stockAlertLevel(minStock, totalQuantity);
+    if (beforeLevel === afterLevel) return;
+
+    const { shopId, productId } = event.params;
+    const db = getFirestore();
+    const stateRef = db.doc(`shops/${shopId}/stockAlertState/${productId}`);
+
+    // Restocking is not an alert: clear the marker so the next drop is fresh,
+    // and treat out → low as a silent improvement rather than a new warning.
+    if (afterLevel === "ok" || (beforeLevel === "out" && afterLevel === "low")) {
+      await stateRef.set({ level: afterLevel, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      return;
+    }
+
+    const claimed = await db.runTransaction(async (transaction) => {
+      const state = await transaction.get(stateRef);
+      const last = state.get("level");
+      // Out-of-order triggers can deliver "low" after "out"; never walk back up.
+      if (last === afterLevel || (last === "out" && afterLevel === "low")) return false;
+      transaction.set(stateRef, { level: afterLevel, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      return true;
+    });
+    if (!claimed) return;
+
+    const shopSnap = await db.doc(`shops/${shopId}`).get();
+    const ownerUid = shopSnap.get("createdBy");
+    if (typeof ownerUid !== "string" || !ownerUid) {
+      logger.warn("Low-stock email skipped: shop has no owner", { shopId, productId });
+      return;
+    }
+
+    let recipient: string | undefined = undefined;
+    try {
+      recipient = (await getAuth().getUser(ownerUid)).email;
+    } catch (cause) {
+      logger.warn("Low-stock email skipped: owner account unreadable", { shopId, ownerUid, cause });
+      return;
+    }
+    if (!recipient) {
+      logger.warn("Low-stock email skipped: owner has no email", { shopId, ownerUid });
+      return;
+    }
+
+    const shopName = typeof shopSnap.get("name") === "string" ? (shopSnap.get("name") as string) : "";
+    const name = typeof after.name === "string" && after.name ? after.name : productId;
+    const sku = typeof after.sku === "string" ? after.sku : "";
+    const appUrl = APP_URL.value();
+    const isOut = afterLevel === "out";
+
+    let variantRows = "";
+    try {
+      const variants = await db
+        .collection(`shops/${shopId}/products/${productId}/variants`)
+        .orderBy("quantity", "asc")
+        .limit(12)
+        .get();
+      variantRows = variants.docs
+        .map((variant) => `<tr>
+        <td style="padding:3px 0">${escapeHtml(variant.get("label"))}</td>
+        <td style="padding:3px 0;text-align:right;white-space:nowrap">${Number(variant.get("quantity") ?? 0)} kom</td>
+      </tr>`)
+        .join("");
+    } catch (cause) {
+      logger.warn("Low-stock email: variants unreadable", { shopId, productId, cause });
+    }
+
+    const subject = `${isOut ? "Nema na stanju" : "Nisko stanje"}: ${name}${shopName ? ` — ${shopName}` : ""}`;
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:540px;margin:0 auto;padding:24px;color:#111827">
+  <h2 style="margin:0 0 2px;font-size:18px">${isOut ? "Nema na stanju" : "Nisko stanje"}: ${escapeHtml(name)}</h2>
+  <p style="margin:0 0 18px;color:#6b7280;font-size:13px">${escapeHtml(shopName)}</p>
+  <table style="width:100%;border-collapse:collapse;font-size:14px">
+    ${sku ? `<tr><td style="padding:3px 0;color:#6b7280">SKU</td><td style="padding:3px 0;text-align:right">${escapeHtml(sku)}</td></tr>` : ""}
+    <tr><td style="padding:3px 0;color:#6b7280">Stanje</td><td style="padding:3px 0;text-align:right;font-weight:700;color:${isOut ? "#dc2626" : "#d97706"}">${totalQuantity} kom</td></tr>
+    <tr><td style="padding:3px 0;color:#6b7280">Minimum</td><td style="padding:3px 0;text-align:right">${minStock} kom</td></tr>
+  </table>
+  ${variantRows ? `<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0">
+  <p style="margin:0 0 6px;color:#6b7280;font-size:13px">Po varijantama</p>
+  <table style="width:100%;border-collapse:collapse;font-size:14px">${variantRows}</table>` : ""}
+  <a href="${appUrl}/dashboard/products/${productId}" style="display:inline-block;margin-top:20px;padding:10px 18px;background:#6366f1;color:#ffffff;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Otvori artikal</a>
+</div>`;
+
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": EMAIL_API_KEY.value(),
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({
+        sender: { name: EMAIL_FROM_NAME.value(), email: EMAIL_SENDER.value() },
+        to: [{ email: recipient }],
+        subject,
+        htmlContent: html,
+      }),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      logger.error("Brevo rejected the low-stock email", { status: response.status, detail, shopId, productId });
+      throw new Error(`Brevo send failed (${response.status})`);
+    }
+
+    logger.info("Low-stock notification emailed", { shopId, productId, level: afterLevel, totalQuantity, minStock });
   }
 );

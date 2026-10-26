@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { collection, limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db } from "./firebase";
 import { CatalogOrder, Product } from "./types";
+import { stockLevel } from "./stock-alerts";
 import { useI18n } from "./i18n-context";
 
 const MESSAGE_READ_EVENT = "logixia-order-message-read";
@@ -225,40 +226,131 @@ export function useCustomerMessageNotifications(
   return { unreadOrderIds, unreadConversationIds, toasts, dismissToast };
 }
 
-export function useLowStockNotifications(products: Product[]) {
-  const notifiedRef = useRef<Set<string>>(new Set());
+type AlertLevels = Record<string, "low" | "out">;
+
+const alertStorageKey = (shopId: string) => `low-stock-levels:${shopId}`;
+
+/** The last level the shop was alerted about, per product. It lives in the
+ * browser rather than Firestore so the alert cannot depend on a schema change
+ * or a rules deploy: a reload keeps it, and a second tab shares it. */
+function readAlertLevels(shopId: string): AlertLevels {
+  try {
+    const raw = window.localStorage.getItem(alertStorageKey(shopId));
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    const levels: AlertLevels = {};
+    for (const [productId, level] of Object.entries(parsed as Record<string, unknown>)) {
+      if (level === "low" || level === "out") levels[productId] = level;
+    }
+    return levels;
+  } catch {
+    return {};
+  }
+}
+
+function writeAlertLevels(shopId: string, levels: AlertLevels) {
+  try {
+    window.localStorage.setItem(alertStorageKey(shopId), JSON.stringify(levels));
+  } catch (cause) {
+    console.error("Could not persist low-stock levels", cause);
+  }
+}
+
+export interface LowStockToast {
+  id: string;
+  productId: string;
+  level: "low" | "out";
+  title: string;
+  body: string;
+}
+
+export function useLowStockNotifications(
+  shopId: string | undefined,
+  products: Product[],
+  loading: boolean
+) {
   const { t } = useI18n();
+  const levelsRef = useRef<AlertLevels>({});
+  const seededRef = useRef(false);
+  const [toasts, setToasts] = useState<LowStockToast[]>([]);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
 
   useEffect(() => {
-    if (typeof window === "undefined" || !("Notification" in window)) return;
-    if (Notification.permission === "denied") return;
+    setPermission(typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported");
+  }, []);
 
-    const lowItems = products.filter(
-      (p) => p.minStock > 0 && p.totalQuantity <= p.minStock
-    );
+  useEffect(() => {
+    if (!shopId) return;
+    levelsRef.current = readAlertLevels(shopId);
+    seededRef.current = false;
+  }, [shopId]);
 
-    if (lowItems.length === 0) return;
+  useEffect(() => {
+    if (!shopId || loading) return;
 
-    async function notify() {
-      if (Notification.permission === "default") {
-        const perm = await Notification.requestPermission();
-        if (perm !== "granted") return;
-      }
-
-      for (const p of lowItems) {
-        if (notifiedRef.current.has(p.id)) continue;
-        notifiedRef.current.add(p.id);
-
-        new Notification(t("notify.lowStockTitle", { name: p.name }), {
-          body: t("notify.lowStockBody", { qty: p.totalQuantity, min: p.minStock }),
-          icon: "/favicon.ico",
-          tag: `low-stock-${p.id}`,
-        });
-      }
+    const next: AlertLevels = {};
+    for (const product of products) {
+      const level = stockLevel(product);
+      if (level !== "ok") next[product.id] = level;
     }
 
-    notify();
-  }, [products, t]);
+    const previous = levelsRef.current;
+    const alerts: { product: Product; level: "low" | "out" }[] = [];
+
+    // The first snapshot after opening the app describes the shop as it already
+    // is — nobody wants an inbox full of notifications for history. Later
+    // snapshots compare against what this browser last saw.
+    if (seededRef.current) {
+      for (const product of products) {
+        const level = stockLevel(product);
+        if (level === "ok") continue;
+        const prior = previous[product.id];
+        // Restocking an empty item up to "low" is an improvement, not a new alert.
+        if (prior === level || (prior === "out" && level === "low")) continue;
+        alerts.push({ product, level });
+      }
+    }
+    seededRef.current = true;
+    levelsRef.current = next;
+    writeAlertLevels(shopId, next);
+
+    for (const { product, level } of alerts) {
+      const title = level === "out"
+        ? t("notify.outOfStockTitle", { name: product.name })
+        : t("notify.lowStockTitle", { name: product.name });
+      const body = level === "out"
+        ? t("notify.outOfStockBody")
+        : t("notify.lowStockBody", { qty: product.totalQuantity, min: product.minStock });
+
+      setToasts((current) => [
+        ...current.filter((toast) => toast.productId !== product.id),
+        { id: `${product.id}-${level}-${Date.now()}`, productId: product.id, level, title, body },
+      ]);
+      notifyAndOpen(title, body, `low-stock-${product.id}-${level}`, `/dashboard/products/${product.id}`);
+    }
+  }, [shopId, products, loading, t]);
+
+  useEffect(() => {
+    if (toasts.length === 0) return;
+    const timer = setTimeout(() => setToasts((current) => current.slice(1)), 8000);
+    return () => clearTimeout(timer);
+  }, [toasts]);
+
+  const requestPermission = useCallback(async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    try {
+      setPermission(await Notification.requestPermission());
+    } catch (cause) {
+      console.error("Could not request notification permission", cause);
+    }
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
+
+  return { toasts, dismissToast, permission, requestPermission };
 }
 
 export function useNewOrderNotifications(orders: CatalogOrder[], loading: boolean) {

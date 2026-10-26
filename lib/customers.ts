@@ -1,4 +1,4 @@
-import type { Customer } from "@/lib/types";
+import type { Customer, Sale } from "@/lib/types";
 
 /** Customer records are written by shop staff, so the limits here mirror
  * `firestore.rules` rather than the anonymous-visitor shape of `orders.ts`: the
@@ -141,4 +141,37 @@ export function collectTags(customers: Customer[]): { tag: string; count: number
   return [...counts]
     .map(([tag, count]) => ({ tag, count }))
     .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+}
+
+export interface FavoriteProduct {
+  productId: string;
+  name: string;
+  units: number;
+  spent: number;
+}
+
+/** What a customer keeps coming back for, from their standing sales only — the
+ * caller removes storno pairs first, because a reversed sale was never bought.
+ * Products are ranked by units, then by money, so a cheap item bought ten times
+ * outranks an expensive one bought once. */
+export function favoriteProducts(sales: Sale[], limit = 5): FavoriteProduct[] {
+  const byProduct = new Map<string, FavoriteProduct>();
+  for (const sale of sales) {
+    for (const line of sale.lines) {
+      if (!line.productId) continue;
+      const current = byProduct.get(line.productId) ?? {
+        productId: line.productId,
+        name: line.productName,
+        units: 0,
+        spent: 0,
+      };
+      // Sales arrive newest first, so the first name seen is the most recent one.
+      current.units += line.quantity;
+      current.spent += line.unitPrice * line.quantity;
+      byProduct.set(line.productId, current);
+    }
+  }
+  return [...byProduct.values()]
+    .sort((a, b) => b.units - a.units || b.spent - a.spent || a.name.localeCompare(b.name))
+    .slice(0, Math.max(0, limit));
 }

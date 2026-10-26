@@ -515,6 +515,7 @@ export function useOrders(shopId: string | undefined, pageSize = 100) {
           note: d.data().note ?? "",
           channel: d.data().channel ?? "other",
           status: d.data().status ?? "new",
+          fulfilledLineIndices: Array.isArray(d.data().fulfilledLineIndices) ? d.data().fulfilledLineIndices : [],
           saleId: d.data().saleId ?? "",
           createdAt: d.data().createdAt?.toDate() ?? null,
         }))

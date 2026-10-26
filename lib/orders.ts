@@ -93,3 +93,21 @@ export function normalizeOrderInput(input: OrderInput): OrderInput {
 export function orderTotal(lines: OrderLine[]) {
   return Math.round(lines.reduce((sum, line) => sum + (line.unitPrice ?? 0) * line.quantity, 0) * 100) / 100;
 }
+
+/** The shop may ship an order in several passes. Each pass names whole lines —
+ * a line is one product variant, so a partial quantity would need a different
+ * ledger shape — and this keeps the selection valid before any stock moves. */
+export function normalizeFulfillmentIndices(lineCount: number, indices: number[]): number[] {
+  if (!Number.isSafeInteger(lineCount) || lineCount <= 0) throw new Error("ORDER_LINES_INVALID");
+  if (!Array.isArray(indices) || indices.length === 0) throw new Error("ORDER_NO_LINES_SELECTED");
+  const unique = [...new Set(indices)];
+  if (unique.some((index) => !Number.isSafeInteger(index) || index < 0 || index >= lineCount)) {
+    throw new Error("ORDER_LINE_INVALID");
+  }
+  return unique.sort((a, b) => a - b);
+}
+
+export function outstandingLineIndices(lines: OrderLine[], fulfilledLineIndices: number[] = []): number[] {
+  const completed = new Set(fulfilledLineIndices.filter((index) => Number.isSafeInteger(index)));
+  return lines.map((_, index) => index).filter((index) => !completed.has(index));
+}

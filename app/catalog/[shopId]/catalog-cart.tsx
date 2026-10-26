@@ -13,6 +13,7 @@ import { placeCatalogOrder } from "@/lib/actions";
 import { catalogLink, MAX_QUANTITY } from "./catalog-store";
 import { itemImages } from "./catalog-card";
 import OrderChannels, { availableChannels } from "./order-channels";
+import { useDialogFocus } from "./use-dialog-focus";
 
 export interface ResolvedCartLine {
   item: CatalogItem;
@@ -37,6 +38,7 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
 }) {
   const { t } = useI18n();
   const intl = INTL_LOCALES[locale];
+  const dialogRef = useDialogFocus<HTMLElement>();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -118,7 +120,7 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
   return createPortal(
     <div className="cat-overlay cat-drawer-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog" aria-modal="true" aria-label={t("catalog.cart")}>
-      <aside className="cat-drawer">
+      <aside className="cat-drawer" ref={dialogRef} tabIndex={-1}>
         <header className="cat-drawer-head">
           <p className="cat-drawer-title">
             <ShoppingBag size={18} />
