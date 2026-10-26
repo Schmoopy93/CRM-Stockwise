@@ -1746,10 +1746,12 @@ async function demoCatalogFilters(page) {
     await sleep(800);
   }
 
-  // A lower bound above every price empties the grid; the empty state offers a
-  // one-click way back, which is worth showing on camera.
+  // A price band with no products empties the grid; the empty state offers a
+  // one-click way back, which is worth showing on camera. 5.000–6.000 has no
+  // hits in the demo shop, so the numbers stay believable.
   if ((await priceInputs.count()) >= 2) {
-    await typeInto(page, priceInputs.nth(0), "999999");
+    await typeInto(page, priceInputs.nth(0), "5000");
+    await typeInto(page, priceInputs.nth(1), "6000");
     const empty = page.locator(".cat-empty").first();
     await empty.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
     await bringIntoView(empty);

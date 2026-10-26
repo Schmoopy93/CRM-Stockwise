@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { BrowserMultiFormatReader, NotFoundException } from "@zxing/library";
 import { X, Camera } from "lucide-react";
 import { useI18n } from "@/lib/i18n-context";
@@ -42,7 +43,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     };
   }, []);
 
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
@@ -100,6 +101,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
