@@ -5,7 +5,7 @@ import {
   orderedPriceBounds,
   parsePriceInput,
   parseSortParam,
-} from "../app/catalog/[shopId]/catalog-filter.ts";
+} from "../lib/catalog-filter.ts";
 
 test("search ignores case, diacritics and word order", () => {
   assert.equal(matchesCatalogQuery("Čaj od nane", "caj"), true);

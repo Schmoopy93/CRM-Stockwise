@@ -116,5 +116,5 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
 export default async function PublicCatalogPage({ params }: Props) {
   const { shopId } = await params;
-  return <CatalogView shopId={shopId} />;
+  return <CatalogView key={shopId} shopId={shopId} />;
 }

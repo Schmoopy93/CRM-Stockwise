@@ -3,18 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { useCatalog, useShopMoney } from "@/lib/hooks";
+import { useCatalog, useCatalogLookup, usePriceTools } from "@/lib/hooks";
 import { INTL_LOCALES, useI18n } from "@/lib/i18n-context";
-import { channelsFromShop, EMPTY_CHANNELS } from "@/lib/catalog-channels";
-import { BASE_CURRENCY, isSupportedCurrency } from "@/lib/currency";
+import { EMPTY_CHANNELS } from "@/lib/catalog-channels";
+import { BASE_CURRENCY } from "@/lib/currency";
+import { catalogStockForVariant } from "@/lib/catalog-query";
 import { trackCatalogEvent } from "@/lib/actions";
 import { useAuth } from "@/lib/auth-context";
-import { CatalogItem, CatalogStatEvent, ShopCatalogSettings } from "@/lib/types";
-import { ArrowUpDown, Check, ChevronDown, LayoutGrid, MessageCircle, Package, Search, ShoppingBag, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { CatalogItem, CatalogStatEvent } from "@/lib/types";
+import { ArrowUpDown, Check, ChevronDown, LayoutGrid, Loader2, MessageCircle, Package, Search, ShoppingBag, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { setProductParam, useCart, useProductParam } from "./catalog-store";
-import CatalogCard, { catalogItemAvailable, catalogStockForVariant, fieldText } from "./catalog-card";
+import CatalogCard from "./catalog-card";
 import CatalogDetail from "./catalog-detail";
 import CatalogCart, { ResolvedCartLine } from "./catalog-cart";
 import OrderChannels, { availableChannels } from "./order-channels";
@@ -23,17 +22,19 @@ import CatalogCategorySheet from "./catalog-category-picker";
 import {
   CATALOG_PAGE_SIZE,
   CatalogSort,
-  matchesCatalogQuery,
   orderedPriceBounds,
   parsePriceInput,
   parseSortParam,
-} from "./catalog-filter";
+} from "@/lib/catalog-filter";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
-function comparePrice(a: CatalogItem, b: CatalogItem, direction: 1 | -1) {
-  if (a.salePrice === undefined) return b.salePrice === undefined ? 0 : 1;
-  if (b.salePrice === undefined) return -1;
-  return (a.salePrice - b.salePrice) * direction;
+function useDebouncedValue<T>(value: T, delay: number) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
 }
 
 export default function CatalogView({ shopId }: { shopId: string }) {
@@ -42,27 +43,12 @@ export default function CatalogView({ shopId }: { shopId: string }) {
   const isShopOwner = !authLoading && Boolean(user && profile?.shopId === shopId);
   const showCustomerActions = !authLoading && !isShopOwner;
   const intl = INTL_LOCALES[locale];
-  const [shop, setShop] = useState<ShopCatalogSettings | null>(null);
-  const [shopLoading, setShopLoading] = useState(true);
-  const { items, loading, error: catalogError } = useCatalog(shopId);
-  const prices = useShopMoney(shopId, intl);
-  const cart = useCart(shopId);
-  const productId = useProductParam();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [sort, setSort] = useState<CatalogSort>("name");
   const [inStockOnly, setInStockOnly] = useState(false);
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
-  const filterSignature = JSON.stringify([search, category, sort, inStockOnly, minPrice, maxPrice]);
-  // Changing any filter starts a fresh page; doing it during render avoids an
-  // extra pass that would briefly show the old batch.
-  const [shown, setShown] = useState(CATALOG_PAGE_SIZE);
-  const [shownFor, setShownFor] = useState(filterSignature);
-  if (shownFor !== filterSignature) {
-    setShownFor(filterSignature);
-    setShown(CATALOG_PAGE_SIZE);
-  }
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [filtersReady, setFiltersReady] = useState(false);
@@ -70,30 +56,42 @@ export default function CatalogView({ shopId }: { shopId: string }) {
   const [toast, setToast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  useEffect(() => {
-    let cancelled = false;
-    getDoc(doc(db, "shops", shopId))
-      .then((snap) => {
-        if (cancelled) return;
-        const data = snap.data();
-        if (!data) {
-          setShop(null);
-          return;
-        }
-        const currency = data.currency;
-        setShop({
-          name: data.name ?? "",
-          catalogEnabled: data.catalogEnabled === true,
-          channels: channelsFromShop(data),
-          logoUrl: data.catalogLogoUrl ?? "",
-          coverUrl: data.catalogCoverUrl ?? "",
-          currency: isSupportedCurrency(currency) ? currency : BASE_CURRENCY,
-        });
-      })
-      .catch(() => { if (!cancelled) setShop(null); })
-      .finally(() => { if (!cancelled) setShopLoading(false); });
-    return () => { cancelled = true; };
-  }, [shopId]);
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const debouncedMinPrice = useDebouncedValue(minPrice, 250);
+  const debouncedMaxPrice = useDebouncedValue(maxPrice, 250);
+  const filtersSettled = search === debouncedSearch
+    && minPrice === debouncedMinPrice
+    && maxPrice === debouncedMaxPrice;
+  const {
+    shop,
+    items,
+    loading,
+    loadingMore,
+    error: catalogError,
+    total,
+    catalogTotal,
+    baseTotal,
+    categories: categoryCounts,
+    hasPrices,
+    loadMore,
+  } = useCatalog(shopId, {
+    search: debouncedSearch,
+    category,
+    sort,
+    inStockOnly,
+    minPrice: debouncedMinPrice,
+    maxPrice: debouncedMaxPrice,
+  }, CATALOG_PAGE_SIZE, filtersReady && filtersSettled);
+  const prices = usePriceTools(shop?.currency ?? BASE_CURRENCY, intl);
+  const cart = useCart(shopId);
+  const productId = useProductParam();
+  const lookupIds = useMemo(() => {
+    const loaded = new Set(items.map((item) => item.id));
+    const wanted = [...cart.lines.map((line) => line.itemId), ...(productId ? [productId] : [])];
+    return Array.from(new Set(wanted)).filter((id) => !loaded.has(id));
+  }, [cart.lines, productId, items]);
+  const lookup = useCatalogLookup(shopId, lookupIds);
+  const shopLoading = !shop && (loading || !filtersReady);
 
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
@@ -177,64 +175,26 @@ export default function CatalogView({ shopId }: { shopId: string }) {
   const logoUrl = catalogEnabled ? shop?.logoUrl ?? "" : "";
   const coverUrl = catalogEnabled ? shop?.coverUrl ?? "" : "";
 
-  const visible = useMemo(() => items.filter((item) => !item.hidden), [items]);
-  const itemsById = useMemo(() => new Map(visible.map((item) => [item.id, item])), [visible]);
+  const itemsById = useMemo(() => {
+    const map = new Map(items.map((item) => [item.id, item]));
+    for (const item of lookup.items) if (!map.has(item.id)) map.set(item.id, item);
+    return map;
+  }, [items, lookup.items]);
+
+  const categories = useMemo(() => {
+    const counts = new Map(categoryCounts);
+    if (category !== "all" && !counts.has(category)) counts.set(category, 0);
+    const collator = new Intl.Collator(locale, { sensitivity: "base", numeric: true });
+    const ordered = Array.from(counts.entries()).sort(([a], [b]) => collator.compare(a, b));
+    return [["all", baseTotal] as const, ...ordered];
+  }, [categoryCounts, category, baseTotal, locale]);
 
   const parsedPriceMin = parsePriceInput(minPrice);
   const parsedPriceMax = parsePriceInput(maxPrice);
   const priceBounds = orderedPriceBounds(parsedPriceMin, parsedPriceMax);
-  const hasPrices = useMemo(() => visible.some((item) => item.salePrice !== undefined), [visible]);
   const priceFilterActive = hasPrices && (priceBounds.min !== undefined || priceBounds.max !== undefined);
-  const toCurrency = prices.toCurrency;
-
-  const searchableById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const item of visible) {
-      map.set(item.id, [
-        item.name,
-        item.category,
-        ...item.variants,
-        ...item.fields.flatMap((field) => {
-          const { label, value } = fieldText(field, locale, t);
-          return [label, value];
-        }),
-      ].join(" "));
-    }
-    return map;
-  }, [visible, locale, t]);
-
-  // Everything except the category itself: the sidebar counts stay truthful
-  // while a search, stock or price filter is active.
-  const base = useMemo(() => visible.filter((item) => {
-    if (!matchesCatalogQuery(searchableById.get(item.id) ?? "", search)) return false;
-    if (inStockOnly && !catalogItemAvailable(item)) return false;
-    if (priceFilterActive) {
-      if (item.salePrice === undefined) return false;
-      const price = toCurrency(item.salePrice);
-      if (priceBounds.min !== undefined && price < priceBounds.min) return false;
-      if (priceBounds.max !== undefined && price > priceBounds.max) return false;
-    }
-    return true;
-  }), [visible, searchableById, search, inStockOnly, priceFilterActive, priceBounds.min, priceBounds.max, toCurrency]);
-
-  const categories = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const item of base) if (item.category) counts.set(item.category, (counts.get(item.category) ?? 0) + 1);
-    if (category !== "all" && !counts.has(category)) counts.set(category, 0);
-    const collator = new Intl.Collator(locale, { sensitivity: "base", numeric: true });
-    const ordered = Array.from(counts.entries()).sort(([a], [b]) => collator.compare(a, b));
-    return [["all", base.length] as const, ...ordered];
-  }, [base, category, locale]);
-
-  const filtered = useMemo(() => {
-    const matches = category === "all" ? base : base.filter((item) => item.category === category);
-    if (sort === "priceAsc") return [...matches].sort((a, b) => comparePrice(a, b, 1));
-    if (sort === "priceDesc") return [...matches].sort((a, b) => comparePrice(a, b, -1));
-    return matches;
-  }, [base, category, sort]);
-
-  const displayedItems = filtered.slice(0, shown);
-  const remaining = Math.max(0, filtered.length - displayedItems.length);
+  const refreshing = loading && items.length > 0;
+  const remaining = Math.max(0, total - items.length);
   const activeCategoryCount = categories.find(([cat]) => cat === category)?.[1] ?? 0;
   const hasNonCategoryFilters = search.trim() !== "" || inStockOnly || minPrice.trim() !== "" || maxPrice.trim() !== "";
   const extraFilterCount = (inStockOnly ? 1 : 0) + (priceFilterActive ? 1 : 0);
@@ -309,7 +269,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
                     {catalogEnabled && (
                       <p className="cat-hero-sub">
                         <span className="cat-hero-dot" aria-hidden="true" />
-                        {t("catalog.itemCount", { n: visible.length })}
+                        {t("catalog.itemCount", { n: catalogTotal })}
                         {categories.length > 1 && <> · {categories.length - 1} {t("catalog.categoriesLabel").toLowerCase()}</>}
                       </p>
                     )}
@@ -341,7 +301,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           </div>
         </header>
 
-        {(shopLoading || loading) ? (
+        {(shopLoading || (loading && items.length === 0)) ? (
           <div className="cat-grid">
             {Array.from({ length: 8 }).map((_, i) => <div key={i} className="cat-skel" style={{ animationDelay: `${i * 70}ms` }} />)}
           </div>
@@ -372,7 +332,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
               <aside className="cat-sidebar" aria-label={t("catalog.categoriesLabel")}>
                 <div className="cat-sidebar-heading">
                   <span>{t("catalog.categoriesLabel")}</span>
-                  <span className="cat-sidebar-total">{visible.length}</span>
+                  <span className="cat-sidebar-total">{catalogTotal}</span>
                 </div>
                 <nav className="cat-category-list" aria-label={t("catalog.categoriesLabel")}>
                   {categories.map(([cat, count]) => {
@@ -407,7 +367,8 @@ export default function CatalogView({ shopId }: { shopId: string }) {
                 </div>
               </aside>
 
-              <section className="cat-results-area" aria-label={t("catalog.title")}>
+              <section className="cat-results-area" aria-label={t("catalog.title")}
+                aria-busy={refreshing || loadingMore || undefined} data-loading={refreshing || undefined}>
                 <div className="cat-toolbar">
                   <div className="cat-toolbar-row">
                     <div className="cat-search-wrap">
@@ -454,8 +415,8 @@ export default function CatalogView({ shopId }: { shopId: string }) {
                     )}
                     <span className="cat-results" aria-live="polite">
                       {remaining > 0
-                        ? t("catalog.showingCount", { shown: displayedItems.length, total: filtered.length })
-                        : t("catalog.itemCount", { n: filtered.length })}
+                        ? t("catalog.showingCount", { shown: items.length, total })
+                        : t("catalog.itemCount", { n: total })}
                     </span>
                     {(inStockOnly || priceFilterActive) && (
                       <div className="cat-filter-chips">
@@ -479,7 +440,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
                   </div>
                 </div>
 
-                {filtered.length === 0 ? (
+                {total === 0 ? (
                   <div className="cat-empty">
                     <Package size={30} strokeWidth={1.5} />
                     {category === "all" ? t("dashboard.noResults") : t("catalog.noCategoryResults", { category })}
@@ -499,7 +460,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
                 ) : (
                   <>
                     <div className="cat-grid">
-                      {displayedItems.map((item, index) => (
+                      {items.map((item, index) => (
                         <CatalogCard key={item.id} item={item} locale={locale} prices={prices} index={index}
                           canAddToCart={showCustomerActions}
                           onOpen={() => setProductParam(item.id)} onQuickAdd={() => quickAdd(item)} />
@@ -507,12 +468,12 @@ export default function CatalogView({ shopId }: { shopId: string }) {
                     </div>
                     {remaining > 0 && (
                       <div className="cat-more">
-                        <button type="button" className="cat-more-btn" onClick={() => setShown((value) => value + CATALOG_PAGE_SIZE)}>
-                          <ChevronDown size={16} />
+                        <button type="button" className="cat-more-btn" onClick={loadMore} disabled={loading || loadingMore} aria-busy={loadingMore || undefined}>
+                          {loadingMore ? <Loader2 size={16} className="cat-spin" /> : <ChevronDown size={16} />}
                           {t("catalog.showMore", { n: Math.min(CATALOG_PAGE_SIZE, remaining) })}
                         </button>
                         <span className="cat-more-count">
-                          {t("catalog.showingCount", { shown: displayedItems.length, total: filtered.length })}
+                          {t("catalog.showingCount", { shown: items.length, total })}
                         </span>
                       </div>
                     )}
@@ -597,7 +558,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           onClose={closeFilters}
           onClear={clearExtraFilters}
           canClear={extraFilterCount > 0}
-          resultCount={filtered.length}
+          resultCount={total}
           inStockOnly={inStockOnly}
           onToggleStock={toggleStock}
           showPrice={hasPrices}
@@ -804,6 +765,8 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           outline: 2px solid var(--shop-accent); outline-offset: 2px;
         }
         .cat-results-area { min-width: 0; }
+        .cat-results-area[data-loading] .cat-grid { opacity: 0.55; pointer-events: none; }
+        .cat-spin { animation: catSpin 0.9s linear infinite; }
 
         .cat-toolbar {
           position: sticky; top: 0; z-index: 30; margin: 0 0 1rem; padding: 0.8rem;

@@ -5,6 +5,7 @@ import { Images, Package, Plus } from "lucide-react";
 import { Locale, useI18n } from "@/lib/i18n-context";
 import type { PriceTools } from "@/lib/currency";
 import { CatalogField, CatalogItem } from "@/lib/types";
+import { catalogItemAvailable, catalogStockForVariant } from "@/lib/catalog-query";
 
 export function itemImages(item: CatalogItem) {
   return item.images.length > 0 ? item.images : item.imageUrl ? [item.imageUrl] : [];
@@ -13,19 +14,6 @@ export function itemImages(item: CatalogItem) {
 export function saleDiscount(item: CatalogItem) {
   if (item.salePrice === undefined || item.compareAtPrice === undefined || item.compareAtPrice <= item.salePrice) return 0;
   return Math.max(1, Math.round((1 - item.salePrice / item.compareAtPrice) * 100));
-}
-
-export function catalogStockForVariant(item: CatalogItem, index: number) {
-  if (item.stockQuantity === undefined) return 0;
-  if (item.variants.length === 0) return item.stockQuantity;
-  const variantId = item.variantIds?.[index];
-  return variantId ? item.variantStock?.[variantId] ?? 0 : 0;
-}
-
-export function catalogItemAvailable(item: CatalogItem) {
-  return item.variants.length > 0
-    ? item.variants.some((_, index) => catalogStockForVariant(item, index) > 0)
-    : (item.stockQuantity ?? 0) > 0;
 }
 
 export function fieldText(field: CatalogField, locale: Locale, t: (key: string) => string) {

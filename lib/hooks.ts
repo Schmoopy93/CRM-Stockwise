@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   doc,
@@ -17,6 +17,8 @@ import { db } from "@/lib/firebase";
 import { Product, ProductVariant, Sale, ShopCatalogSettings, StockEvent, Customer } from "@/lib/types";
 import { CatalogItem, CatalogOrder, CatalogStatsDay, ShopConversation } from "@/lib/types";
 import { channelsFromShop, EMPTY_CHANNELS } from "@/lib/catalog-channels";
+import type { CatalogSort } from "@/lib/catalog-filter";
+import type { CatalogPageResponse } from "@/lib/catalog-api";
 import {
   BASE_CURRENCY,
   convert,
@@ -59,9 +61,18 @@ export function useExchangeRates() {
  * reads one value from the database and prints it in whatever the shop trades
  * in. `toCurrency` does the conversion alone, for places that need the number
  * rather than a string — writing it onto a catalog order, for instance. */
+export function usePriceTools(currency: string, intlLocale: string): PriceTools {
+  const rates = useExchangeRates();
+  const toCurrency = useCallback((amount: number) => convert(amount, currency, rates), [currency, rates]);
+  const money = useCallback(
+    (amount: number, options?: MoneyFormatOptions) => formatMoney(toCurrency(amount), intlLocale, currency, options),
+    [intlLocale, currency, toCurrency]
+  );
+  return { currency, money, toCurrency };
+}
+
 export function useShopMoney(shopId: string | undefined, intlLocale: string): PriceTools {
   const [currency, setCurrency] = useState(BASE_CURRENCY);
-  const rates = useExchangeRates();
 
   useEffect(() => {
     if (!shopId) return;
@@ -76,13 +87,7 @@ export function useShopMoney(shopId: string | undefined, intlLocale: string): Pr
     return unsub;
   }, [shopId]);
 
-  const toCurrency = useCallback((amount: number) => convert(amount, currency, rates), [currency, rates]);
-  const money = useCallback(
-    (amount: number, options?: MoneyFormatOptions) => formatMoney(toCurrency(amount), intlLocale, currency, options),
-    [intlLocale, currency, toCurrency]
-  );
-
-  return { currency, money, toCurrency };
+  return usePriceTools(currency, intlLocale);
 }
 
 export function useShop(shopId: string | undefined): ShopCatalogSettings & { loading: boolean } {
@@ -110,57 +115,222 @@ export function useShop(shopId: string | undefined): ShopCatalogSettings & { loa
   return { ...shop, loading };
 }
 
-const NEW_PRODUCT_DAYS = 14;
-
-function readCatalogVariantStock(value: unknown): Record<string, number> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const stock: Record<string, number> = {};
-  for (const [id, quantity] of Object.entries(value)) {
-    if (typeof quantity !== "number" || !Number.isSafeInteger(quantity) || quantity < 0) return undefined;
-    stock[id] = quantity;
-  }
-  return stock;
+export interface CatalogQueryParams {
+  search?: string;
+  category?: string;
+  sort?: CatalogSort;
+  inStockOnly?: boolean;
+  minPrice?: string;
+  maxPrice?: string;
 }
 
-export function useCatalog(shopId: string | undefined) {
-  const [items, setItems] = useState<CatalogItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+interface CatalogState {
+  /** Request key the data below belongs to; "" until the first page settles. */
+  key: string;
+  shop: ShopCatalogSettings | null;
+  items: CatalogItem[];
+  total: number;
+  catalogTotal: number;
+  baseTotal: number;
+  categories: Array<[string, number]>;
+  hasPrices: boolean;
+  hasMore: boolean;
+  loadingMore: boolean;
+  error: boolean;
+}
+
+const EMPTY_CATALOG_STATE: CatalogState = {
+  key: "",
+  shop: null,
+  items: [],
+  total: 0,
+  catalogTotal: 0,
+  baseTotal: 0,
+  categories: [],
+  hasPrices: false,
+  hasMore: false,
+  loadingMore: false,
+  error: false,
+};
+
+function catalogApiUrl(shopId: string, params: CatalogQueryParams, page: number, pageSize: number) {
+  const url = new URL(`/api/catalog/${encodeURIComponent(shopId)}`, window.location.origin);
+  const search = params.search?.trim() ?? "";
+  const category = params.category ?? "all";
+  const sort = params.sort ?? "name";
+  if (search) url.searchParams.set("q", search);
+  if (category !== "all") url.searchParams.set("cat", category);
+  if (sort !== "name") url.searchParams.set("sort", sort);
+  if (params.inStockOnly) url.searchParams.set("stock", "1");
+  const min = params.minPrice?.trim() ?? "";
+  const max = params.maxPrice?.trim() ?? "";
+  if (min) url.searchParams.set("min", min);
+  if (max) url.searchParams.set("max", max);
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("pageSize", String(pageSize));
+  return url;
+}
+
+/** One cached page of the public catalog. The route handler reads Firestore at
+ * most once per minute and does search, filtering and paging on that snapshot,
+ * so a visit costs a small JSON payload instead of the whole collection. */
+export function useCatalog(
+  shopId: string | undefined,
+  params: CatalogQueryParams,
+  pageSize: number,
+  enabled = true
+) {
+  const [state, setState] = useState<CatalogState>(EMPTY_CATALOG_STATE);
+  const pageRef = useRef(0);
+  const keyRef = useRef("");
+  const loadController = useRef<AbortController | null>(null);
+  const key = useMemo(
+    () => JSON.stringify([
+      params.search?.trim() ?? "",
+      params.category ?? "all",
+      params.sort ?? "name",
+      params.inStockOnly === true,
+      params.minPrice?.trim() ?? "",
+      params.maxPrice?.trim() ?? "",
+      pageSize,
+    ]),
+    [params.search, params.category, params.sort, params.inStockOnly, params.minPrice, params.maxPrice, pageSize]
+  );
 
   useEffect(() => {
-    if (!shopId) return;
-    const q = query(collection(db, "shops", shopId, "catalog"), orderBy("name"));
-    const unsub = onSnapshot(q, (snap) => {
-      const newSince = Date.now() - NEW_PRODUCT_DAYS * 24 * 60 * 60 * 1000;
-      setItems(
-        snap.docs.map((d) => ({
-          id: d.id,
-          name: d.data().name ?? "",
-          category: d.data().category ?? "",
-          imageUrl: d.data().imageUrl ?? "",
-          images: Array.isArray(d.data().images) && d.data().images.length > 0 ? d.data().images : (d.data().imageUrl ? [d.data().imageUrl] : []),
-          salePrice: typeof d.data().salePrice === "number" ? d.data().salePrice : undefined,
-          compareAtPrice: typeof d.data().compareAtPrice === "number" ? d.data().compareAtPrice : undefined,
-          isNew: (d.data().createdAt?.toMillis?.() ?? 0) >= newSince,
-          variants: Array.isArray(d.data().variants) ? d.data().variants : [],
-          variantIds: Array.isArray(d.data().variantIds) ? d.data().variantIds : undefined,
-          stockQuantity: typeof d.data().stockQuantity === "number" ? d.data().stockQuantity : undefined,
-          variantStock: readCatalogVariantStock(d.data().variantStock),
-          fields: Array.isArray(d.data().fields) ? d.data().fields : [],
-          hidden: d.data().hidden === true,
-        }))
-      );
-      setError(false);
-      setLoading(false);
-    }, (snapshotError) => {
-      console.error("Failed to load public catalog", snapshotError);
-      setError(true);
-      setLoading(false);
-    });
-    return unsub;
-  }, [shopId]);
+    if (!shopId || !enabled) return;
+    keyRef.current = key;
+    pageRef.current = 0;
+    loadController.current?.abort();
+    const controller = new AbortController();
 
-  return { items, loading, error };
+    fetch(catalogApiUrl(shopId, params, 1, pageSize), { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`CATALOG_HTTP_${response.status}`);
+        return response.json() as Promise<CatalogPageResponse>;
+      })
+      .then((data) => {
+        if (controller.signal.aborted || keyRef.current !== key) return;
+        pageRef.current = 1;
+        setState({
+          key,
+          shop: data.shop,
+          items: data.items,
+          total: data.total,
+          catalogTotal: data.catalogTotal,
+          baseTotal: data.baseTotal,
+          categories: data.categories,
+          hasPrices: data.hasPrices,
+          hasMore: data.hasMore,
+          loadingMore: false,
+          error: false,
+        });
+      })
+      .catch((cause) => {
+        if (controller.signal.aborted || keyRef.current !== key) return;
+        console.error("Failed to load public catalog", cause);
+        setState((previous) => ({ ...previous, key, loadingMore: false, error: true }));
+      });
+
+    return () => {
+      controller.abort();
+      loadController.current?.abort();
+    };
+    // `params` is represented by `key`; using the object itself would restart
+    // the request on every render even when no filter changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopId, key, enabled, pageSize]);
+
+  const loading = !enabled || state.key !== key;
+
+  const loadMore = useCallback(() => {
+    if (!shopId || !enabled || loading || state.loadingMore || !state.hasMore) return;
+    const keyAtStart = key;
+    const nextPage = pageRef.current + 1;
+    loadController.current?.abort();
+    const controller = new AbortController();
+    loadController.current = controller;
+    setState((previous) => ({ ...previous, loadingMore: true }));
+
+    fetch(catalogApiUrl(shopId, params, nextPage, pageSize), { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`CATALOG_HTTP_${response.status}`);
+        return response.json() as Promise<CatalogPageResponse>;
+      })
+      .then((data) => {
+        if (controller.signal.aborted || keyRef.current !== keyAtStart) return;
+        pageRef.current = nextPage;
+        setState((previous) => {
+          const seen = new Set(previous.items.map((item) => item.id));
+          return {
+            ...previous,
+            items: [...previous.items, ...data.items.filter((item) => !seen.has(item.id))],
+            total: data.total,
+            catalogTotal: data.catalogTotal,
+            baseTotal: data.baseTotal,
+            categories: data.categories,
+            hasPrices: data.hasPrices,
+            hasMore: data.hasMore,
+            loadingMore: false,
+          };
+        });
+      })
+      .catch((cause) => {
+        if (controller.signal.aborted || keyRef.current !== keyAtStart) return;
+        console.error("Failed to load the next catalog page", cause);
+        setState((previous) => ({ ...previous, loadingMore: false }));
+      });
+  }, [shopId, enabled, loading, key, state.loadingMore, state.hasMore, params, pageSize]);
+
+  return { ...state, loading, error: state.error && state.key === key, loadMore };
+}
+
+/** Resolves products that are not on the current catalog page: an item opened
+ * from a shared link, or a cart saved before this visit. */
+export function useCatalogLookup(shopId: string | undefined, ids: string[]) {
+  const knownRef = useRef(new Map<string, CatalogItem>());
+  const [items, setItems] = useState<CatalogItem[]>([]);
+  const [resolvedKey, setResolvedKey] = useState("");
+  const idsKey = Array.from(new Set(ids.filter(Boolean))).sort().join(",");
+  const knownIds = new Set(items.map((item) => item.id));
+  const missingCount = shopId && idsKey
+    ? idsKey.split(",").filter((id) => !knownIds.has(id)).length
+    : 0;
+  const loading = missingCount > 0 && resolvedKey !== idsKey;
+
+  useEffect(() => {
+    if (!shopId || !idsKey) return;
+    const missingIds = idsKey.split(",").filter((id) => !knownRef.current.has(id));
+    if (missingIds.length === 0) return;
+    const controller = new AbortController();
+
+    const chunks: string[][] = [];
+    for (let index = 0; index < missingIds.length; index += 60) chunks.push(missingIds.slice(index, index + 60));
+    Promise.all(chunks.map(async (chunk) => {
+      const url = new URL(`/api/catalog/${encodeURIComponent(shopId)}`, window.location.origin);
+      url.searchParams.set("lookup", "1");
+      url.searchParams.set("ids", chunk.join(","));
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) return [];
+        return ((await response.json()) as CatalogPageResponse).extras;
+      } catch {
+        return [];
+      }
+    }))
+      .then((groups) => {
+        if (controller.signal.aborted) return;
+        for (const group of groups) for (const item of group) knownRef.current.set(item.id, item);
+        setItems(Array.from(knownRef.current.values()));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setResolvedKey(idsKey);
+      });
+
+    return () => controller.abort();
+  }, [shopId, idsKey]);
+
+  return { items, loading };
 }
 
 export function useProducts(shopId: string | undefined) {

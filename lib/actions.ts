@@ -35,6 +35,7 @@ import { normalizeFulfillmentIndices, normalizeOrderInput, newOrderCode, orderTo
 import { normalizeCustomer, type CustomerInput } from "@/lib/customers";
 import { getLocalizedOptionValue } from "@/lib/product-field-options";
 import { CatalogChannels } from "@/lib/catalog-channels";
+import { invalidateCatalogCache, invalidateCatalogCacheNow } from "@/lib/catalog-cache";
 import { BASE_CURRENCY, isSupportedCurrency, roundForCurrency } from "@/lib/currency";
 import { AppLocale, CatalogOrder, CatalogStatEvent, OrderStatus, Product, ProductCustomField, ProductVariant, Sale, SaleChannel, SaleLine } from "@/lib/types";
 
@@ -199,6 +200,7 @@ export async function updateCatalogSettings(shopId: string, settings: CatalogSet
       (batch) => batch.update(shopRef, { catalogEnabled: false, ...contactFields }),
       ...catalogDocs.docs.map((catalogDoc): BatchOperation => (batch) => batch.delete(catalogDoc.ref)),
     ]);
+    invalidateCatalogCache(shopId);
     return;
   }
 
@@ -234,6 +236,7 @@ export async function updateCatalogSettings(shopId: string, settings: CatalogSet
   });
   operations.push((batch) => batch.update(shopRef, { catalogEnabled: true, ...contactFields }));
   await commitInChunks(operations);
+  invalidateCatalogCache(shopId);
 }
 
 /** Uploads (or removes when `file` is null) the catalog logo or cover image. */
@@ -241,6 +244,7 @@ export async function setCatalogImage(shopId: string, kind: "logo" | "cover", fi
   const field = kind === "logo" ? "catalogLogoUrl" : "catalogCoverUrl";
   const url = file ? await uploadShopImage(file, shopId, kind) : null;
   await updateDoc(doc(db, "shops", shopId), { [field]: url ?? deleteField() });
+  invalidateCatalogCache(shopId);
 }
 
 /** Sets the currency the shop trades in. This only changes how prices are read
@@ -249,6 +253,9 @@ export async function setCatalogImage(shopId: string, kind: "logo" | "cover", fi
 export async function updateShopCurrency(shopId: string, currency: string) {
   if (!isSupportedCurrency(currency)) throw new Error("CURRENCY_INVALID");
   await updateDoc(doc(db, "shops", shopId), { currency });
+  // Public prices are converted into the shop currency by the server, so the
+  // switch has to reach the catalog immediately.
+  invalidateCatalogCache(shopId);
 }
 
 /** Best-effort, anonymous daily counter for the public catalog. */
@@ -395,6 +402,7 @@ async function fulfillOrderLinesInternal(
   // Costs are snapshotted from each product as its line is fulfilled, so a
   // later change to the product's purchase price cannot rewrite past profit.
   const costByProduct = new Map<string, number>();
+  let catalogPublished = false;
 
   for (const index of selected) {
     const line = lines[index];
@@ -438,6 +446,7 @@ async function fulfillOrderLinesInternal(
       tx.update(variantRef, { quantity: totals.variantQuantity, lastStockEventId: eventRef.id });
       tx.update(productRef, { totalQuantity: totals.productQuantity, lastStockEventId: eventRef.id });
       if (catalogSnap.exists()) {
+        catalogPublished = true;
         tx.update(catalogRef, {
           stockQuantity: totals.productQuantity,
           [`variantStock.${variantIds[index]}`]: totals.variantQuantity,
@@ -462,6 +471,8 @@ async function fulfillOrderLinesInternal(
       });
     });
   }
+
+  if (catalogPublished) invalidateCatalogCache(shopId);
 
   // A partial pass stops here: the shipped lines are already out of stock, but
   // the order is only turned into a sale once every line has left the shelf.
@@ -641,6 +652,7 @@ export async function saveProduct(
   const existingSnap = await getDocs(variantsCol);
   const existingVariants = new Map(existingSnap.docs.map((variantDoc) => [variantDoc.id, variantDoc]));
   let isNewProduct = false;
+  let catalogPublished = false;
 
   await runTransaction(db, async (tx) => {
     const [productSnap, shopSnap] = await Promise.all([
@@ -706,6 +718,7 @@ export async function saveProduct(
     }
 
     if (shopSnap.data()?.catalogEnabled === true) {
+      catalogPublished = true;
       tx.set(
         doc(db, "shops", shopId, "catalog", id),
         buildCatalogDoc(
@@ -726,6 +739,7 @@ export async function saveProduct(
       );
     }
   });
+  if (catalogPublished) invalidateCatalogCache(shopId);
   return id;
 }
 
@@ -746,6 +760,7 @@ export async function deleteProduct(shopId: string, productId: string) {
   batch.delete(productRef);
   batch.delete(doc(db, "shops", shopId, "catalog", productId));
   await batch.commit();
+  invalidateCatalogCache(shopId);
 }
 
 // ─── Categories ──────────────────────────────────────────────────────────────
@@ -778,6 +793,7 @@ export async function renameCategory(shopId: string, oldName: string, newName: s
     }
   }
   await commitInChunks(operations);
+  if (catalogEnabled) invalidateCatalogCache(shopId);
 }
 
 // ─── Stock ───────────────────────────────────────────────────────────────────
@@ -832,6 +848,7 @@ export async function adjustStock(
   const productRef = doc(db, "shops", shopId, "products", productId);
   const variantRef = doc(productRef, "variants", variant.id);
   const eventRef = doc(collection(db, "shops", shopId, "stockEvents"));
+  let catalogPublished = false;
 
   await runTransaction(db, async (tx) => {
     const variantSnap = await tx.get(variantRef);
@@ -848,6 +865,7 @@ export async function adjustStock(
     tx.update(variantRef, { quantity: next.variantQuantity, lastStockEventId: eventRef.id });
     tx.update(productRef, { totalQuantity: next.productQuantity, lastStockEventId: eventRef.id, updatedAt: serverTimestamp() });
     if (catalogSnap.exists()) {
+      catalogPublished = true;
       tx.update(catalogRef, {
         stockQuantity: next.productQuantity,
         [`variantStock.${variant.id}`]: next.variantQuantity,
@@ -865,6 +883,7 @@ export async function adjustStock(
       createdAt: serverTimestamp(),
     });
   });
+  if (catalogPublished) invalidateCatalogCache(shopId);
 }
 
 /** Each receipt line is atomic. Completed lines are returned on partial
@@ -1171,6 +1190,7 @@ export async function deleteShopAccount() {
   );
 
   await deleteDoc(doc(db, "shops", shopId));
+  await invalidateCatalogCacheNow(shopId);
   await deleteDoc(doc(db, "users", user.uid));
   await deleteSignedInUser(user);
 }
