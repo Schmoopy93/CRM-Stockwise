@@ -18,8 +18,10 @@
     "test:orders": "node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/orders.test.ts",
     "test:alerts": "node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/stock-alerts.test.ts",
     "test:catalog": "node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/catalog-filter.test.ts tests/catalog-query.test.ts",
+    "test:monitor": "node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/client-errors.test.ts",
     "test:rules": "cross-env FIREBASE_EMULATORS_PATH=./node_modules/.cache/firebase-emulators firebase emulators:exec --project demo-inventory-crm --only firestore,storage \"node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/firestore.rules.test.ts\"",
-    "test": "npm run test:stock && npm run test:import && npm run test:currency && npm run test:ai && npm run test:menu && npm run test:customers && npm run test:orders && npm run test:alerts && npm run test:catalog && npm run test:rules"
+    "test:order-api": "cross-env FIREBASE_EMULATORS_PATH=./node_modules/.cache/firebase-emulators NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-inventory-crm firebase emulators:exec --project demo-inventory-crm --only firestore \"node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/next-alias-register.mjs tests/order-api.test.mjs\"",
+    "test": "npm run test:stock && npm run test:import && npm run test:currency && npm run test:ai && npm run test:menu && npm run test:customers && npm run test:orders && npm run test:alerts && npm run test:catalog && npm run test:monitor && npm run test:rules && npm run test:order-api"
   },
   "dependencies": {
     "@zxing/library": "^0.21.3",
@@ -28,6 +30,7 @@
     "country-flag-icons": "^1.6.20",
     "emoji-flags": "^1.3.0",
     "firebase": "^12.19.0",
+    "firebase-admin": "^14.5.0",
     "lucide-react": "^1.48.0",
     "next": "16.3.6",
     "react": "19.2.8",

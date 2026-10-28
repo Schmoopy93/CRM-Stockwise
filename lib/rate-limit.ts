@@ -1,8 +1,10 @@
 import { getApps, initializeApp } from "firebase/app";
 import { doc, getFirestore, runTransaction, Timestamp, type Firestore } from "firebase/firestore";
+import { Timestamp as AdminTimestamp, type Firestore as AdminFirestore } from "firebase-admin/firestore";
+import { adminDb } from "./firebase-admin.ts";
 
 /**
- * Shared rate limiting for the AI routes.
+ * Shared rate limiting for the AI and order routes.
  *
  * The limiter state lives in Firestore so every serverless instance shares the
  * same budget — an in-process Map only ever limits the single instance that
@@ -10,6 +12,11 @@ import { doc, getFirestore, runTransaction, Timestamp, type Firestore } from "fi
  * in-process Map is kept only as a fallback for when Firestore is unreachable
  * (rules not deployed yet, local emulator off), so a Firestore outage degrades
  * the limit instead of removing it.
+ *
+ * The Admin SDK is preferred when configured: the client SDK speaks to
+ * Firestore as an anonymous visitor, which stops working once App Check is
+ * enforced for Firestore. The client path stays for local development, where
+ * no service account exists.
  */
 
 /** Built on first use rather than at import time: the rules test suite imports
@@ -63,27 +70,52 @@ async function keyToDocId(key: string) {
 
 /**
  * Counts one call against `key` and reports whether it is within budget.
- * Returns `true` when the call is allowed.
+ * Returns `true` when the call is allowed. `database` overrides the client SDK
+ * instance, which the emulator-backed tests rely on.
  */
-export async function consumeRateLimit(key: string, limit: number, database: Firestore = sharedFirestore()): Promise<boolean> {
+export async function consumeRateLimit(key: string, limit: number, database?: Firestore): Promise<boolean> {
   const now = Date.now();
+  const docId = await keyToDocId(key);
+  const admin = database ? null : adminDb();
   try {
-    const ref = doc(database, "rateLimits", await keyToDocId(key));
-    return await runTransaction(database, async (transaction) => {
-      const snap = await transaction.get(ref);
-      const data = snap.data() ?? {};
-      const windowStart = data.windowStart instanceof Timestamp ? data.windowStart.toMillis() : 0;
-      if (now - windowStart >= WINDOW_MS || windowStart === 0) {
-        transaction.set(ref, { windowStart: Timestamp.fromMillis(now), count: 1 });
-        return true;
-      }
-      const count = typeof data.count === "number" ? data.count : 0;
-      if (count >= limit) return false;
-      transaction.update(ref, { count: count + 1 });
-      return true;
-    });
+    if (admin) return await consumeAdmin(admin, docId, limit, now);
+    return await consumeClient(database ?? sharedFirestore(), docId, limit, now);
   } catch (cause) {
     console.error("Rate limit store unavailable, using in-process fallback:", cause);
     return consumeFallback(key, limit, now);
   }
+}
+
+async function consumeAdmin(database: AdminFirestore, docId: string, limit: number, now: number) {
+  const ref = database.collection("rateLimits").doc(docId);
+  return database.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    const data = snap.data() ?? {};
+    const windowStart = data.windowStart instanceof AdminTimestamp ? data.windowStart.toMillis() : 0;
+    if (now - windowStart >= WINDOW_MS || windowStart === 0) {
+      transaction.set(ref, { windowStart: AdminTimestamp.fromMillis(now), count: 1 });
+      return true;
+    }
+    const count = typeof data.count === "number" ? data.count : 0;
+    if (count >= limit) return false;
+    transaction.update(ref, { count: count + 1 });
+    return true;
+  });
+}
+
+async function consumeClient(database: Firestore, docId: string, limit: number, now: number) {
+  const ref = doc(database, "rateLimits", docId);
+  return runTransaction(database, async (transaction) => {
+    const snap = await transaction.get(ref);
+    const data = snap.data() ?? {};
+    const windowStart = data.windowStart instanceof Timestamp ? data.windowStart.toMillis() : 0;
+    if (now - windowStart >= WINDOW_MS || windowStart === 0) {
+      transaction.set(ref, { windowStart: Timestamp.fromMillis(now), count: 1 });
+      return true;
+    }
+    const count = typeof data.count === "number" ? data.count : 0;
+    if (count >= limit) return false;
+    transaction.update(ref, { count: count + 1 });
+    return true;
+  });
 }

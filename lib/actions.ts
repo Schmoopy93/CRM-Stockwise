@@ -264,25 +264,66 @@ export function trackCatalogEvent(shopId: string, event: CatalogStatEvent) {
   setDoc(doc(db, "shops", shopId, "catalogStats", day), { [event]: increment(1) }, { merge: true }).catch(() => undefined);
 }
 
-/** Records a catalog order so the shop can confirm it and fulfill it. Anonymous
- * by design — customers have no account — and stock moves only when a member
- * fulfills the order through the stock ledger. Returns the human-quotable order code.
+/** Places a catalog order through the server, which re-reads the product from
+ * the shop's own catalog and is the only writer of `orders` documents.
  *
  * `input` carries the prices the customer actually saw, already converted into
- * the shop's chosen currency, so the order is stored in the currency it was
- * quoted in. Recording it that way means a later change of the shop currency
- * cannot restate what was agreed, and the unit prices still add up to the total
- * the shop reads back. */
-export async function placeCatalogOrder(shopId: string, input: OrderInput, currency: string = BASE_CURRENCY) {
+ * the shop's chosen currency. The server compares them and stores its own
+ * freshly converted figures, so the order is recorded in the currency it was
+ * quoted in and a later change of the shop currency cannot restate it.
+ *
+ * `idempotencyKey` is stable for one checkout attempt: a retried request (a
+ * dropped response, a double click) returns the order created the first time
+ * instead of placing a second one. */
+export async function placeCatalogOrder(
+  shopId: string,
+  input: OrderInput,
+  currency: string = BASE_CURRENCY,
+  idempotencyKey = ""
+) {
+  const response = await fetch(`/api/catalog/${encodeURIComponent(shopId)}/orders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      idempotencyKey,
+      currency,
+      lines: input.lines.map((line) => ({
+        productId: line.productId,
+        ...(line.variantId ? { variantId: line.variantId } : {}),
+        quantity: line.quantity,
+        unitPrice: line.unitPrice ?? 0,
+      })),
+      customerName: input.customerName,
+      customerContact: input.customerContact,
+      customerEmail: input.customerEmail,
+      customerAddress: input.customerAddress,
+      customerCity: input.customerCity,
+      note: input.note,
+    }),
+  });
+  const body = await response.json().catch(() => null) as { code?: unknown; error?: unknown } | null;
+  if (!response.ok || typeof body?.code !== "string") {
+    const error = typeof body?.error === "string" ? body.error : "ORDER_FAILED";
+    // Local development has no service account, so the server route cannot
+    // write. The un-hardened direct write keeps the demo working until
+    // FIREBASE_SERVICE_ACCOUNT is configured (production never reaches this).
+    if (error === "ORDER_UNAVAILABLE" && process.env.NODE_ENV !== "production") {
+      return writeCatalogOrderDirectly(shopId, input, currency);
+    }
+    throw new Error(error);
+  }
+  return body.code;
+}
+
+/** Development-only path, used when the server has no Admin credentials. */
+async function writeCatalogOrderDirectly(shopId: string, input: OrderInput, currency: string) {
   if (!await isCatalogEnabled(shopId)) throw new Error("CATALOG_DISABLED");
   const order = normalizeOrderInput(input);
   const quotedIn = isSupportedCurrency(currency) ? currency : BASE_CURRENCY;
-
   const total = roundForCurrency(orderTotal(order.lines), quotedIn);
   if (!Number.isFinite(total) || total > 100_000_000) throw new Error("VALUE_OUT_OF_RANGE");
   const code = newOrderCode();
-  const ref = doc(collection(db, "shops", shopId, "orders"));
-  await setDoc(ref, {
+  await setDoc(doc(collection(db, "shops", shopId, "orders")), {
     code,
     lines: order.lines,
     total,

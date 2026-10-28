@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { revalidateTag } from "next/cache";
 import { catalogCacheTag } from "@/lib/catalog-api";
+import { adminDb } from "@/lib/firebase-admin";
 import { bearerToken, verifyFirebaseToken } from "@/lib/firebase-token";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
@@ -9,10 +10,18 @@ function json(body: { revalidated: true } | { error: string }, status = 200) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-/** Reads the caller's own profile document with the caller's own token, so the
- * "a user may read their own profile" rule is what decides access here. Someone
- * signed in to another shop gets that shop's id back and is turned away. */
+/** Resolves the caller's shop. The token has already been verified, so the
+ * Admin read answers only for the user it was verified as. Without a service
+ * account this falls back to reading the caller's own profile with the caller's
+ * own token — the "a user may read their own profile" rule decides access. */
 async function memberShopId(token: string, uid: string) {
+  const admin = adminDb();
+  if (admin) {
+    const snapshot = await admin.collection("users").doc(uid).get();
+    const shopId = snapshot.data()?.shopId;
+    return typeof shopId === "string" ? shopId : null;
+  }
+
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
   if (!projectId || !apiKey) return null;

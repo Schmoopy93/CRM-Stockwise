@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { createPortal } from "react-dom";
@@ -48,6 +48,9 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
   const [placedCode, setPlacedCode] = useState("");
   const [placedMessage, setPlacedMessage] = useState("");
   const [placeError, setPlaceError] = useState("");
+  // One key per checkout attempt, reused on retry so a dropped response cannot
+  // become a second order.
+  const attempt = useRef<{ signature: string; key: string } | null>(null);
   const channelList = availableChannels(channels);
   const priced = lines.every((line) => line.item.salePrice !== undefined);
   const stockAvailable = lines.every((line) => line.availableQuantity > 0 && line.quantity <= line.availableQuantity);
@@ -64,6 +67,10 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
   async function place() {
     if (placing || !name.trim() || !email.trim() || !phone.trim() || !address.trim() || !city.trim() || !priced || !stockAvailable || lines.length === 0) return;
     setPlacing(true); setPlaceError("");
+    const signature = lines.map((line) => `${line.item.id}/${line.variantId ?? ""}/${line.quantity}`).join("|");
+    const previous = attempt.current;
+    const idempotencyKey = previous && previous.signature === signature ? previous.key : crypto.randomUUID();
+    attempt.current = { signature, key: idempotencyKey };
     try {
       // Sent in the currency the customer was quoted, and tagged with it, so the
       // shop reads back the same figure the customer agreed to.
@@ -88,7 +95,8 @@ export default function CatalogCart({ lines, locale, prices, shopId, channels, o
         customerCity: city,
         note: "",
         channel: "catalog",
-      }, prices.currency);
+      }, prices.currency, idempotencyKey);
+      attempt.current = null;
       setPlacedMessage([
         baseMessage,
         `${t("catalog.orderCodeLabel")}: ${code}`,

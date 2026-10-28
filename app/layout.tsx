@@ -6,6 +6,7 @@ import { I18nProvider } from "@/lib/i18n-context";
 import { ThemeProvider } from "@/lib/theme-context";
 import { BASE_URL, buildMetadata, localeFromHeaders, seoCopy } from "@/lib/seo";
 import { CookieNotice } from "@/components/CookieNotice";
+import { ErrorReporter } from "@/components/ErrorReporter";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext", "cyrillic"],
@@ -65,6 +66,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <I18nProvider>
             <AuthProvider>{children}</AuthProvider>
             <CookieNotice />
+            <ErrorReporter />
           </I18nProvider>
         </ThemeProvider>
       </body>

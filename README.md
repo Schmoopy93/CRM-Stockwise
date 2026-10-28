@@ -202,6 +202,16 @@ npm run start
 6. Uključite email-link prijavu: **Authentication → Sign-in method → Email/Password → Email link (passwordless sign-in)**.
 7. U Cloudinary-ju po želji napravite upload preset za fotografije. Ograničite format i veličinu datoteka prema svojim potrebama.
 
+### Serverski pristup (Admin SDK)
+
+Javna porudžbina, keš javnog kataloga, provera članstva radnje i rate limit rade kroz Firebase Admin SDK na serveru. Klijentske biblioteke i dalje koriste web konfiguraciju, ali serverske rute ne zavise od anonimnih Firestore čitanja.
+
+1. U **Project settings → Service accounts** izaberite **Generate new private key**.
+2. JSON fajl čuvajte van repozitorijuma. Na hostingu ga unesite kao `FIREBASE_SERVICE_ACCOUNT` (JSON ili base64-encoded JSON), ili razložite na `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL` i `FIREBASE_PRIVATE_KEY`. Vrednost mora biti u **jednom redu**: Next učitava samo prvi red višelinijske vrednosti, pa prettified JSON stigne kao `{` i Admin SDK ostane nedostupan.
+3. Lokalno ključ nije obavezan: porudžbina tada koristi klijentski rezervni put, a katalog se čita javnim REST pozivima. Produkcija bez ključa vraća `ORDER_UNAVAILABLE` za porudžbine.
+
+Admin ključ je serverska tajna. Nikada ga ne stavljajte u promenljive sa prefiksom `NEXT_PUBLIC_`.
+
 ### Email link za kupce
 
 Firebase šalje link za prijavu kupcu. Kupac koristi istu email adresu kojom je zatražio prijavu, a aplikacija vraća korisnika na nalog kataloga. Predložak email-a može se menjati u **Authentication → Templates → Email link sign-in**. Ostavite Firebase `%LINK%` placeholder u poruci.
@@ -222,8 +232,16 @@ Primer vrednosti nalazi se u `.env.local.example`. Taj fajl sadrži samo placeho
 | `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Da | Firebase Storage bucket |
 | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Da | Firebase messaging sender ID |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | Da | Firebase Web app ID |
+| `FIREBASE_SERVICE_ACCOUNT` | Za porudžbine u produkciji | JSON servisnog naloga (ili base64 JSON) za Admin SDK: javna porudžbina, keš kataloga, rate limit |
+| `FIREBASE_PROJECT_ID` | alternativa | ID projekta ako se Admin nalog zadaje kroz tri odvojene promenljive |
+| `FIREBASE_CLIENT_EMAIL` | alternativa | Email servisnog naloga uz `FIREBASE_PRIVATE_KEY` |
+| `FIREBASE_PRIVATE_KEY` | alternativa | Privatni ključ servisnog naloga (`\n` ostaje escapovan) |
 | `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | Za Cloudinary slike | Cloudinary cloud name |
 | `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Za Cloudinary slike | Upload preset za otpremanje slika |
+| `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` | Za App Check | reCAPTCHA v3 site key za App Check na klijentu |
+| `NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN` | Ne | Fiksni debug token za lokalni razvoj (registruje se u App Check → Manage debug tokens) |
+| `NEXT_PUBLIC_LEMON_SQUEEZY_CHECKOUT_URL` | Za pretplatu | Checkout link iz Lemon Squeezy Dashboard-a |
+| `LEMON_SQUEEZY_WEBHOOK_SECRET` | Za pretplatu | Signing secret webhook-a pretplate |
 | `GEMINI_API_KEY` | Ne | Omogućava AI funkcije; ima prednost ako je podešen i OpenAI |
 | `GEMINI_MODEL` | Ne | Model za Gemini; koristi se podrazumevani model ako nije naveden |
 | `OPENAI_API_KEY` | Ne | Rezervni AI provajder ako Gemini ključ nije podešen |
@@ -260,7 +278,11 @@ npm run test:ai
 npm run test:menu
 npm run test:customers
 npm run test:orders
+npm run test:alerts
+npm run test:catalog
+npm run test:monitor
 npm run test:rules
+npm run test:order-api
 ```
 
 Provera koda:
@@ -279,6 +301,10 @@ Za testove Firebase pravila potrebna je Java jer Firebase Emulator Suite pokreć
 - Podaci radnje su odvojeni po `shopId`. Lični podaci kupaca i privatne poruke nisu deo javnog kataloga.
 - Kupac može pristupiti samo sopstvenim porudžbinama i razgovorima uz potvrđenu email adresu.
 - Količine lagera ne menjaju se proizvoljnim upisom; prijemi, prodaje i isporuke prolaze kroz proverene akcije i evidenciju događaja.
+- Porudžbinu iz javnog kataloga prima isključivo serverska ruta `/api/catalog/{shopId}/orders`. Ruta ponovo čita katalog sa Admin kredencijalima, proverava cenu, dostupnost i varijantu pre upisa, ograničava broj pokušaja po IP-ju i email-u i upisuje porudžbinu sa idempotentnim ID-jem. Firestore pravila zato odbijaju kreiranje porudžbine iz pregledača (`allow create: if false`); bez `FIREBASE_SERVICE_ACCOUNT` ruta vraća `ORDER_UNAVAILABLE`, a lokalni razvoj bez Admin naloga koristi klijentski rezervni put.
+- **Redosled objave:** prvo podesite `FIREBASE_SERVICE_ACCOUNT` na hostingu i proverite da porudžbina prolazi, pa tek onda objavite `firestore.rules`. Obrnut redosled gasi kreiranje porudžbina u produkciji.
+- Nepredviđene greške u pregledaču prikazuju lokalizovanu stranicu sa ponovnim pokušajem. U produkciji se greška šalje na `/api/monitor`, koji je upisuje kao jednu JSON liniju u serverski log (bez spoljnog servisa i bez kolačića); upitni parametri se uklanjaju pre upisa, a broj prijava po IP-ju je ograničen.
+- App Check (reCAPTCHA v3) štiti klijentske pozive. Server-side čitanja (katalog, članstvo radnje, rate limit) idu kroz Admin SDK, koji App Check ne proverava, pa se u Firebase Console može uključiti **Firestore → App Check → Enforce** bez prekida serverskih ruta. Proverite emulator i preview pre uključivanja prinude; za lokalni razvoj registrujte debug token.
 - Firebase Admin privatne ključeve, AI ključeve i druge tajne držite van repozitorijuma. Ne delite ih kroz javne issue-je, screenshot-ove ili klijentski bundle.
 - Posle izmene pravila ili indeksa, prvo ih proverite u emulatoru, a zatim ih ciljano objavite na odgovarajući Firebase projekat.
 

@@ -248,7 +248,7 @@ test("anonymous visitors can only bump one catalog counter by one while the cata
   )));
 });
 
-test("customers can place catalog orders but members own the lifecycle", async () => {
+test("catalog orders are server-only but members own the lifecycle", async () => {
   const visitorDb = firestoreFor();
   const staffDb = firestoreFor("staff-a");
   // `currency` is part of the order shape: an order keeps the currency it was
@@ -256,35 +256,26 @@ test("customers can place catalog orders but members own the lifecycle", async (
   const order = { code: "K7M2QP", total: 20, currency: "EUR", customerName: "Ana", customerContact: "@ana", customerEmail: "ana@example.com", customerAddress: "Knez Mihailova 1", customerCity: "Beograd", note: "", channel: "instagram", createdAt: serverTimestamp() };
   const line = { productId, variantId, productName: "Jacket", variantLabel: "M", quantity: 1, unitPrice: 20, baseUnitPrice: 20 };
 
-  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o1"), { ...order, lines: [], status: "new" }));
-  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o2"), { ...order, lines: [line], status: "confirmed" }));
-  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o3"), { ...order, lines: [line], status: "new", costPrice: 3 }));
-  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o4"), { ...order, code: "bad-code", lines: [line], status: "new" }));
-  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o6"), { ...order, customerCity: "", lines: [line], status: "new" }));
-  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o7"), { ...order, customerEmail: "invalid", lines: [line], status: "new" }));
-
   await env.withSecurityRulesDisabled(async (context) => {
     await updateDoc(doc(context.firestore(), "shops", shopId), { catalogEnabled: true });
   });
-  await assertSucceeds(setDoc(doc(visitorDb, "shops", shopId, "orders", "o5"), { ...order, lines: [line], status: "new" }));
 
-  // The currency must be a real three-letter code. The rule pins the *shape*,
-  // which is all it can check — whether a code is one the shop can pick lives in
-  // the picker, not here. It is required so every order says what it was quoted in.
-  await assertSucceeds(setDoc(doc(visitorDb, "shops", shopId, "orders", "o6"), { ...order, currency: "RSD", lines: [line], status: "new" }));
-  await assertSucceeds(setDoc(doc(visitorDb, "shops", shopId, "orders", "catalog-order"), {
+  // The order API re-reads prices from the catalog and writes with admin
+  // credentials. If a browser could write the same document it could also
+  // invent the price, so every client create is refused — enabled catalog or not.
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o5"), { ...order, lines: [line], status: "new" }));
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "catalog-order"), {
     ...order,
     channel: "catalog",
     lines: [{ ...line, variantId: "variant-a", baseUnitPrice: 20 }],
     status: "new",
   }));
-  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o7"), { ...order, currency: "rsd", lines: [line], status: "new" }));
-  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o8"), { ...order, currency: "RS", lines: [line], status: "new" }));
-  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o9"), { ...order, currency: 117, lines: [line], status: "new" }));
-  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o11"), { ...order, currency: "DINARS", lines: [line], status: "new" }));
-  const withoutCurrency: Record<string, unknown> = { ...order };
-  delete withoutCurrency.currency;
-  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o10"), { ...withoutCurrency, lines: [line], status: "new" }));
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o2"), { ...order, lines: [line], status: "confirmed" }));
+  await assertFails(setDoc(doc(visitorDb, "shops", shopId, "orders", "o3"), { ...order, lines: [line], status: "new", costPrice: 3 }));
+
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "shops", shopId, "orders", "o5"), { ...order, lines: [line], status: "new" });
+  });
 
   await assertFails(getDoc(doc(visitorDb, "shops", shopId, "orders", "o5")));
   await assertSucceeds(getDoc(doc(staffDb, "shops", shopId, "orders", "o5")));
@@ -802,9 +793,12 @@ test("catalog managers can edit settings while shop members retain product catal
   }));
 });
 
-test("products with positive stock cannot be deleted", async () => {
-  const db = firestoreFor("owner-a");
+test("staff cannot delete a product that still carries stock", async () => {
+  const db = firestoreFor("staff-a");
   await assertFails(deleteDoc(doc(db, "shops", shopId, "products", productId)));
+  // The owner override exists for the shop wipe, which clears stock still on
+  // the shelf, so the same delete succeeds for the owner.
+  await assertSucceeds(deleteDoc(doc(firestoreFor("owner-a"), "shops", shopId, "products", productId)));
 });
 
 test("members cannot bypass the stock ledger with a direct quantity edit", async () => {
