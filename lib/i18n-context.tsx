@@ -23,7 +23,7 @@ export const LOCALE_LABELS: Record<Locale, string> = {
 };
 
 export const INTL_LOCALES: Record<Locale, string> = {
-  sr: "sr-RS",
+  sr: "sr-Latn-RS",
   en: "en-US",
   ru: "ru-RU",
   de: "de-DE",

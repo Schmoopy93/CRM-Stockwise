@@ -11,7 +11,7 @@ import { catalogStockForVariant } from "@/lib/catalog-query";
 import { trackCatalogEvent } from "@/lib/actions";
 import { useAuth } from "@/lib/auth-context";
 import { CatalogItem, CatalogStatEvent } from "@/lib/types";
-import { ArrowUpDown, Check, ChevronDown, LayoutGrid, Loader2, MessageCircle, Package, Search, ShoppingBag, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { Check, ChevronDown, LayoutGrid, Loader2, MessageCircle, Package, Search, ShoppingBag, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { setProductParam, useCart, useProductParam } from "./catalog-store";
 import CatalogCard from "./catalog-card";
 import CatalogDetail from "./catalog-detail";
@@ -27,6 +27,12 @@ import {
   parseSortParam,
 } from "@/lib/catalog-filter";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+
+const SORT_OPTIONS: { value: CatalogSort; label: string }[] = [
+  { value: "name", label: "catalog.sortName" },
+  { value: "priceAsc", label: "catalog.sortPriceAsc" },
+  { value: "priceDesc", label: "catalog.sortPriceDesc" },
+];
 
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debounced, setDebounced] = useState(value);
@@ -260,7 +266,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
               <div className="cat-hero-logo" aria-hidden="true">
                 {logoUrl ? <Image src={logoUrl} alt="" fill sizes="80px" quality={90} style={{ objectFit: "cover" }} /> : initials}
               </div>
-              <div style={{ minWidth: 0 }}>
+              <div className="cat-hero-id">
                 {shopLoading ? (
                   <div className="cat-hero-skel" />
                 ) : (
@@ -270,7 +276,6 @@ export default function CatalogView({ shopId }: { shopId: string }) {
                       <p className="cat-hero-sub">
                         <span className="cat-hero-dot" aria-hidden="true" />
                         {t("catalog.itemCount", { n: catalogTotal })}
-                        {categories.length > 1 && <> · {categories.length - 1} {t("catalog.categoriesLabel").toLowerCase()}</>}
                       </p>
                     )}
                   </>
@@ -278,27 +283,25 @@ export default function CatalogView({ shopId }: { shopId: string }) {
               </div>
             </div>
             {!shopLoading && catalogEnabled && (
-              <div className="cat-hero-contact">
+              <div className="cat-hero-actions">
                 <div className="cat-hero-tools">
                   <ThemeSwitcher className="cat-theme-toggle" lightLabel={t("theme.switchToLight")} darkLabel={t("theme.switchToDark")} />
                 </div>
                 {showCustomerActions && (
-                  <>
-                    <Link href={`/catalog/${shopId}/account#shop-chat`} className="cat-ask-shop">
-                      <MessageCircle size={15} />
-                      {t("chat.askBeforeOrder")}
-                    </Link>
-                    {hasChannels && (
-                      <div className="cat-hero-order-via">
-                        <p className="cat-hero-caption">{t("catalog.orderVia")}</p>
-                        <OrderChannels channels={channels} onChannelClick={track} />
-                      </div>
-                    )}
-                  </>
+                  <Link href={`/catalog/${shopId}/account#shop-chat`} className="cat-ask-shop" aria-label={t("chat.askBeforeOrder")}>
+                    <MessageCircle size={15} />
+                    <span className="cat-ask-shop-label">{t("chat.askBeforeOrder")}</span>
+                  </Link>
                 )}
               </div>
             )}
           </div>
+          {!shopLoading && catalogEnabled && showCustomerActions && hasChannels && (
+            <div className="cat-hero-channels">
+              <p className="cat-hero-caption">{t("catalog.orderVia")}</p>
+              <OrderChannels channels={channels} onChannelClick={track} />
+            </div>
+          )}
         </header>
 
         {(shopLoading || (loading && items.length === 0)) ? (
@@ -380,15 +383,20 @@ export default function CatalogView({ shopId }: { shopId: string }) {
                       )}
                     </div>
                     <div className="cat-toolbar-controls">
-                      <label className="cat-sort">
-                        <ArrowUpDown size={16} className="cat-sort-icon" />
-                        <span className="cat-sort-label">{t("catalog.sortLabel")}</span>
-                        <select value={sort} onChange={(e) => setSort(e.target.value as CatalogSort)} aria-label={t("catalog.sortLabel")}>
-                          <option value="name">{t("catalog.sortName")}</option>
-                          <option value="priceAsc">{t("catalog.sortPriceAsc")}</option>
-                          <option value="priceDesc">{t("catalog.sortPriceDesc")}</option>
-                        </select>
-                      </label>
+                      <div className="cat-sort" role="group" aria-label={t("catalog.sortLabel")}>
+                        {SORT_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className="cat-sort-btn"
+                            data-active={sort === option.value || undefined}
+                            aria-pressed={sort === option.value}
+                            onClick={() => setSort(option.value)}
+                          >
+                            {t(option.label)}
+                          </button>
+                        ))}
+                      </div>
                       <button
                         type="button"
                         className="cat-filter-trigger"
@@ -459,11 +467,14 @@ export default function CatalogView({ shopId }: { shopId: string }) {
                   </div>
                 ) : (
                   <>
-                    <div className="cat-grid">
+                    <div className="cat-grid" aria-busy={loadingMore || undefined}>
                       {items.map((item, index) => (
                         <CatalogCard key={item.id} item={item} locale={locale} prices={prices} index={index}
                           canAddToCart={showCustomerActions}
                           onOpen={() => setProductParam(item.id)} onQuickAdd={() => quickAdd(item)} />
+                      ))}
+                      {loadingMore && Array.from({ length: 4 }).map((_, i) => (
+                        <div key={`loading-${i}`} className="cat-skel" style={{ animationDelay: `${i * 70}ms` }} aria-hidden="true" />
                       ))}
                     </div>
                     {remaining > 0 && (
@@ -573,69 +584,94 @@ export default function CatalogView({ shopId }: { shopId: string }) {
       <div className="cat-toast" role="status" aria-live="polite" data-visible={toast ? true : undefined}>{toast}</div>
 
       <style>{`
-        .cat-page {
+        /* The shop accent also has to reach the modals and sheets, which are
+           portaled to <body> and therefore outside .cat-page. */
+        :root, .cat-page {
           --shop-accent: var(--accent); --shop-accent-hover: var(--accent-2); --shop-accent-soft: var(--accent-glow);
-          min-height: 100vh; position: relative; overflow-x: clip; background: var(--bg);
         }
-        .cat-wrap { max-width: 1320px; margin: 0 auto; padding: 1.5rem 2rem 7rem; position: relative; }
+        .cat-page {
+          --cat-shadow-sm: 0 12px 30px -20px rgba(0, 0, 0, 0.7);
+          --cat-shadow-md: 0 24px 52px -28px rgba(0, 0, 0, 0.72);
+          min-height: 100vh; position: relative; overflow-x: clip;
+          background:
+            radial-gradient(1100px 460px at 50% -180px, color-mix(in srgb, var(--shop-accent) 14%, transparent), transparent 72%),
+            var(--bg);
+        }
+        .light .cat-page {
+          --cat-shadow-sm: 0 10px 26px -18px rgba(15, 23, 42, 0.22);
+          --cat-shadow-md: 0 26px 52px -28px rgba(15, 23, 42, 0.26);
+        }
+        .cat-wrap { max-width: 1280px; margin: 0 auto; padding: 1.25rem 1.75rem 7rem; position: relative; }
 
-        /* ── Hero ── */
+        /* ── Shop header ── */
         .cat-hero {
-          position: relative; overflow: hidden; min-height: 150px;
-          margin-bottom: 1.25rem; border: 1px solid var(--border); border-radius: 12px;
-          background: var(--bg-2);
+          position: relative; overflow: hidden;
+          margin-bottom: 1.35rem; border: 1px solid var(--border); border-radius: 18px;
+          background:
+            radial-gradient(620px 260px at 6% -20%, var(--shop-accent-soft), transparent 70%),
+            linear-gradient(150deg, color-mix(in srgb, var(--shop-accent) 8%, var(--bg-2)), var(--bg-2) 62%);
+          box-shadow: var(--cat-shadow-sm);
           animation: catRise 0.5s cubic-bezier(0.2, 0.8, 0.3, 1);
         }
-        .cat-hero[data-cover] { display: flex; align-items: flex-end; min-height: 320px; background: #111713; }
+        .cat-hero[data-cover] { display: flex; flex-direction: column; justify-content: flex-end; min-height: 300px; background: #0b100d; }
         .cat-hero-cover { position: absolute; inset: 0; width: 100%; height: 100%; background: var(--bg-3); }
-        .cat-hero-cover::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(0deg, rgba(10, 18, 14, 0.88), rgba(10, 18, 14, 0.1) 72%); }
+        .cat-hero-cover::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(0deg, rgba(8, 14, 11, 0.92), rgba(8, 14, 11, 0.14) 64%); }
         .cat-hero-content {
-          position: relative; z-index: 1; display: flex; align-items: flex-end; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap;
-          width: 100%; padding: 1.5rem 1.6rem;
+          position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 0.85rem 1.25rem; flex-wrap: wrap;
+          width: 100%; padding: 1rem 1.15rem;
         }
-        .cat-hero-main { display: flex; align-items: center; gap: 1rem; min-width: 0; }
+        .cat-hero[data-cover] .cat-hero-content { padding: 1rem 1.25rem 0.85rem; }
+        .cat-hero-main { display: flex; align-items: center; gap: 0.9rem; min-width: 0; }
+        .cat-hero-id { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
         .cat-hero-logo {
           position: relative; overflow: hidden;
-          width: 68px; height: 68px; border-radius: 12px; flex-shrink: 0;
+          width: 54px; height: 54px; border-radius: 14px; flex-shrink: 0;
           display: flex; align-items: center; justify-content: center;
-          font-size: 1.65rem; font-weight: 750; color: white;
-          background: var(--shop-accent); border: 1px solid rgba(255, 255, 255, 0.16);
+          font-size: 1.35rem; font-weight: 800; color: white;
+          background: linear-gradient(145deg, var(--shop-accent-hover), var(--shop-accent));
+          border: 1px solid color-mix(in srgb, #fff 24%, transparent);
+          box-shadow: 0 10px 24px -14px color-mix(in srgb, var(--shop-accent) 85%, transparent), inset 0 1px rgba(255, 255, 255, 0.25);
         }
         .cat-hero-title {
-          font-size: 2rem; font-weight: 760; color: var(--text-1); margin: 0;
-          letter-spacing: 0; line-height: 1.12; overflow-wrap: anywhere;
+          font-size: 1.5rem; font-weight: 800; color: var(--text-1); margin: 0;
+          letter-spacing: -0.015em; line-height: 1.12; overflow-wrap: anywhere;
         }
-        .cat-hero-sub { display: flex; align-items: center; gap: 7px; font-size: 0.8rem; font-weight: 600; color: var(--text-3); margin: 8px 0 0; }
-        .cat-hero-dot { width: 7px; height: 7px; border-radius: 99px; background: var(--green); }
-        .cat-hero-contact {
-          display: flex; align-items: center; justify-content: flex-end; gap: 0.55rem;
-          flex-wrap: wrap; padding: 0.45rem; border: 1px solid var(--border);
-          border-radius: 13px; background: color-mix(in srgb, var(--bg-2) 88%, transparent);
-          box-shadow: 0 5px 18px rgba(0,0,0,0.08);
-          backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+        .cat-hero-sub {
+          display: inline-flex; align-items: center; gap: 7px; margin: 0;
+          color: var(--text-2); font-size: 0.76rem; font-weight: 600; font-variant-numeric: tabular-nums;
         }
-        .cat-hero-tools { display: flex; align-items: center; padding-right: 0.45rem; border-right: 1px solid var(--border); }
-        .cat-theme-toggle { width: 38px !important; height: 38px !important; border-radius: 10px !important; }
-        .cat-theme-toggle:hover { border-color: #7664ed !important; transform: translateY(-1px); }
-        .cat-hero[data-cover] .cat-hero-contact { background: rgba(20, 20, 29, 0.68); border-color: rgba(255,255,255,0.25); }
-        .cat-hero[data-cover] .cat-hero-tools { border-color: rgba(255,255,255,0.22); }
-        .cat-hero[data-cover] .cat-theme-toggle { background: rgba(255,255,255,0.94) !important; border-color: rgba(255,255,255,0.65) !important; color: #18231d !important; }
-        .cat-hero[data-cover] .cat-theme-toggle:hover { background: #fff !important; }
-        .cat-hero-order-via { display: inline-flex; align-items: center; gap: 0.5rem; padding-left: 0.2rem; }
+        .cat-hero-dot { width: 7px; height: 7px; border-radius: 99px; background: var(--green); box-shadow: 0 0 0 3px var(--green-dim); flex-shrink: 0; }
+        .cat-hero-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+        .cat-hero-tools { display: flex; align-items: center; }
+        .cat-theme-toggle { width: 40px !important; height: 40px !important; border-radius: 11px !important; }
+        .cat-theme-toggle:hover { border-color: var(--shop-accent) !important; transform: translateY(-1px); }
+        .cat-hero-channels {
+          position: relative; z-index: 1; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+          margin: 0 1.15rem; padding: 0.8rem 0 1rem; border-top: 1px solid var(--border);
+        }
+        .cat-hero[data-cover] .cat-hero-channels { margin: 0 1.25rem; padding-bottom: 1.1rem; border-top-color: rgba(255, 255, 255, 0.18); }
         .cat-ask-shop {
-          display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px;
-          width: fit-content; padding: 0.5rem 0.8rem; border: 1px solid #6551dc;
-          border-radius: 9px; background: linear-gradient(135deg, #8069f2, #624bdc); color: #fff;
-          box-shadow: 0 4px 13px rgba(99, 77, 220, 0.32);
+          display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px;
+          width: fit-content; padding: 0.5rem 0.9rem;
+          border: 1px solid color-mix(in srgb, var(--shop-accent) 78%, #000);
+          border-radius: 11px; background: linear-gradient(135deg, var(--shop-accent), var(--shop-accent-hover)); color: #fff;
+          box-shadow: 0 8px 20px -10px color-mix(in srgb, var(--shop-accent) 80%, transparent);
           font-size: 0.78rem; font-weight: 750; text-decoration: none; white-space: nowrap;
           transition: background 0.16s, border-color 0.16s, transform 0.16s, box-shadow 0.16s;
         }
-        .cat-ask-shop:hover { background: linear-gradient(135deg, #907fff, #7159ed); border-color: #8e7cf5; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(99, 77, 220, 0.44); }
-        .cat-ask-shop:focus-visible { outline: 2px solid #918aff; outline-offset: 3px; }
-        .cat-hero-caption { font-size: 0.68rem; font-weight: 650; color: var(--text-3); margin: 0; }
+        .cat-ask-shop:hover {
+          background: linear-gradient(135deg, var(--shop-accent-hover), var(--shop-accent));
+          border-color: var(--shop-accent-hover); transform: translateY(-1px);
+          box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--shop-accent) 90%, transparent);
+        }
+        .cat-ask-shop:focus-visible { outline: 2px solid var(--shop-accent); outline-offset: 3px; }
+        .cat-hero-caption { font-size: 0.64rem; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); margin: 0; white-space: nowrap; }
         .cat-hero[data-cover] .cat-hero-title { color: #fff; }
-        .cat-hero[data-cover] .cat-hero-sub, .cat-hero[data-cover] .cat-hero-caption { color: rgba(255, 255, 255, 0.78); }
-        .cat-hero[data-cover] .cat-hero-logo { border: 2px solid rgba(255, 255, 255, 0.8); }
+        .cat-hero[data-cover] .cat-hero-sub { color: rgba(255, 255, 255, 0.82); }
+        .cat-hero[data-cover] .cat-hero-caption { color: rgba(255, 255, 255, 0.72); }
+        .cat-hero[data-cover] .cat-theme-toggle { background: rgba(255,255,255,0.94) !important; border-color: rgba(255,255,255,0.65) !important; color: #18231d !important; }
+        .cat-hero[data-cover] .cat-theme-toggle:hover { background: #fff !important; }
+        .cat-hero[data-cover] .cat-hero-logo { border: 2px solid rgba(255, 255, 255, 0.8); box-shadow: 0 14px 30px -16px rgba(0,0,0,0.7); }
         .cat-hero-skel { width: 200px; height: 30px; border-radius: 10px; background: var(--bg-3); animation: pulse 1.4s ease-in-out infinite; }
 
         /* ── Channels ── */
@@ -643,8 +679,8 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-channels[data-disabled] { opacity: 0.5; }
         .cat-channel {
           display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex: 0 0 auto;
-          min-height: 38px; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 8px;
-          background: var(--bg-2); color: var(--text-1); font-size: 0.8rem; font-weight: 650;
+          min-height: 38px; padding: 0.5rem 0.8rem; border: 1px solid var(--border); border-radius: 10px;
+          background: var(--bg-2); color: var(--text-1); font-size: 0.78rem; font-weight: 700;
           text-decoration: none; white-space: nowrap; transition: border-color 0.16s, background 0.16s, transform 0.16s;
         }
         .cat-channel:hover { transform: translateY(-1px); border-color: var(--shop-accent); background: var(--bg-3); }
@@ -657,50 +693,54 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-hint { font-size: 0.72rem; color: var(--text-3); margin: 0; line-height: 1.45; }
 
         /* ── Category navigation and toolbar ── */
-        .cat-browse { display: grid; grid-template-columns: 220px minmax(0, 1fr); align-items: start; gap: 1.1rem; }
+        .cat-browse { display: grid; grid-template-columns: 236px minmax(0, 1fr); align-items: start; gap: 1.25rem; }
         .cat-sidebar {
-          position: sticky; top: 1rem; max-height: calc(100dvh - 2rem); overflow-x: hidden; overflow-y: auto; padding: 0.8rem;
-          background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px;
+          position: sticky; top: 1.25rem; max-height: calc(100dvh - 2.5rem); overflow-x: hidden; overflow-y: auto;
+          padding: 0.85rem; background: var(--bg-2); border: 1px solid var(--border); border-radius: 14px;
+          box-shadow: var(--cat-shadow-sm);
         }
         .cat-sidebar-heading {
           display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
-          padding: 0.25rem 0.45rem 0.7rem; color: var(--text-1); font-size: 0.78rem; font-weight: 750;
+          padding: 0.3rem 0.5rem 0.7rem; color: var(--text-3);
+          font-size: 0.64rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase;
         }
         .cat-sidebar-total {
-          min-width: 22px; padding: 2px 6px; border-radius: 6px; text-align: center;
-          background: var(--bg-3); color: var(--text-3); font-size: 0.68rem; font-variant-numeric: tabular-nums;
+          min-width: 24px; padding: 2px 7px; border-radius: 999px; text-align: center;
+          background: var(--bg-3); color: var(--text-2); font-size: 0.66rem; font-weight: 750; font-variant-numeric: tabular-nums;
         }
-        .cat-category-list { display: flex; flex-direction: column; gap: 3px; }
+        .cat-category-list { display: flex; flex-direction: column; gap: 2px; }
         .cat-category {
           display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
-          width: 100%; min-width: 0; padding: 0.58rem 0.62rem; border: 1px solid transparent; border-radius: 7px;
+          width: 100%; min-width: 0; padding: 0.55rem 0.6rem; border: 1px solid transparent; border-radius: 9px;
           background: transparent; color: var(--text-2); text-align: left; cursor: pointer;
-          font: inherit; font-size: 0.78rem; transition: background 0.16s, color 0.16s, border-color 0.16s;
+          font: inherit; font-size: 0.79rem; font-weight: 550; transition: background 0.16s, color 0.16s, border-color 0.16s;
         }
         .cat-category:hover { background: var(--bg-3); color: var(--text-1); }
         .cat-category[data-active] {
-          background: var(--shop-accent-soft); border-color: color-mix(in srgb, var(--shop-accent) 28%, transparent);
-          color: var(--shop-accent); font-weight: 700;
+          background: var(--shop-accent-soft); border-color: color-mix(in srgb, var(--shop-accent) 24%, transparent);
+          color: var(--shop-accent); font-weight: 750;
+          box-shadow: inset 2px 0 var(--shop-accent);
         }
         .cat-category-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .cat-category-check { flex: 0 0 auto; color: var(--shop-accent); }
         .cat-category:focus-visible { outline: 2px solid var(--shop-accent); outline-offset: 2px; }
         .cat-category-count {
-          flex: 0 0 auto; min-width: 22px; padding: 2px 6px; border-radius: 5px;
+          flex: 0 0 auto; min-width: 24px; padding: 2px 7px; border-radius: 999px;
           background: var(--bg-3); color: var(--text-3); text-align: center;
-          font-size: 0.66rem; font-weight: 700; font-variant-numeric: tabular-nums;
+          font-size: 0.66rem; font-weight: 750; font-variant-numeric: tabular-nums;
         }
-        .cat-category[data-active] .cat-category-count { background: color-mix(in srgb, var(--shop-accent) 14%, var(--bg-2)); color: var(--shop-accent); }
+        .cat-category[data-active] .cat-category-count { background: color-mix(in srgb, var(--shop-accent) 16%, var(--bg-2)); color: var(--shop-accent); }
         .cat-category-picker {
-          display: none; align-items: center; gap: 0.6rem; width: 100%; padding: 0.55rem 0.65rem;
-          border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2);
+          display: none; align-items: center; gap: 0.65rem; width: 100%; padding: 0.55rem 0.65rem;
+          border: 1px solid var(--border); border-radius: 12px; background: var(--bg-2);
+          box-shadow: var(--cat-shadow-sm);
           color: var(--text-1); font: inherit; text-align: left; cursor: pointer;
           transition: border-color 0.16s, background 0.16s;
         }
         .cat-category-picker:hover { border-color: var(--shop-accent); }
         .cat-category-picker-icon {
           display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
-          width: 34px; height: 34px; border-radius: 8px;
+          width: 36px; height: 36px; border-radius: 10px;
           background: var(--shop-accent-soft); color: var(--shop-accent);
         }
         .cat-category-picker-text { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
@@ -712,30 +752,31 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           text-overflow: ellipsis; white-space: nowrap;
         }
         .cat-category-picker-count {
-          flex: 0 0 auto; min-width: 24px; padding: 2px 6px; border-radius: 6px;
+          flex: 0 0 auto; min-width: 24px; padding: 2px 8px; border-radius: 999px;
           background: var(--bg-3); color: var(--text-3); text-align: center;
-          font-size: 0.68rem; font-weight: 700; font-variant-numeric: tabular-nums;
+          font-size: 0.68rem; font-weight: 750; font-variant-numeric: tabular-nums;
         }
         .cat-category-picker-arrow { flex: 0 0 auto; color: var(--text-3); }
         .cat-sidebar-filters {
           display: flex; flex-direction: column; gap: 0.55rem;
-          margin-top: 0.55rem; padding-top: 0.7rem; border-top: 1px solid var(--border);
+          margin-top: 0.6rem; padding-top: 0.8rem; border-top: 1px solid var(--border);
         }
         .cat-filter-heading {
           display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
-          padding: 0 0.45rem; color: var(--text-1); font-size: 0.78rem; font-weight: 750;
+          padding: 0 0.5rem 0.2rem; color: var(--text-3);
+          font-size: 0.64rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase;
         }
-        .cat-filter-controls { display: flex; flex-direction: column; gap: 0.6rem; }
+        .cat-filter-controls { display: flex; flex-direction: column; gap: 0.55rem; }
         .cat-stock-toggle {
-          display: flex; align-items: center; gap: 8px; width: 100%; padding: 0.5rem 0.62rem;
-          border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--text-2);
+          display: flex; align-items: center; gap: 8px; width: 100%; padding: 0.5rem 0.6rem;
+          border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--text-2);
           font: inherit; font-size: 0.78rem; font-weight: 650; text-align: left; cursor: pointer;
           transition: background 0.16s, color 0.16s, border-color 0.16s;
         }
         .cat-stock-toggle:hover { background: var(--bg-3); color: var(--text-1); }
         .cat-stock-toggle[data-active] {
           color: var(--shop-accent); background: var(--shop-accent-soft);
-          border-color: color-mix(in srgb, var(--shop-accent) 28%, transparent); font-weight: 700;
+          border-color: color-mix(in srgb, var(--shop-accent) 24%, transparent); font-weight: 750;
         }
         .cat-stock-check {
           display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
@@ -753,7 +794,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-price-field { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
         .cat-price-field > span { color: var(--text-3); font-size: 0.62rem; font-weight: 650; }
         .cat-price-input {
-          width: 100%; min-height: 36px; padding: 0.35rem 0.5rem !important; border-radius: 6px;
+          width: 100%; min-height: 36px; padding: 0.35rem 0.55rem !important; border-radius: 8px;
           font-size: 0.76rem; font-variant-numeric: tabular-nums;
         }
         .cat-price-input:focus { border-color: var(--shop-accent) !important; box-shadow: 0 0 0 3px var(--shop-accent-soft); }
@@ -769,17 +810,17 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-spin { animation: catSpin 0.9s linear infinite; }
 
         .cat-toolbar {
-          position: sticky; top: 0; z-index: 30; margin: 0 0 1rem; padding: 0.8rem;
-          background: color-mix(in srgb, var(--bg-2) 96%, transparent);
-          backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-          border: 1px solid var(--border); border-radius: 10px;
-          box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 22%, transparent);
+          position: sticky; top: 0.75rem; z-index: 30; margin: 0 0 1.1rem; padding: 0.7rem 0.75rem;
+          background: color-mix(in srgb, var(--bg-2) 92%, transparent);
+          backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+          border: 1px solid var(--border); border-radius: 14px;
+          box-shadow: var(--cat-shadow-sm);
         }
-        .cat-toolbar-row { display: flex; gap: 0.65rem; align-items: center; }
-        .cat-toolbar-controls { display: flex; align-items: center; gap: 0.65rem; }
+        .cat-toolbar-row { display: flex; gap: 0.6rem; align-items: center; }
+        .cat-toolbar-controls { display: flex; align-items: center; gap: 0.6rem; }
         .cat-filter-trigger {
           display: none; align-items: center; justify-content: center; gap: 7px; flex: 0 0 auto;
-          height: 42px; padding: 0 0.8rem; border: 1px solid var(--border); border-radius: 8px;
+          height: 44px; padding: 0 0.85rem; border: 1px solid var(--border); border-radius: 10px;
           background: var(--bg); color: var(--text-2); font: inherit; font-size: 0.76rem; font-weight: 700;
           cursor: pointer; transition: background 0.16s, color 0.16s, border-color 0.16s;
         }
@@ -790,161 +831,195 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         }
         .cat-filter-badge {
           display: inline-flex; align-items: center; justify-content: center; min-width: 18px;
-          height: 18px; padding: 0 5px; border-radius: 5px;
+          height: 18px; padding: 0 5px; border-radius: 999px;
           background: var(--shop-accent); color: #fff; font-size: 0.62rem; font-weight: 750;
         }
         .cat-filter-chips { display: none; flex-wrap: wrap; gap: 0.35rem; }
         .cat-filter-chip {
-          display: inline-flex; align-items: center; gap: 5px; padding: 0.22rem 0.45rem;
-          border: 1px solid color-mix(in srgb, var(--shop-accent) 26%, var(--border)); border-radius: 5px;
-          background: var(--shop-accent-soft); color: var(--shop-accent); font: inherit;
-          font-size: 0.67rem; font-weight: 650; cursor: pointer;
+          display: inline-flex; align-items: center; gap: 6px; padding: 0.24rem 0.45rem 0.24rem 0.65rem;
+          border: 1px solid var(--border); border-radius: 999px;
+          background: var(--bg-3); color: var(--text-2); font: inherit;
+          font-size: 0.71rem; font-weight: 600; cursor: pointer;
+          transition: color 0.16s, border-color 0.16s, background 0.16s;
         }
-        .cat-filter-chip:hover { border-color: var(--shop-accent); }
+        .cat-filter-chip svg { opacity: 0.7; }
+        .cat-filter-chip:hover { color: var(--text-1); border-color: var(--shop-accent); background: var(--bg-2); }
+        .cat-filter-chip:hover svg { opacity: 1; color: var(--shop-accent); }
+        .cat-filter-chip:focus-visible { outline: 2px solid var(--shop-accent); outline-offset: 2px; }
         .cat-search-wrap { position: relative; flex: 1; min-width: 0; }
         .cat-search-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--shop-accent); pointer-events: none; }
         .cat-search {
-          width: 100%; height: 46px; padding-left: 2.8rem !important; padding-right: 2.6rem !important;
-          border-radius: 8px !important; background: var(--bg); font-size: 0.86rem;
+          width: 100%; height: 44px; padding-left: 2.8rem !important; padding-right: 2.6rem !important;
+          border-radius: 10px !important; background: var(--bg); font-size: 0.85rem;
           transition: border-color 0.16s, box-shadow 0.16s;
         }
         .cat-search:focus { border-color: var(--shop-accent) !important; box-shadow: 0 0 0 3px var(--shop-accent-soft); }
         .cat-search::-webkit-search-cancel-button { display: none; }
         .cat-search-clear {
-          position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-          width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--border); cursor: pointer;
+          position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
+          width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer;
           display: flex; align-items: center; justify-content: center; background: var(--bg-2); color: var(--text-2);
           transition: color 0.16s, border-color 0.16s, background 0.16s;
         }
         .cat-search-clear:hover { color: var(--text-1); border-color: var(--shop-accent); }
         .cat-sort {
-          position: relative; display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto;
-          padding: 0 0.8rem; height: 46px; border-radius: 8px; cursor: pointer;
-          background: var(--bg); border: 1px solid var(--border); color: var(--text-2);
-          font-size: 0.76rem; font-weight: 650; transition: border-color 0.16s, box-shadow 0.16s;
+          display: inline-flex; align-items: center; gap: 2px; flex: 0 1 auto; min-width: 0;
+          height: 44px; padding: 3px; border-radius: 11px;
+          background: var(--bg); border: 1px solid var(--border);
+          overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
         }
-        .cat-sort-icon { flex: 0 0 auto; color: var(--shop-accent); }
-        .cat-sort select {
-          appearance: none; -webkit-appearance: none; border: none; background: transparent; cursor: pointer;
-          color: var(--text-1); font: inherit; font-weight: 700; outline: none; padding: 0 1rem 0 0; max-width: 220px;
+        .cat-sort::-webkit-scrollbar { display: none; }
+        .cat-sort-btn {
+          display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+          height: 100%; padding: 0 0.7rem; border: 0; border-radius: 8px;
+          background: transparent; color: var(--text-2); font: inherit;
+          font-size: 0.74rem; font-weight: 650; white-space: nowrap; cursor: pointer;
+          transition: color 0.16s, background 0.16s;
         }
-        .cat-sort select option { background: var(--bg-2); color: var(--text-1); }
-        .cat-sort:focus-within { border-color: var(--shop-accent); box-shadow: 0 0 0 3px var(--shop-accent-soft); }
-        .cat-toolbar-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0.55rem; min-height: 1.25rem; margin-top: 0.6rem; }
-        .cat-active-category { min-width: 0; color: var(--text-1); font-size: 0.73rem; font-weight: 700; }
+        .cat-sort-btn:hover { color: var(--text-1); }
+        .cat-sort-btn:focus-visible { outline: 2px solid var(--shop-accent); outline-offset: -2px; }
+        .cat-sort-btn[data-active] { background: var(--shop-accent-soft); color: var(--shop-accent); }
+        .cat-toolbar-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0.45rem; min-height: 1.25rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border); }
+        .cat-active-category {
+          min-width: 0; padding: 0.22rem 0.55rem; border-radius: 999px; background: var(--shop-accent-soft);
+          color: var(--shop-accent); font-size: 0.7rem; font-weight: 750;
+        }
         .cat-active-category-reset {
           display: inline-flex; align-items: center; gap: 5px; max-width: min(240px, 100%);
-          margin: -0.18rem 0; padding: 0.18rem 0.45rem; border: 1px solid var(--border); border-radius: 999px;
-          background: var(--bg); color: var(--text-1); font: inherit; font-size: 0.7rem; font-weight: 700;
+          padding: 0.22rem 0.55rem; border: 1px solid color-mix(in srgb, var(--shop-accent) 24%, var(--border)); border-radius: 999px;
+          background: var(--shop-accent-soft); color: var(--shop-accent); font: inherit; font-size: 0.7rem; font-weight: 750;
           cursor: pointer; transition: color 0.16s, border-color 0.16s, background 0.16s;
         }
         .cat-active-category-reset:hover {
-          border-color: var(--shop-accent); background: var(--shop-accent-soft); color: var(--shop-accent);
+          border-color: var(--shop-accent); background: color-mix(in srgb, var(--shop-accent) 18%, var(--bg-2));
         }
         .cat-active-category-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .cat-results { flex: 0 0 auto; color: var(--text-3); font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
-        .cat-clear-filters {
-          display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 0.18rem 0.35rem;
-          border: 0; background: transparent; color: var(--shop-accent); cursor: pointer; font: inherit;
-          font-size: 0.7rem; font-weight: 700; white-space: nowrap;
+        .cat-results {
+          flex: 0 0 auto; padding: 0.22rem 0.55rem; border-radius: 999px;
+          background: var(--bg-3); color: var(--text-2); font-size: 0.7rem; font-weight: 650; white-space: nowrap;
+          font-variant-numeric: tabular-nums;
         }
-        .cat-clear-filters:hover { color: var(--shop-accent-hover); }
+        .cat-clear-filters {
+          display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 0.22rem 0.45rem;
+          border: 0; background: transparent; color: var(--shop-accent); cursor: pointer; font: inherit;
+          font-size: 0.7rem; font-weight: 750; white-space: nowrap; border-radius: 8px;
+        }
+        .cat-clear-filters:hover { color: var(--shop-accent-hover); background: var(--shop-accent-soft); }
 
         /* ── Grid + cards ── */
-        .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.85rem; }
-        .cat-more { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; margin-top: 1.25rem; }
+        .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(228px, 1fr)); gap: 1rem; }
+        .cat-more { display: flex; flex-direction: column; align-items: center; gap: 0.45rem; margin-top: 1.5rem; }
         .cat-more-btn {
           display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-          min-height: 44px; padding: 0.6rem 1.15rem; border-radius: 8px;
+          min-height: 44px; padding: 0.6rem 1.2rem; border-radius: 10px;
           border: 1px solid color-mix(in srgb, var(--shop-accent) 30%, var(--border));
           background: var(--bg-2); color: var(--shop-accent); font: inherit;
           font-size: 0.82rem; font-weight: 750; cursor: pointer;
           transition: background 0.16s, border-color 0.16s, transform 0.16s;
         }
         .cat-more-btn:hover { background: var(--shop-accent-soft); border-color: var(--shop-accent); transform: translateY(-1px); }
-        .cat-more-count { color: var(--text-3); font-size: 0.7rem; font-weight: 600; }
+        .cat-more-count { color: var(--text-3); font-size: 0.7rem; font-weight: 600; font-variant-numeric: tabular-nums; }
         .cat-card {
           position: relative; display: flex; flex-direction: column; height: 100%;
-          background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+          background: var(--bg-2); border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+          box-shadow: var(--cat-shadow-sm);
           transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
           animation: catRise 0.38s ease both;
         }
         .cat-card:hover {
-          transform: translateY(-3px); border-color: var(--border-hover);
-          box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+          transform: translateY(-4px);
+          border-color: color-mix(in srgb, var(--shop-accent) 32%, var(--border));
+          box-shadow: var(--cat-shadow-md);
         }
         .cat-card-hit { position: absolute; inset: 0; z-index: 2; background: transparent; border: none; cursor: pointer; border-radius: inherit; }
         .cat-card-hit:focus-visible { outline: 2px solid var(--shop-accent); outline-offset: -3px; }
-        .cat-card-media { position: relative; width: 100%; aspect-ratio: 1 / 1.08; background: var(--bg-3); overflow: hidden; }
-        .cat-card-media img { padding: 10px; transition: transform 0.35s ease; }
-        .cat-card:hover .cat-card-media img { transform: scale(1.035); }
+        .cat-card-media {
+          position: relative; width: 100%; aspect-ratio: 1 / 1.06; overflow: hidden;
+          background: radial-gradient(125% 105% at 50% 0%, color-mix(in srgb, var(--bg-3) 55%, var(--bg-2)), var(--bg-3));
+        }
+        .cat-card-media img { padding: 12px; transition: transform 0.35s ease; }
+        .cat-card:hover .cat-card-media img { transform: scale(1.045); }
         .cat-card-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-3); }
         .cat-card-shade { display: none; }
         .cat-card-cat, .cat-card-count {
           position: absolute; display: inline-flex; align-items: center; gap: 4px;
-          padding: 4px 8px; border-radius: 5px; font-size: 0.65rem; font-weight: 650;
-          background: color-mix(in srgb, var(--bg-2) 92%, transparent); color: var(--text-1);
+          padding: 4px 8px; border-radius: 7px; font-size: 0.64rem; font-weight: 700;
+          background: color-mix(in srgb, var(--bg-2) 88%, transparent); color: var(--text-1);
           border: 1px solid var(--border); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
         }
-        .cat-card-cat { top: 9px; left: 9px; max-width: calc(100% - 18px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cat-card-cat { top: 10px; left: 10px; max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .cat-card-stock {
           position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1;
-          padding: 0.4rem 0.7rem; border: 1px solid var(--border); border-radius: 6px;
-          background: color-mix(in srgb, var(--bg-2) 90%, transparent); color: var(--text-2);
+          padding: 0.4rem 0.75rem; border: 1px solid var(--border); border-radius: 999px;
+          background: color-mix(in srgb, var(--bg-2) 92%, transparent); color: var(--text-2);
           font-size: 0.7rem; font-weight: 750; white-space: nowrap;
         }
-        .cat-card-count { bottom: 9px; right: 9px; }
-        .cat-card-badges { position: absolute; bottom: 9px; left: 9px; display: flex; gap: 4px; }
+        .cat-card-count { bottom: 10px; right: 10px; }
+        .cat-card-badges { position: absolute; bottom: 10px; left: 10px; display: flex; gap: 4px; }
         .cat-badge {
-          display: inline-flex; align-items: center; padding: 4px 7px; border-radius: 5px;
-          font-size: 0.65rem; font-weight: 750; color: white; white-space: nowrap;
+          display: inline-flex; align-items: center; padding: 3px 7px; border-radius: 6px;
+          font-size: 0.62rem; font-weight: 800; color: white; white-space: nowrap; letter-spacing: 0.01em;
         }
         .cat-badge[data-kind="sale"] { background: var(--red); }
-        .cat-badge[data-kind="new"] { background: var(--shop-accent); }
-        .cat-card-body { padding: 0.85rem 0.9rem 0.9rem; display: flex; flex-direction: column; gap: 0.45rem; flex: 1; }
+        .cat-badge[data-kind="new"] { background: linear-gradient(135deg, var(--shop-accent), var(--shop-accent-hover)); }
+        .cat-card-body { padding: 0.95rem 1rem 1rem; display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
         .cat-card-name {
-          font-weight: 700; font-size: 0.93rem; color: var(--text-1); margin: 0; line-height: 1.35;
+          font-weight: 700; font-size: 0.94rem; color: var(--text-1); margin: 0; line-height: 1.38;
           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
         }
-        .cat-card-fields { font-size: 0.73rem; color: var(--text-3); margin: 0; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+        .cat-card-fields { font-size: 0.72rem; color: var(--text-3); margin: 0; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
         .cat-card-pills { display: flex; gap: 0.3rem; flex-wrap: wrap; }
-        .cat-card-pill { padding: 2px 7px; border-radius: 5px; font-size: 0.66rem; font-weight: 600; background: var(--bg-3); color: var(--text-2); }
-        .cat-card-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding-top: 0.6rem; border-top: 1px solid var(--border); }
-        .cat-card-prices { display: flex; flex-direction: column; min-width: 0; line-height: 1.1; }
-        .cat-card-price { font-size: 1.08rem; font-weight: 750; color: var(--text-1); font-variant-numeric: tabular-nums; }
+        .cat-card-pill {
+          padding: 2px 7px; border-radius: 6px; font-size: 0.65rem; font-weight: 650;
+          background: var(--bg-3); border: 1px solid var(--border); color: var(--text-2);
+        }
+        .cat-card-foot { margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between; gap: 0.5rem; padding-top: 0.8rem; border-top: 1px solid var(--border); min-height: 49px; }
+        .cat-card-prices { display: flex; flex-direction: column; gap: 1px; min-width: 0; line-height: 1.1; }
+        .cat-card-price { font-size: 1.06rem; font-weight: 800; color: var(--text-1); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
         .cat-card-price[data-sale] { color: var(--red); }
-        .cat-card-old { font-size: 0.74rem; font-weight: 600; color: var(--text-3); margin-top: 2px; }
+        .cat-card-old { font-size: 0.7rem; font-weight: 600; color: var(--text-3); }
         .cat-card-add {
           position: relative; z-index: 3; flex-shrink: 0;
-          width: 36px; height: 36px; border-radius: 8px; border: none; cursor: pointer;
+          width: 38px; height: 38px; border-radius: 11px; border: none; cursor: pointer;
           display: flex; align-items: center; justify-content: center; color: white;
-          background: var(--shop-accent); transition: background 0.16s, transform 0.16s;
+          background: linear-gradient(135deg, var(--shop-accent), var(--shop-accent-hover));
+          box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--shop-accent) 90%, transparent);
+          transition: background 0.16s, transform 0.16s, box-shadow 0.16s;
         }
-        .cat-card-add:hover { background: var(--shop-accent-hover); transform: translateY(-1px); }
+        .cat-card-add:hover {
+          background: linear-gradient(135deg, var(--shop-accent-hover), var(--shop-accent));
+          transform: translateY(-1px);
+          box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--shop-accent) 90%, transparent);
+        }
         .cat-card-add:disabled { background: var(--bg-3); color: var(--text-3); box-shadow: none; cursor: not-allowed; transform: none; }
         .cat-card-add:active { transform: scale(0.96); }
         .cat-card-add:focus-visible { outline: 2px solid var(--shop-accent); outline-offset: 2px; }
 
         .cat-empty {
-          min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem;
-          border: 1px dashed var(--border); border-radius: 10px; color: var(--text-3); font-size: 0.875rem; text-align: center; padding: 1rem;
+          min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.9rem;
+          border: 1px dashed var(--border-hover); border-radius: 16px; color: var(--text-2); font-size: 0.88rem; text-align: center; padding: 2rem 1.25rem;
+          background: linear-gradient(180deg, color-mix(in srgb, var(--bg-2) 70%, transparent), transparent);
+        }
+        .cat-empty > svg {
+          width: 58px; height: 58px; padding: 14px; border-radius: 16px; box-sizing: border-box;
+          background: var(--shop-accent-soft); color: var(--shop-accent); flex-shrink: 0;
         }
         .cat-empty[data-large] { min-height: 42vh; }
         .cat-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.45rem; }
         .cat-empty-action {
           display: inline-flex; align-items: center; gap: 6px; margin-top: 0.2rem;
-          padding: 0.45rem 0.7rem; border: 1px solid var(--border); border-radius: 6px;
+          padding: 0.45rem 0.75rem; border: 1px solid var(--border); border-radius: 9px;
           background: var(--bg-2); color: var(--text-1); font: inherit;
           font-size: 0.76rem; font-weight: 650; cursor: pointer;
-          transition: color 0.16s, border-color 0.16s;
+          transition: color 0.16s, border-color 0.16s, background 0.16s;
         }
-        .cat-empty-action:hover { color: var(--shop-accent); border-color: var(--shop-accent); }
-        .cat-skel { aspect-ratio: 1 / 1.32; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--border); animation: pulse 1.4s ease-in-out infinite; }
+        .cat-empty-action:hover { color: var(--shop-accent); border-color: var(--shop-accent); background: var(--shop-accent-soft); }
+        .cat-skel { aspect-ratio: 1 / 1.3; border-radius: 16px; background: var(--bg-2); border: 1px solid var(--border); animation: pulse 1.4s ease-in-out infinite; }
 
         /* ── Footer ── */
-        .cat-footer { margin-top: 3rem; display: flex; flex-direction: column; align-items: center; gap: 0.8rem; font-size: 0.72rem; color: var(--text-3); }
+        .cat-footer { margin-top: 3.5rem; display: flex; flex-direction: column; align-items: center; gap: 0.9rem; font-size: 0.72rem; color: var(--text-3); }
         .cat-footer-cta {
-          display: inline-flex; align-items: center; gap: 7px; padding: 0.55rem 0.85rem; border-radius: 7px;
+          display: inline-flex; align-items: center; gap: 7px; padding: 0.55rem 0.9rem; border-radius: 9px;
           font-size: 0.78rem; font-weight: 700; color: var(--accent-2); text-decoration: none;
           background: var(--shop-accent-soft); border: 1px solid color-mix(in srgb, var(--shop-accent) 28%, transparent);
           transition: background 0.18s;
@@ -965,19 +1040,21 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         /* ── Floating cart ── */
         .cat-cart-bar {
           position: fixed; z-index: 60; bottom: max(1.25rem, env(safe-area-inset-bottom)); right: 1.5rem;
-          display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1.2rem 0.6rem 0.6rem;
-          border-radius: 10px; border: 1px solid var(--border); cursor: pointer; color: white; background: var(--shop-accent);
-          box-shadow: 0 10px 28px -12px rgba(0, 0, 0, 0.55);
-          font-size: 0.88rem; font-weight: 700;
+          display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 1.2rem 0.55rem 0.55rem;
+          border-radius: 14px; border: 1px solid color-mix(in srgb, var(--shop-accent) 60%, #000); cursor: pointer;
+          color: white; background: linear-gradient(135deg, var(--shop-accent), var(--shop-accent-hover));
+          box-shadow: 0 16px 34px -16px color-mix(in srgb, var(--shop-accent) 85%, transparent), var(--cat-shadow-md);
+          font-size: 0.88rem; font-weight: 750;
           animation: catRise 0.35s cubic-bezier(0.2, 0.8, 0.3, 1);
-          transition: transform 0.18s;
+          transition: transform 0.18s, box-shadow 0.18s;
         }
-        .cat-cart-bar:hover { transform: translateY(-2px); background: var(--shop-accent-hover); }
+        .cat-cart-bar:hover { transform: translateY(-2px); background: linear-gradient(135deg, var(--shop-accent-hover), var(--shop-accent)); }
         .cat-cart-bar-icon {
-          position: relative; width: 38px; height: 38px; border-radius: 8px;
+          position: relative; width: 38px; height: 38px; border-radius: 10px;
           display: flex; align-items: center; justify-content: center; color: white;
-          background: rgba(255, 255, 255, 0.15);
+          background: rgba(255, 255, 255, 0.16);
         }
+        .cat-cart-bar-label { line-height: 1.15; }
         .cat-cart-bar-badge {
           position: absolute; top: -4px; right: -4px; min-width: 19px; height: 19px; padding: 0 5px;
           border-radius: 6px; font-size: 0.66rem; display: flex; align-items: center; justify-content: center;
@@ -1002,8 +1079,8 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-modal {
           position: relative; width: 100%; max-width: 1020px; max-height: 90vh;
           display: flex; flex-direction: column; overflow: hidden;
-          background: var(--bg-2); border: 1px solid var(--border); border-radius: 14px;
-          box-shadow: 0 24px 72px rgba(0, 0, 0, 0.32);
+          background: var(--bg-2); border: 1px solid var(--border); border-radius: 18px;
+          box-shadow: 0 32px 80px -24px rgba(0, 0, 0, 0.55);
           animation: catModalIn 0.24s ease;
         }
         .cat-modal:focus, .cat-drawer:focus, .cat-filter-sheet:focus { outline: none; }
@@ -1011,7 +1088,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           position: absolute; top: 12px; right: 12px; z-index: 6; flex-shrink: 0;
           width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
           background: color-mix(in srgb, var(--bg-2) 92%, transparent); border: 1px solid var(--border);
-          border-radius: 8px; cursor: pointer; color: var(--text-1);
+          border-radius: 10px; cursor: pointer; color: var(--text-1);
           backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
           transition: background 0.15s, border-color 0.15s;
         }
@@ -1021,7 +1098,10 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           outline: 2px solid var(--shop-accent); outline-offset: 3px;
         }
         .cat-drawer-close { position: static; flex: 0 0 auto; }
-        .cat-modal-slider { position: relative; width: 100%; aspect-ratio: 1 / 1; background: var(--bg-3); flex-shrink: 0; }
+        .cat-modal-slider {
+          position: relative; width: 100%; aspect-ratio: 1 / 1; flex-shrink: 0;
+          background: radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--bg-3) 50%, var(--bg-2)), var(--bg-3));
+        }
         .cat-modal-placeholder { display: grid; place-items: center; color: var(--text-3); }
         .cat-modal-count {
           position: absolute; top: 12px; left: 12px; z-index: 4;
@@ -1054,23 +1134,23 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-modal-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; padding: 1.35rem 1.5rem 1.5rem; }
         .cat-modal-top { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding-right: 2.75rem; }
         .cat-modal-eyebrow {
-          padding: 4px 8px; border-radius: 5px; font-size: 0.68rem; font-weight: 650;
+          padding: 4px 9px; border-radius: 999px; font-size: 0.66rem; font-weight: 750;
           background: var(--shop-accent-soft); color: var(--shop-accent); border: 1px solid color-mix(in srgb, var(--shop-accent) 25%, transparent);
         }
         .cat-modal-share {
-          display: inline-flex; align-items: center; gap: 6px; padding: 0.45rem 0.7rem; border-radius: 7px;
+          display: inline-flex; align-items: center; gap: 6px; padding: 0.45rem 0.75rem; border-radius: 9px;
           font-size: 0.76rem; font-weight: 700; cursor: pointer; color: var(--text-2);
           background: var(--bg-3); border: 1px solid var(--border); transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.15s;
         }
         .cat-modal-share:hover { color: var(--shop-accent); border-color: var(--shop-accent); background: var(--shop-accent-soft); transform: translateY(-1px); }
-        .cat-modal-title { font-size: 1.5rem; font-weight: 750; color: var(--text-1); margin: 0.85rem 0 0; line-height: 1.2; }
+        .cat-modal-title { font-size: 1.6rem; font-weight: 800; color: var(--text-1); margin: 0.85rem 0 0; line-height: 1.18; letter-spacing: -0.01em; }
         .cat-modal-price { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; font-size: 1.7rem; font-weight: 750; color: var(--shop-accent); margin: 0.45rem 0 0; font-variant-numeric: tabular-nums; }
         .cat-modal-old { font-size: 1rem; font-weight: 600; color: var(--text-3); letter-spacing: 0; }
         .cat-modal-group { margin-top: 1.25rem; }
-        .cat-modal-section { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); margin: 0 0 0.55rem; }
+        .cat-modal-section { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); margin: 0 0 0.55rem; }
         .cat-variant-list { display: flex; flex-wrap: wrap; gap: 0.45rem; }
         .cat-variant {
-          min-width: 48px; min-height: 40px; padding: 0.5rem 0.85rem; border-radius: 7px; font-size: 0.84rem; font-weight: 650; cursor: pointer;
+          min-width: 48px; min-height: 40px; padding: 0.5rem 0.85rem; border-radius: 9px; font-size: 0.84rem; font-weight: 650; cursor: pointer;
           background: var(--bg-2); color: var(--text-1); border: 1.5px solid var(--border);
           transition: border-color 0.15s, background 0.15s, transform 0.15s;
         }
@@ -1079,22 +1159,23 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-variant[data-active] { border-color: var(--shop-accent); background: var(--shop-accent-soft); color: var(--shop-accent); }
         .cat-variant:disabled { color: var(--text-3); background: var(--bg-3); border-color: var(--border); cursor: not-allowed; opacity: 0.65; }
         .cat-modal-fields { display: flex; flex-direction: column; gap: 6px; }
-        .cat-modal-field { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; font-size: 0.82rem; padding: 0.6rem 0.7rem; border-radius: 6px; background: var(--bg-3); }
+        .cat-modal-field { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; font-size: 0.82rem; padding: 0.6rem 0.75rem; border-radius: 9px; background: var(--bg-3); border: 1px solid var(--border); }
         .cat-modal-field span:first-child { color: var(--text-3); font-weight: 600; flex-shrink: 0; }
         .cat-modal-field span:last-child { color: var(--text-1); text-align: right; }
         .cat-modal-actions { margin-top: auto; padding-top: 1.5rem; display: flex; flex-direction: column; gap: 0.7rem; }
         .cat-modal-ask {
           display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-          width: 100%; min-height: 52px; padding: 0.8rem 1rem; border: 2px solid #6a54df;
-          border-radius: 12px; color: #fff; background: linear-gradient(135deg, #8069f2, #624bdc);
+          width: 100%; min-height: 52px; padding: 0.8rem 1rem;
+          border: 1px solid color-mix(in srgb, var(--shop-accent) 78%, #000);
+          border-radius: 12px; color: #fff; background: linear-gradient(135deg, var(--shop-accent), var(--shop-accent-hover));
           text-decoration: none; font-size: 0.9rem; font-weight: 800; letter-spacing: 0.005em;
-          box-shadow: 0 5px 17px rgba(99, 77, 220, 0.28), inset 0 1px rgba(255,255,255,0.2);
+          box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--shop-accent) 85%, transparent), inset 0 1px rgba(255,255,255,0.2);
           transition: transform 0.16s, border-color 0.16s, background 0.16s, box-shadow 0.16s;
         }
         .cat-modal-ask:hover {
-          transform: translateY(-2px); border-color: #8e7cf5;
-          background: linear-gradient(135deg, #907fff, #7159ed);
-          box-shadow: 0 8px 22px rgba(99, 77, 220, 0.4);
+          transform: translateY(-2px); border-color: var(--shop-accent-hover);
+          background: linear-gradient(135deg, var(--shop-accent-hover), var(--shop-accent));
+          box-shadow: 0 14px 28px -12px color-mix(in srgb, var(--shop-accent) 90%, transparent);
         }
         .cat-modal-ask:active { transform: translateY(0) scale(0.99); }
         .cat-buy-row { display: flex; gap: 0.6rem; }
@@ -1115,13 +1196,13 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-add-btn {
           flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
           min-height: 54px; padding: 0.8rem 1rem; font-size: 0.96rem; font-weight: 800; border-radius: 12px;
-          color: #fff; background: linear-gradient(135deg, #8069f2, #624bdc);
-          border: 1px solid #735ee8;
-          box-shadow: 0 7px 22px rgba(99, 77, 220, 0.38), inset 0 1px rgba(255,255,255,0.22);
+          color: #fff; background: linear-gradient(135deg, var(--shop-accent), var(--shop-accent-hover));
+          border: 1px solid color-mix(in srgb, var(--shop-accent) 78%, #000);
+          box-shadow: 0 12px 26px -14px color-mix(in srgb, var(--shop-accent) 90%, transparent), inset 0 1px rgba(255,255,255,0.22);
           text-shadow: 0 1px 1px rgba(0,0,0,0.14);
           transition: transform 0.15s, background 0.15s, box-shadow 0.15s, filter 0.15s;
         }
-        .cat-add-btn:hover:not(:disabled) { transform: translateY(-2px); background: linear-gradient(135deg, #907fff, #7159ed); box-shadow: 0 10px 28px rgba(99, 77, 220, 0.48), inset 0 1px rgba(255,255,255,0.25); filter: saturate(1.12); }
+        .cat-add-btn:hover:not(:disabled) { transform: translateY(-2px); background: linear-gradient(135deg, var(--shop-accent-hover), var(--shop-accent)); box-shadow: 0 16px 30px -14px color-mix(in srgb, var(--shop-accent) 90%, transparent), inset 0 1px rgba(255,255,255,0.25); filter: saturate(1.08); }
         .cat-add-btn:active:not(:disabled) { transform: translateY(0) scale(0.99); }
         .cat-add-btn:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; filter: grayscale(0.15); }
 
@@ -1130,14 +1211,15 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-drawer {
           width: min(460px, 100%); height: 100%; display: flex; flex-direction: column;
           background: var(--bg-2); border-left: 1px solid var(--border);
-          box-shadow: -20px 0 54px rgba(0, 0, 0, 0.25); animation: catDrawerIn 0.24s ease;
+          border-radius: 18px 0 0 18px;
+          box-shadow: -28px 0 60px -30px rgba(0, 0, 0, 0.55); animation: catDrawerIn 0.24s ease;
         }
         .cat-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.15rem; border-bottom: 1px solid var(--border); }
         .cat-drawer-title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 1rem; font-weight: 750; color: var(--text-1); }
         .cat-drawer-title > svg { color: var(--shop-accent); }
         .cat-drawer-badge { font-size: 0.7rem; font-weight: 750; padding: 3px 7px; border-radius: 5px; background: var(--shop-accent); color: white; }
         .cat-drawer-list { list-style: none; margin: 0; padding: 0.75rem 1.15rem; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.55rem; }
-        .cat-line { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-3); animation: catRise 0.25s ease both; }
+        .cat-line { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.65rem; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-3); animation: catRise 0.25s ease both; }
         .cat-line-media { position: relative; width: 64px; height: 64px; border-radius: 6px; overflow: hidden; flex-shrink: 0; background: var(--bg-2); display: flex; align-items: center; justify-content: center; color: var(--text-3); }
         .cat-line-media img { padding: 4px; }
         .cat-line-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
@@ -1157,20 +1239,20 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-drawer-total { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 0.25rem; font-size: 0.85rem; font-weight: 600; color: var(--text-2); }
         .cat-drawer-total strong { font-size: 1.4rem; font-weight: 750; color: var(--text-1); font-variant-numeric: tabular-nums; }
         .cat-drawer-clear {
-          align-self: center; display: inline-flex; align-items: center; gap: 6px; margin-top: 0.25rem; padding: 0.4rem 0.65rem; border-radius: 6px;
+          align-self: center; display: inline-flex; align-items: center; gap: 6px; margin-top: 0.25rem; padding: 0.45rem 0.7rem; border-radius: 9px;
           font-size: 0.75rem; font-weight: 600; color: var(--text-3); background: none; border: none; cursor: pointer;
         }
         .cat-drawer-clear:hover { color: var(--red); background: var(--red-dim); }
         .cat-cart-empty { flex: 1; margin: 1rem; }
         .cat-order-form {
           display: flex; flex-direction: column; gap: 0.9rem; padding: 1rem;
-          border: 1px solid var(--border); border-radius: 10px;
+          border: 1px solid var(--border); border-radius: 14px;
           background: color-mix(in srgb, var(--bg-3) 55%, var(--bg-2));
         }
         .cat-order-heading { display: flex; align-items: flex-start; gap: 0.7rem; }
         .cat-order-heading-icon {
           display: flex; align-items: center; justify-content: center; flex: 0 0 34px; height: 34px;
-          border: 1px solid color-mix(in srgb, var(--shop-accent) 28%, var(--border)); border-radius: 8px;
+          border: 1px solid color-mix(in srgb, var(--shop-accent) 28%, var(--border)); border-radius: 10px;
           color: var(--shop-accent); background: var(--shop-accent-soft);
         }
         .cat-order-form .cat-modal-section { margin: 0 0 0.25rem; color: var(--text-1); font-size: 0.8rem; letter-spacing: 0.02em; }
@@ -1179,9 +1261,14 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-order-field { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
         .cat-order-field > span { color: var(--text-2); font-size: 0.7rem; font-weight: 650; }
         .cat-order-field-wide { grid-column: 1 / -1; }
-        .cat-order-input { min-height: 42px; padding: 0.65rem 0.75rem !important; border-radius: 7px; font-size: 0.8rem; transition: border-color 0.16s, box-shadow 0.16s, background 0.16s; }
+        .cat-order-input { min-height: 42px; padding: 0.65rem 0.75rem !important; border-radius: 10px; font-size: 0.8rem; transition: border-color 0.16s, box-shadow 0.16s, background 0.16s; }
         .cat-order-input:focus { border-color: var(--shop-accent) !important; box-shadow: 0 0 0 3px var(--shop-accent-soft); }
-        .cat-order-button { min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 7px; border-radius: 7px; font-size: 0.82rem; }
+        .cat-order-button {
+          min-height: 46px; display: flex; align-items: center; justify-content: center; gap: 7px; border-radius: 11px;
+          border: 1px solid color-mix(in srgb, var(--shop-accent) 78%, #000);
+          background: linear-gradient(135deg, var(--shop-accent), var(--shop-accent-hover));
+          font-size: 0.82rem; box-shadow: 0 10px 22px -14px color-mix(in srgb, var(--shop-accent) 90%, transparent);
+        }
         .cat-order-button:disabled { cursor: not-allowed; opacity: 0.5; filter: grayscale(0.2); }
         .cat-order-note, .cat-order-error, .cat-order-success { margin: 0; font-size: 0.72rem; line-height: 1.45; }
         .cat-order-error { color: var(--red); }
@@ -1192,7 +1279,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-order-chat-link {
           display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px;
           padding: 0.55rem 0.8rem; border: 1px solid color-mix(in srgb, var(--shop-accent) 30%, transparent);
-          border-radius: 8px; background: var(--shop-accent-soft); color: var(--shop-accent);
+          border-radius: 10px; background: var(--shop-accent-soft); color: var(--shop-accent);
           text-decoration: none; font-size: 0.8rem; font-weight: 750; transition: background 0.16s, transform 0.16s;
         }
         .cat-order-chat-link:hover { background: color-mix(in srgb, var(--shop-accent) 18%, var(--bg-2)); transform: translateY(-1px); }
@@ -1200,10 +1287,10 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         /* ── Toast ── */
         .cat-toast {
           position: fixed; z-index: 90; left: 50%; top: 1.25rem; transform: translate(-50%, -20px);
-          max-width: min(92vw, 420px); padding: 0.7rem 1rem; border-radius: 8px;
+          max-width: min(92vw, 420px); padding: 0.7rem 1.05rem; border-radius: 10px;
           font-size: 0.84rem; font-weight: 700; text-align: center;
           background: var(--shop-accent); color: white; border: 1px solid rgba(255, 255, 255, 0.14);
-          box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+          box-shadow: 0 14px 30px -16px color-mix(in srgb, var(--shop-accent) 80%, transparent);
           opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1);
         }
         .cat-toast[data-visible] { opacity: 1; transform: translate(-50%, 0); }
@@ -1213,7 +1300,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-filter-sheet {
           width: 100%; max-height: 88dvh; overflow-y: auto;
           padding: 0 1rem max(1rem, env(safe-area-inset-bottom));
-          background: var(--bg-2); border: 1px solid var(--border); border-radius: 14px 14px 0 0;
+          background: var(--bg-2); border: 1px solid var(--border); border-radius: 18px 18px 0 0;
           box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.25); animation: catSheetIn 0.24s ease;
         }
         .cat-filter-head {
@@ -1228,13 +1315,17 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-filter-sheet-body .cat-price-input { min-height: 44px; font-size: 0.85rem; }
         .cat-filter-foot { display: flex; gap: 0.55rem; margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
         .cat-filter-clear, .cat-filter-apply {
-          min-height: 46px; border-radius: 8px; font: inherit; font-size: 0.84rem; font-weight: 750; cursor: pointer;
+          min-height: 46px; border-radius: 11px; font: inherit; font-size: 0.84rem; font-weight: 750; cursor: pointer;
         }
         .cat-filter-clear { flex: 1; border: 1px solid var(--border); background: var(--bg-3); color: var(--text-2); }
         .cat-filter-clear:hover:not(:disabled) { color: var(--text-1); border-color: var(--border-hover); }
         .cat-filter-clear:disabled { opacity: 0.45; cursor: default; }
-        .cat-filter-apply { flex: 1.4; border: 1px solid transparent; background: var(--shop-accent); color: #fff; }
-        .cat-filter-apply:hover { background: var(--shop-accent-hover); }
+        .cat-filter-apply {
+          flex: 1.4; border: 1px solid color-mix(in srgb, var(--shop-accent) 78%, #000);
+          background: linear-gradient(135deg, var(--shop-accent), var(--shop-accent-hover));
+          color: #fff; box-shadow: 0 10px 22px -14px color-mix(in srgb, var(--shop-accent) 90%, transparent);
+        }
+        .cat-filter-apply:hover { background: linear-gradient(135deg, var(--shop-accent-hover), var(--shop-accent)); }
 
         /* ── Category picker sheet ── */
         .cat-category-sheet { display: flex; flex-direction: column; overflow: hidden; }
@@ -1242,8 +1333,8 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0.45rem 0 0.15rem;
         }
         .cat-category-option {
-          display: flex; align-items: center; gap: 0.6rem; width: 100%; padding: 0.72rem 0.5rem;
-          border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text-2);
+          display: flex; align-items: center; gap: 0.6rem; width: 100%; padding: 0.72rem 0.6rem;
+          border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--text-2);
           font: inherit; font-size: 0.86rem; text-align: left; cursor: pointer;
           transition: background 0.16s, color 0.16s, border-color 0.16s;
         }
@@ -1254,8 +1345,8 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         }
         .cat-category-option-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .cat-category-option-count {
-          flex: 0 0 auto; min-width: 24px; padding: 2px 6px; border-radius: 6px; text-align: center;
-          background: var(--bg-3); color: var(--text-3); font-size: 0.7rem; font-weight: 700; font-variant-numeric: tabular-nums;
+          flex: 0 0 auto; min-width: 24px; padding: 2px 8px; border-radius: 999px; text-align: center;
+          background: var(--bg-3); color: var(--text-3); font-size: 0.7rem; font-weight: 750; font-variant-numeric: tabular-nums;
         }
         .cat-category-option[data-active] .cat-category-option-count {
           background: color-mix(in srgb, var(--shop-accent) 14%, var(--bg-2)); color: var(--shop-accent);
@@ -1290,13 +1381,23 @@ export default function CatalogView({ shopId }: { shopId: string }) {
 
         @media (max-width: 760px) {
           .cat-wrap { padding: 0.9rem 1rem 6rem; }
-          .cat-hero { border-radius: 10px; }
-          .cat-hero[data-cover] { min-height: 270px; }
-          .cat-hero-content { padding: 1.1rem; gap: 1rem; }
-          .cat-hero-logo { width: 56px; height: 56px; border-radius: 9px; font-size: 1.35rem; }
-          .cat-hero-title { font-size: 1.55rem; }
-          .cat-hero-contact { width: fit-content; max-width: 100%; justify-content: flex-start; gap: 0.45rem; }
-          .cat-hero-order-via { flex-wrap: wrap; }
+          .cat-hero { border-radius: 16px; }
+          .cat-hero[data-cover] { min-height: 240px; }
+          .cat-hero-content { padding: 0.85rem; gap: 0.7rem; }
+          .cat-hero-logo { width: 46px; height: 46px; border-radius: 12px; font-size: 1.15rem; }
+          .cat-hero-title { font-size: 1.2rem; letter-spacing: -0.01em; }
+          .cat-hero-sub { font-size: 0.7rem; gap: 6px; }
+          .cat-theme-toggle { width: 40px !important; height: 40px !important; }
+          .cat-ask-shop { width: 40px; min-height: 40px; padding: 0; border-radius: 11px; }
+          .cat-ask-shop-label { display: none; }
+          .cat-hero-channels {
+            margin: 0 0.85rem; padding: 0.7rem 0 0.85rem;
+            flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+          }
+          .cat-hero-channels::-webkit-scrollbar { display: none; }
+          .cat-hero-channels .cat-hero-caption { display: none; }
+          .cat-hero[data-cover] .cat-hero-channels { margin: 0 0.85rem; }
+          .cat-hero-channels .cat-channel { min-height: 36px; padding: 0.4rem 0.7rem; font-size: 0.74rem; }
           .cat-modal-actions { padding-top: 1rem; }
           .cat-buy-row { gap: 0.5rem; }
           .cat-stepper button { width: 34px; }
@@ -1309,14 +1410,14 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           .cat-toolbar-controls { width: 100%; gap: 0.5rem; }
           .cat-search-wrap { flex: 1 1 100%; }
           .cat-search { height: 44px; }
-          .cat-sort { flex: 1; width: auto; min-width: 0; height: 42px; justify-content: space-between; }
-          .cat-sort select { max-width: calc(100% - 6.5rem); }
+          .cat-sort { flex: 1; width: auto; min-width: 0; height: 44px; justify-content: flex-start; }
+          .cat-sort-btn { padding: 0 0.6rem; font-size: 0.72rem; }
           .cat-filter-trigger { display: inline-flex; }
           .cat-filter-chips { display: flex; }
           .cat-sidebar-filters { display: none; }
           .cat-toolbar-meta { margin-top: 0.45rem; }
           .cat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; }
-          .cat-card { border-radius: 8px; }
+          .cat-card { border-radius: 14px; }
           .cat-card-media { aspect-ratio: 1 / 1.04; }
           .cat-card-media img { padding: 6px; }
           .cat-card-body { padding: 0.65rem; gap: 0.4rem; }
@@ -1325,28 +1426,38 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           .cat-card-pill { font-size: 0.62rem; }
           .cat-card-price { font-size: 0.9rem; }
           .cat-card-old { font-size: 0.66rem; }
-          .cat-card-add { width: 32px; height: 32px; border-radius: 7px; }
+          .cat-card-add { width: 32px; height: 32px; border-radius: 9px; }
           .cat-card-cat { top: 7px; left: 7px; }
           .cat-card-badges { bottom: 7px; left: 7px; }
           .cat-overlay:not(.cat-drawer-overlay) { align-items: flex-end; padding: 0; }
-          .cat-modal { max-height: 94dvh; border-radius: 12px 12px 0 0; animation: catSheetIn 0.24s ease; }
+          .cat-modal { max-height: 94dvh; border-radius: 18px 18px 0 0; animation: catSheetIn 0.24s ease; }
           .cat-modal-slider { aspect-ratio: 1.15 / 1; max-height: 42dvh; }
           .cat-modal-arrow { display: none; }
           .cat-modal-body { padding: 1rem 1rem max(1rem, env(safe-area-inset-bottom)); }
           .cat-modal-title { font-size: 1.2rem; }
           .cat-modal-price { font-size: 1.4rem; }
           .cat-drawer-overlay { align-items: flex-end; }
-          .cat-drawer { width: 100%; height: auto; max-height: 90dvh; border-left: none; border-radius: 12px 12px 0 0; animation: catSheetIn 0.24s ease; }
+          .cat-drawer { width: 100%; height: auto; max-height: 90dvh; border-left: none; border-radius: 18px 18px 0 0; animation: catSheetIn 0.24s ease; }
           .cat-drawer-foot { gap: 0.55rem; }
           .cat-order-form { padding: 0.85rem; gap: 0.75rem; }
           .cat-order-fields { gap: 0.6rem; }
-          .cat-cart-bar { left: 1rem; right: 1rem; justify-content: flex-start; }
-          .cat-cart-bar-total { margin-left: auto; }
+          .cat-cart-bar {
+            left: 0; right: 0; bottom: 0; gap: 0.6rem; justify-content: flex-start;
+            padding: 0.6rem 1rem calc(0.6rem + env(safe-area-inset-bottom));
+            border-radius: 18px 18px 0 0; border-bottom: none;
+            box-shadow: 0 -18px 40px -22px color-mix(in srgb, var(--shop-accent) 80%, transparent);
+            animation: catSheetIn 0.24s ease;
+          }
+          .cat-cart-bar:hover { transform: none; }
+          .cat-cart-bar-icon { width: 34px; height: 34px; border-radius: 9px; }
+          .cat-cart-bar-badge { background: #fff; color: var(--shop-accent); border-color: transparent; border-radius: 999px; }
+          .cat-cart-bar-label { font-size: 0.9rem; font-weight: 750; }
+          .cat-cart-bar-total { margin-left: auto; font-size: 0.95rem; font-weight: 800; }
           /* Sticky toolbar re-composites its blur on every scroll frame and the
              card badges put one blur layer per grid card; backgrounds are ~90%
              opaque so the blur is invisible while the GPU cost is real. */
           .cat-toolbar { background: var(--bg-2); backdrop-filter: none; -webkit-backdrop-filter: none; }
-          .cat-card-cat, .cat-card-count, .cat-hero-contact { backdrop-filter: none; -webkit-backdrop-filter: none; }
+          .cat-card-cat, .cat-card-count { backdrop-filter: none; -webkit-backdrop-filter: none; }
         }
 
         @media (max-width: 380px) {

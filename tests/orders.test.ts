@@ -1,6 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MAX_ORDER_LINES, MAX_ORDER_QUANTITY, newOrderCode, normalizeFulfillmentIndices, normalizeOrderInput, orderTotal, outstandingLineIndices } from "../lib/orders.ts";
+import {
+  filterOrders,
+  MAX_ORDER_LINES,
+  MAX_ORDER_QUANTITY,
+  newOrderCode,
+  normalizeFulfillmentIndices,
+  normalizeOrderInput,
+  orderFulfillment,
+  orderMatchesSearch,
+  orderStatusCounts,
+  orderTotal,
+  outstandingLineIndices,
+} from "../lib/orders.ts";
+import type { CatalogOrder } from "../lib/types.ts";
 
 const line = {
   productId: "product-a",
@@ -67,4 +80,60 @@ test("outstanding lines drop what earlier passes already shipped", () => {
   assert.deepEqual(outstandingLineIndices(lines, [0, 1, 2]), []);
   // A corrupt marker must not hide a line that still needs to ship.
   assert.deepEqual(outstandingLineIndices(lines, [7, 1.5]), [0, 1, 2]);
+});
+
+function makeOrder(overrides: Partial<CatalogOrder> = {}): CatalogOrder {
+  return {
+    id: "o1",
+    code: "ABC234",
+    lines: [{ productId: "p1", productName: "Zeleni čaj", variantLabel: "100 g", quantity: 2, unitPrice: 5 }],
+    total: 10,
+    customerName: "Đorđe Nikolić",
+    customerContact: "+381 64 123-4567",
+    note: "",
+    channel: "catalog",
+    status: "new",
+    createdAt: null,
+    ...overrides,
+  };
+}
+
+test("status counts include the unfinished union as open", () => {
+  const counts = orderStatusCounts([
+    makeOrder({ id: "a", status: "new" }),
+    makeOrder({ id: "b", status: "confirmed" }),
+    makeOrder({ id: "c", status: "fulfilling" }),
+    makeOrder({ id: "d", status: "fulfilled" }),
+    makeOrder({ id: "e", status: "cancelled" }),
+  ]);
+  assert.deepEqual(counts, { open: 3, new: 1, confirmed: 1, fulfilling: 1, fulfilled: 1, cancelled: 1, all: 5 });
+});
+
+test("order search folds diacritics and requires every word", () => {
+  const order = makeOrder();
+  assert.equal(orderMatchesSearch(order, "caj 100"), true);
+  assert.equal(orderMatchesSearch(order, "dorde"), true);
+  assert.equal(orderMatchesSearch(order, "djordje"), false);
+  assert.equal(orderMatchesSearch(order, "abc234"), true);
+  assert.equal(orderMatchesSearch(order, "caj espresso"), false);
+  assert.equal(orderMatchesSearch(order, ""), true);
+});
+
+test("filtering combines the status chip and the search", () => {
+  const orders = [
+    makeOrder({ id: "new-1", status: "new" }),
+    makeOrder({ id: "new-2", status: "new", customerName: "Ana" }),
+    makeOrder({ id: "done-1", status: "fulfilled" }),
+  ];
+  assert.deepEqual(filterOrders(orders, "open", "").map((order) => order.id), ["new-1", "new-2"]);
+  assert.deepEqual(filterOrders(orders, "fulfilled", "").map((order) => order.id), ["done-1"]);
+  assert.deepEqual(filterOrders(orders, "all", "ana").map((order) => order.id), ["new-2"]);
+  assert.deepEqual(filterOrders(orders, "new", "ana").map((order) => order.id), ["new-2"]);
+  assert.deepEqual(filterOrders(orders, "new", "nikolic").map((order) => order.id), ["new-1"]);
+});
+
+test("fulfillment progress follows whole lines, never quantities", () => {
+  const order = makeOrder({ lines: [line, line, line], fulfilledLineIndices: [0, 2] });
+  assert.deepEqual(orderFulfillment(order), { completed: 2, outstanding: [1], percent: 67 });
+  assert.deepEqual(orderFulfillment(makeOrder({ lines: [] })), { completed: 0, outstanding: [], percent: 0 });
 });

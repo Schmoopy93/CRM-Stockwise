@@ -3,17 +3,21 @@ import assert from "node:assert/strict";
 import {
   collectTags,
   contactKey,
+  countNewCustomers,
   customerMatches,
   favoriteProducts,
   MAX_CUSTOMER_TAGS,
   MAX_TAG_LENGTH,
   normalizeCustomer,
   normalizeTag,
+  orderCountsByCustomer,
   parseTags,
   sameContact,
   sortCustomers,
+  spendingByCustomer,
+  standingSales,
 } from "../lib/customers.ts";
-import type { Customer, Sale } from "../lib/types.ts";
+import type { CatalogOrder, Customer, Sale } from "../lib/types.ts";
 
 function makeCustomer(overrides: Partial<Customer> = {}): Customer {
   return {
@@ -46,6 +50,22 @@ function makeSale(lines: Sale["lines"], id = "s1"): Sale {
 
 function saleLine(productId: string, productName: string, quantity: number, unitPrice: number): Sale["lines"][number] {
   return { productId, productName, variantId: `${productId}-v`, variantLabel: "M", quantity, unitPrice };
+}
+
+function makeOrder(overrides: Partial<CatalogOrder> = {}): CatalogOrder {
+  return {
+    id: "o1",
+    code: "ABC234",
+    lines: [{ productId: "p1", productName: "Jacket", variantLabel: "M", quantity: 1, unitPrice: 10 }],
+    total: 10,
+    customerName: "Ana",
+    customerContact: "+381641234567",
+    note: "",
+    channel: "catalog",
+    status: "new",
+    createdAt: null,
+    ...overrides,
+  };
 }
 
 test("a name is required and everything else is optional", () => {
@@ -127,6 +147,14 @@ test("search covers name, contact, email and tags", () => {
   assert.equal(customerMatches(customer, "zzz"), false);
 });
 
+test("search folds diacritics so a name and a tag can be typed plainly", () => {
+  const dorde = makeCustomer({ name: "Đorđe Nikolić", tags: ["đački"] });
+  assert.equal(customerMatches(dorde, "dorde"), true);
+  assert.equal(customerMatches(dorde, "nikolic"), true);
+  assert.equal(customerMatches(dorde, "dacki"), true);
+  assert.equal(customerMatches(dorde, "đorđe"), true);
+});
+
 test("sorting by spending is descending, and name ties break on contact", () => {
   const ana = makeCustomer({ id: "a", name: "Ana", contact: "1" });
   const anaTwo = makeCustomer({ id: "b", name: "Ana", contact: "2" });
@@ -180,4 +208,37 @@ test("favorite products are capped and empty when nothing was sold", () => {
   );
   assert.equal(favoriteProducts(many).length, 5);
   assert.deepEqual(favoriteProducts([]), []);
+});
+
+test("a storno removes both documents from every money figure", () => {
+  const kept = { ...makeSale([saleLine("a", "A", 1, 100)], "kept"), customerId: "c1" };
+  const reversed = { ...makeSale([saleLine("a", "A", 1, 50)], "reversed"), customerId: "c1" };
+  const storno = { ...makeSale([saleLine("a", "A", 1, -50)], "storno"), customerId: "c1", stornoOf: "reversed" };
+
+  assert.deepEqual(standingSales([kept, reversed, storno]).map((sale) => sale.id), ["kept"]);
+  assert.deepEqual([...spendingByCustomer([kept, reversed, storno])], [["c1", 100]]);
+  // A sale with no linked customer cannot be attributed to anyone.
+  assert.deepEqual([...spendingByCustomer([kept, makeSale([saleLine("a", "A", 1, 20)], "guest")])], [["c1", 100]]);
+});
+
+test("order counts follow the customer link", () => {
+  const counts = orderCountsByCustomer([
+    makeOrder({ id: "o1", customerId: "c1" }),
+    makeOrder({ id: "o2", customerId: "c1" }),
+    makeOrder({ id: "o3" }),
+    makeOrder({ id: "o4", customerId: "c2" }),
+  ]);
+  assert.deepEqual([...counts], [["c1", 2], ["c2", 1]]);
+});
+
+test("new customers are counted from a fixed moment, undated ones never", () => {
+  const now = new Date("2026-10-28T12:00:00").getTime();
+  const customers = [
+    makeCustomer({ id: "fresh", createdAt: new Date("2026-10-20T12:00:00") }),
+    makeCustomer({ id: "inside", createdAt: new Date("2026-09-29T12:00:00") }),
+    makeCustomer({ id: "old", createdAt: new Date("2026-09-01T12:00:00") }),
+    makeCustomer({ id: "undated" }),
+  ];
+  assert.equal(countNewCustomers(customers, now), 2);
+  assert.equal(countNewCustomers(customers, now, 90), 3);
 });

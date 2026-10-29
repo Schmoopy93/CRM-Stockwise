@@ -17,6 +17,7 @@ import { db } from "@/lib/firebase";
 import { Product, ProductVariant, Sale, ShopCatalogSettings, StockEvent, Customer } from "@/lib/types";
 import { CatalogItem, CatalogOrder, CatalogStatsDay, ShopConversation } from "@/lib/types";
 import { channelsFromShop, EMPTY_CHANNELS } from "@/lib/catalog-channels";
+import { AUDIT_EVENT_LIMIT } from "@/lib/audit";
 import type { CatalogSort } from "@/lib/catalog-filter";
 import type { CatalogPageResponse } from "@/lib/catalog-api";
 import {
@@ -446,7 +447,7 @@ export function useAllStockEvents(shopId: string | undefined, days = 30) {
       collection(db, "shops", shopId, "stockEvents"),
       where("createdAt", ">=", since),
       orderBy("createdAt", "desc"),
-      limit(500)
+      limit(AUDIT_EVENT_LIMIT)
     );
     const unsub = onSnapshot(q, (snap) => {
       setEvents(

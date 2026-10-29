@@ -24,6 +24,10 @@
   --red-dim: rgba(239, 68, 68, 0.12);
   --amber: #f59e0b;
   --amber-dim: rgba(245, 158, 11, 0.12);
+  --cyan: #22d3ee;
+  --cyan-dim: rgba(34, 211, 238, 0.12);
+  --violet: #a855f7;
+  --violet-dim: rgba(168, 85, 247, 0.14);
 }
 
 .light {
@@ -45,6 +49,10 @@
   --red-dim: rgba(220, 38, 38, 0.1);
   --amber: #b45309;
   --amber-dim: rgba(217, 119, 6, 0.12);
+  --cyan: #0e7490;
+  --cyan-dim: rgba(14, 116, 144, 0.1);
+  --violet: #7e22ce;
+  --violet-dim: rgba(126, 34, 206, 0.1);
 }
 
 * {

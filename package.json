@@ -19,9 +19,10 @@
     "test:alerts": "node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/stock-alerts.test.ts",
     "test:catalog": "node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/catalog-filter.test.ts tests/catalog-query.test.ts",
     "test:monitor": "node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/client-errors.test.ts",
+    "test:audit": "node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/audit.test.ts",
     "test:rules": "cross-env FIREBASE_EMULATORS_PATH=./node_modules/.cache/firebase-emulators firebase emulators:exec --project demo-inventory-crm --only firestore,storage \"node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/firestore.rules.test.ts\"",
     "test:order-api": "cross-env FIREBASE_EMULATORS_PATH=./node_modules/.cache/firebase-emulators NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-inventory-crm firebase emulators:exec --project demo-inventory-crm --only firestore \"node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/next-alias-register.mjs tests/order-api.test.mjs\"",
-    "test": "npm run test:stock && npm run test:import && npm run test:currency && npm run test:ai && npm run test:menu && npm run test:customers && npm run test:orders && npm run test:alerts && npm run test:catalog && npm run test:monitor && npm run test:rules && npm run test:order-api"
+    "test": "npm run test:stock && npm run test:import && npm run test:currency && npm run test:ai && npm run test:menu && npm run test:customers && npm run test:orders && npm run test:alerts && npm run test:catalog && npm run test:monitor && npm run test:audit && npm run test:rules && npm run test:order-api"
   },
   "dependencies": {
     "@zxing/library": "^0.21.3",

@@ -1,4 +1,5 @@
-import type { Customer, Sale } from "@/lib/types";
+import type { CatalogOrder, Customer, Sale } from "@/lib/types";
+import { foldCatalogText } from "./catalog-filter.ts";
 
 /** Customer records are written by shop staff, so the limits here mirror
  * `firestore.rules` rather than the anonymous-visitor shape of `orders.ts`: the
@@ -102,11 +103,14 @@ export function sameContact(a: string, b: string): boolean {
 export function customerMatches(customer: Customer, query: string): boolean {
   const needle = collapse(query).toLowerCase();
   if (!needle) return true;
-  if (customer.name.toLowerCase().includes(needle)) return true;
+  // Names and tags fold diacritics so "dorde" finds "Đorđe"; the contact keeps
+  // the digits-only comparison above, and email stays a whole-field match.
+  const folded = foldCatalogText(needle);
+  if (foldCatalogText(customer.name).includes(folded)) return true;
   const contactNeedle = contactKey(needle);
   if (contactNeedle && contactKey(customer.contact).includes(contactNeedle)) return true;
   if (customer.email.toLowerCase() === needle) return true;
-  return customer.tags.some((tag) => tag.includes(needle));
+  return customer.tags.some((tag) => foldCatalogText(tag).includes(folded));
 }
 
 export type CustomerSort = "name" | "newest" | "spent";
@@ -141,6 +145,44 @@ export function collectTags(customers: Customer[]): { tag: string; count: number
   return [...counts]
     .map(([tag, count]) => ({ tag, count }))
     .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+}
+
+/** A storno annuls its original sale: the reversal and the sale it reverses
+ * both drop out, so every money figure counts only sales that stand. */
+export function standingSales(sales: Sale[]): Sale[] {
+  const reversed = new Set(sales.flatMap((sale) => (sale.stornoOf ? [sale.stornoOf] : [])));
+  return sales.filter((sale) => !sale.stornoOf && !reversed.has(sale.id));
+}
+
+/** Money each customer actually spent, keyed by customer id. Sales with no
+ * linked customer are left out — there is nobody to attribute them to. */
+export function spendingByCustomer(sales: Sale[]): Map<string, number> {
+  const totals = new Map<string, number>();
+  for (const sale of standingSales(sales)) {
+    if (!sale.customerId) continue;
+    totals.set(sale.customerId, (totals.get(sale.customerId) ?? 0) + sale.total);
+  }
+  return totals;
+}
+
+export function orderCountsByCustomer(orders: CatalogOrder[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const order of orders) {
+    if (!order.customerId) continue;
+    counts.set(order.customerId, (counts.get(order.customerId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** Long enough that a shop that signs a customer in spring still recognises
+ * them the following winter. */
+export const NEW_CUSTOMER_DAYS = 30;
+
+/** Measured from a caller-supplied moment, so the count cannot drift while the
+ * page is open. Undated records never count as new. */
+export function countNewCustomers(customers: Customer[], now: number, days = NEW_CUSTOMER_DAYS): number {
+  const since = now - days * 86_400_000;
+  return customers.filter((customer) => (customer.createdAt?.getTime() ?? 0) >= since).length;
 }
 
 export interface FavoriteProduct {

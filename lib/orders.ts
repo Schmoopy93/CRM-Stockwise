@@ -1,4 +1,5 @@
-import type { OrderLine, OrderStatus } from "@/lib/types";
+import type { CatalogOrder, OrderLine, OrderStatus } from "@/lib/types";
+import { matchesCatalogQuery } from "./catalog-filter.ts";
 
 /** Orders are written by anonymous visitors, so the shape is validated here in
  * the same spirit as `firestore.rules` — the rules are the real gate, this is
@@ -110,4 +111,64 @@ export function normalizeFulfillmentIndices(lineCount: number, indices: number[]
 export function outstandingLineIndices(lines: OrderLine[], fulfilledLineIndices: number[] = []): number[] {
   const completed = new Set(fulfilledLineIndices.filter((index) => Number.isSafeInteger(index)));
   return lines.map((_, index) => index).filter((index) => !completed.has(index));
+}
+
+export type OrderFilter = "open" | OrderStatus | "all";
+
+export const ORDER_FILTERS: OrderFilter[] = ["open", "new", "confirmed", "fulfilling", "fulfilled", "cancelled", "all"];
+
+const OPEN_STATUSES: OrderStatus[] = ["new", "confirmed", "fulfilling"];
+
+export function isOpenOrder(status: OrderStatus): boolean {
+  return OPEN_STATUSES.includes(status);
+}
+
+/** Chip counts for every filter; "open" is the union of the unfinished states,
+ * so it is counted separately from the per-status numbers. */
+export function orderStatusCounts(orders: CatalogOrder[]): Record<OrderFilter, number> {
+  const counts: Record<OrderFilter, number> = {
+    open: 0,
+    new: 0,
+    confirmed: 0,
+    fulfilling: 0,
+    fulfilled: 0,
+    cancelled: 0,
+    all: orders.length,
+  };
+  for (const order of orders) {
+    counts[order.status] += 1;
+    if (isOpenOrder(order.status)) counts.open += 1;
+  }
+  return counts;
+}
+
+/** Search folds diacritics and requires every word to appear somewhere in the
+ * order, matching how the catalog and audit log search already behave. */
+export function orderMatchesSearch(order: CatalogOrder, query: string): boolean {
+  const haystack = [
+    order.code,
+    order.customerName,
+    order.customerContact,
+    order.note,
+    ...order.lines.flatMap((line) => [line.productName, line.variantLabel]),
+  ].join("\n");
+  return matchesCatalogQuery(haystack, query);
+}
+
+export function filterOrders(orders: CatalogOrder[], filter: OrderFilter, query: string): CatalogOrder[] {
+  return orders.filter((order) => {
+    if (filter === "open" ? !isOpenOrder(order.status) : filter !== "all" && order.status !== filter) {
+      return false;
+    }
+    return orderMatchesSearch(order, query);
+  });
+}
+
+export function orderFulfillment(order: CatalogOrder) {
+  const completed = Math.min(order.fulfilledLineIndices?.length ?? 0, order.lines.length);
+  return {
+    completed,
+    outstanding: outstandingLineIndices(order.lines, order.fulfilledLineIndices ?? []),
+    percent: order.lines.length > 0 ? Math.round((completed / order.lines.length) * 100) : 0,
+  };
 }
