@@ -964,7 +964,11 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-badge[data-kind="new"] { background: linear-gradient(135deg, var(--shop-accent), var(--shop-accent-hover)); }
         .cat-card-body { padding: 0.95rem 1rem 1rem; display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
         .cat-card-name {
-          font-weight: 700; font-size: 0.94rem; color: var(--text-1); margin: 0; line-height: 1.38;
+          font-weight: 700; font-size: 0.94rem; color: var(--text-1); margin: 0; line-height: 1.38; letter-spacing: -0.01em;
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        }
+        .cat-card-desc {
+          margin: 0; font-size: 0.76rem; line-height: 1.5; color: var(--text-2);
           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
         }
         .cat-card-fields { font-size: 0.72rem; color: var(--text-3); margin: 0; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
@@ -1148,6 +1152,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
         .cat-modal-old { font-size: 1rem; font-weight: 600; color: var(--text-3); letter-spacing: 0; }
         .cat-modal-group { margin-top: 1.25rem; }
         .cat-modal-section { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); margin: 0 0 0.55rem; }
+        .cat-modal-desc { margin: 0; font-size: 0.88rem; line-height: 1.65; color: var(--text-2); white-space: pre-line; overflow-wrap: anywhere; }
         .cat-variant-list { display: flex; flex-wrap: wrap; gap: 0.45rem; }
         .cat-variant {
           min-width: 48px; min-height: 40px; padding: 0.5rem 0.85rem; border-radius: 9px; font-size: 0.84rem; font-weight: 650; cursor: pointer;
@@ -1422,6 +1427,7 @@ export default function CatalogView({ shopId }: { shopId: string }) {
           .cat-card-media img { padding: 6px; }
           .cat-card-body { padding: 0.65rem; gap: 0.4rem; }
           .cat-card-name { font-size: 0.83rem; }
+          .cat-card-desc { font-size: 0.7rem; -webkit-line-clamp: 2; }
           .cat-card-fields { display: -webkit-box; font-size: 0.67rem; }
           .cat-card-pill { font-size: 0.62rem; }
           .cat-card-price { font-size: 0.9rem; }

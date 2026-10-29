@@ -486,6 +486,10 @@ select {
 .pform-card-actions { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .pform-card-hint { font-size: 0.74rem; color: var(--text-3); margin: -0.4rem 0 0; }
 .pform-label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-2); margin-bottom: 7px; }
+.pform-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 7px; }
+.pform-label-row .pform-label { margin-bottom: 0; }
+.pform-count { font-size: 0.68rem; font-weight: 600; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.pform-textarea { display: block; min-height: 112px; resize: vertical; line-height: 1.55; }
 .pform-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 0.875rem; min-width: 0; }
 .pform-span-full { grid-column: 1 / -1; }
 .pform-hint { font-size: 0.7rem; color: var(--text-3); margin: 6px 0 0; }

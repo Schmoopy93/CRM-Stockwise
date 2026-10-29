@@ -223,6 +223,48 @@ test("new products may carry a server createdAt and a compare-at price, but crea
   await assertFails(updateDoc(productRef, { createdAt: serverTimestamp() }));
 });
 
+test("product descriptions are capped and mirrored into the customer-safe catalog copy", async () => {
+  const db = firestoreFor("owner-a");
+  const productRef = doc(db, "shops", shopId, "products", "described-product");
+  const base = {
+    name: "Wool coat",
+    sku: "WC-1",
+    category: "Clothing",
+    minStock: 0,
+    imageUrl: "",
+    totalQuantity: 0,
+    customFieldDefinitions: [],
+    customFieldValues: {},
+  };
+
+  await assertSucceeds(setDoc(productRef, {
+    ...base,
+    description: "Ručno šivena vunena jakna.",
+    createdAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(productRef, { description: "Nova sezona.", updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(productRef, { description: "x".repeat(2001), updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(productRef, { description: 42, updatedAt: serverTimestamp() }));
+
+  // The public projection carries the same copy, capped the same way.
+  const catalogRef = doc(db, "shops", shopId, "catalog", "described-product");
+  const catalog = {
+    name: "Wool coat",
+    category: "Clothing",
+    description: "Ručno šivena vunena jakna.",
+    imageUrl: "",
+    variants: [],
+    fields: [],
+    hidden: false,
+  };
+  await assertSucceeds(setDoc(catalogRef, { ...catalog, updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(db, "shops", shopId, "catalog", "too-long"), {
+    ...catalog,
+    description: "x".repeat(2001),
+    updatedAt: serverTimestamp(),
+  }));
+});
+
 test("anonymous visitors can only bump one catalog counter by one while the catalog is enabled", async () => {
   const signedOutDb = firestoreFor();
   const statsRef = doc(signedOutDb, "shops", shopId, "catalogStats", "2026-09-29");

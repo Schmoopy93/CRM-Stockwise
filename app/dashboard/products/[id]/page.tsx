@@ -174,6 +174,13 @@ export default function ProductDetailPage() {
 
       {error && <div role="alert" className={styles.alert}>{error}</div>}
 
+      {product.description && (
+        <section className={`glass ${styles.section}`}>
+          <h2 className={styles.sectionTitle}>{t("product.description")}</h2>
+          <p className={styles.description}>{product.description}</p>
+        </section>
+      )}
+
       {(product.costPrice !== undefined || product.salePrice !== undefined || product.supplier?.name) && (
         <section className={`glass ${styles.section}`}>
           <h2 className={styles.sectionTitle}>{t("product.pricingSupplier")}</h2>

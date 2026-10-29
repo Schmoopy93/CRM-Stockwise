@@ -32,6 +32,7 @@ export default function CatalogCard({ item, locale, prices, index, canAddToCart,
   onQuickAdd: () => void;
 }) {
   const { t } = useI18n();
+  const description = item.description?.trim();
   const images = itemImages(item);
   const discount = saleDiscount(item);
   const available = catalogItemAvailable(item);
@@ -67,6 +68,8 @@ export default function CatalogCard({ item, locale, prices, index, canAddToCart,
 
       <div className="cat-card-body">
         <p className="cat-card-name">{item.name}</p>
+
+        {description && <p className="cat-card-desc">{description}</p>}
 
         {item.fields.length > 0 && (
           <p className="cat-card-fields">

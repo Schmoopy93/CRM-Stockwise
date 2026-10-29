@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { translateError, useI18n } from "@/lib/i18n-context";
 import { useProducts } from "@/lib/hooks";
-import { saveProduct } from "@/lib/actions";
+import { saveProduct, MAX_PRODUCT_DESCRIPTION } from "@/lib/actions";
 import { ProductCustomField, ProductVariant } from "@/lib/types";
 import ProductCustomFields from "@/components/ProductCustomFields";
 import ProductImages, { ProductImageSlot } from "@/components/ProductImages";
@@ -28,6 +28,7 @@ export default function NewProductPage() {
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [category, setCategory] = useState("");
+  const [description, setDescription] = useState("");
   const [minStock, setMinStock] = useState(0);
   const [customFieldDefinitions, setCustomFieldDefinitions] = useState<ProductCustomField[]>([]);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string | number | boolean>>({});
@@ -47,7 +48,7 @@ export default function NewProductPage() {
     setError(""); setSaving(true);
     try {
       const savedId = await saveProduct(
-        profile.shopId, null, name, sku, category, minStock, imageSlots, variants, customFieldDefinitions, customFieldValues,
+        profile.shopId, null, name, sku, category, description, minStock, imageSlots, variants, customFieldDefinitions, customFieldValues,
         parsePrice(pricing.costPrice), parsePrice(pricing.salePrice),
         { name: pricing.supplierName, contact: pricing.supplierContact },
         false,
@@ -90,6 +91,22 @@ export default function NewProductPage() {
               <div>
                 <label className="pform-label" htmlFor="product-category">{t("product.category")}</label>
                 <input id="product-category" className="input" type="text" placeholder={t("product.categoryPlaceholder")} value={category} onChange={(e) => setCategory(e.target.value)} list="product-categories" />
+              </div>
+              <div className="pform-span-full">
+                <div className="pform-label-row">
+                  <label className="pform-label" htmlFor="product-description">{t("product.description")}</label>
+                  <span className="pform-count">{description.length}/{MAX_PRODUCT_DESCRIPTION}</span>
+                </div>
+                <textarea
+                  id="product-description"
+                  className="input pform-textarea"
+                  rows={4}
+                  maxLength={MAX_PRODUCT_DESCRIPTION}
+                  placeholder={t("product.descriptionPlaceholder")}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+                <p className="pform-hint">{t("product.descriptionHint")}</p>
               </div>
             </div>
             <datalist id="product-categories">

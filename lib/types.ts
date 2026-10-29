@@ -39,6 +39,8 @@ export interface Product {
   name: string;
   sku: string;
   category: string;
+  /** Customer-facing copy; also published to the shop catalog. */
+  description?: string;
   imageUrl: string;
   images: string[];
   minStock: number;
@@ -87,6 +89,7 @@ export interface CatalogItem {
   id: string;
   name: string;
   category: string;
+  description?: string;
   imageUrl: string;
   images: string[];
   salePrice?: number;

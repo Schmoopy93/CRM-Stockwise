@@ -130,6 +130,7 @@ export async function signOut() {
 function buildCatalogDoc(
   name: string,
   category: string,
+  description: string,
   imageUrl: string,
   images: string[],
   salePrice: number | undefined,
@@ -158,6 +159,7 @@ function buildCatalogDoc(
   return {
     name: name.trim(),
     category: category.trim(),
+    description: description.trim(),
     imageUrl,
     images: images.length > 0 ? images : (imageUrl ? [imageUrl] : []),
     salePrice: salePrice !== undefined ? salePrice : deleteField(),
@@ -221,6 +223,7 @@ export async function updateCatalogSettings(shopId: string, settings: CatalogSet
     const catalogDoc = buildCatalogDoc(
       data.name ?? "",
       data.category ?? "",
+      typeof data.description === "string" ? data.description : "",
       data.imageUrl ?? "",
       Array.isArray(data.images) ? data.images : [],
       typeof data.salePrice === "number" ? data.salePrice : undefined,
@@ -631,6 +634,7 @@ export async function linkSaleToCustomer(shopId: string, saleId: string, custome
 // ─── Products ────────────────────────────────────────────────────────────────
 
 export const MAX_PRODUCT_IMAGES = 6;
+export const MAX_PRODUCT_DESCRIPTION = 2000;
 
 export interface ProductImageInput {
   file: File | null;
@@ -643,6 +647,7 @@ export async function saveProduct(
   name: string,
   sku: string,
   category: string,
+  description: string,
   minStock: number,
   images: ProductImageInput[],
   variants: ProductVariant[],
@@ -672,6 +677,7 @@ export async function saveProduct(
   const products = collection(db, "shops", shopId, "products");
   const docRef = productId ? doc(products, productId) : doc(products);
   const id = docRef.id;
+  const trimmedDescription = description.trim().slice(0, MAX_PRODUCT_DESCRIPTION);
 
   const trimmedImages = images.slice(0, MAX_PRODUCT_IMAGES);
   const imageUrls: string[] = [];
@@ -728,6 +734,7 @@ export async function saveProduct(
       name: name.trim(),
       sku: sku.trim(),
       category: category.trim(),
+      description: trimmedDescription,
       minStock: Math.max(0, Math.floor(minStock)),
       imageUrl,
       images: imageUrls,
@@ -765,6 +772,7 @@ export async function saveProduct(
         buildCatalogDoc(
           name,
           category,
+          trimmedDescription,
           imageUrl,
           imageUrls,
           salePrice,

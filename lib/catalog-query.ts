@@ -29,6 +29,7 @@ export function catalogItemSearchText(item: CatalogItem) {
   return [
     item.name,
     item.category,
+    item.description ?? "",
     ...item.variants,
     ...item.fields.flatMap(fieldSearchText),
   ].join(" ");

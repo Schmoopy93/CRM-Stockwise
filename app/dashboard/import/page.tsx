@@ -197,6 +197,7 @@ export default function ImportPage() {
           first.name,
           first.sku,
           first.category,
+          "",
           first.minStock,
           [],
           variants,

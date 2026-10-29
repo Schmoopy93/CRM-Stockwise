@@ -25,6 +25,7 @@ export default function CatalogDetail({ item, locale, prices, shopId, canPurchas
   onTrack: (event: CatalogStatEvent) => void;
 }) {
   const { t } = useI18n();
+  const description = item.description?.trim();
   const [index, setIndex] = useState(0);
   const [variantIndex, setVariantIndex] = useState(item.variants.length === 1 ? 0 : -1);
   const variant = item.variants[variantIndex] ?? "";
@@ -144,6 +145,13 @@ export default function CatalogDetail({ item, locale, prices, shopId, canPurchas
                 </>
               )}
             </p>
+          )}
+
+          {description && (
+            <div className="cat-modal-group">
+              <p className="cat-modal-section">{t("product.description")}</p>
+              <p className="cat-modal-desc">{description}</p>
+            </div>
           )}
 
           {item.variants.length > 0 && (

@@ -87,7 +87,7 @@ service cloud.firestore {
 
     function validCatalogDocument(data) {
       return data.keys().hasOnly([
-          'name', 'category', 'imageUrl', 'images', 'salePrice', 'compareAtPrice', 'variants', 'variantIds', 'stockQuantity', 'variantStock', 'fields', 'hidden', 'createdAt', 'updatedAt'
+          'name', 'category', 'description', 'imageUrl', 'images', 'salePrice', 'compareAtPrice', 'variants', 'variantIds', 'stockQuantity', 'variantStock', 'fields', 'hidden', 'createdAt', 'updatedAt'
         ])
         && (!('stockQuantity' in data) || (data.stockQuantity is int && data.stockQuantity >= 0))
         && (!('variantStock' in data) || (data.variantStock is map && data.variantStock.size() <= 200))
@@ -95,6 +95,7 @@ service cloud.firestore {
         && (!('createdAt' in data) || data.createdAt is timestamp)
         && data.name is string
         && data.category is string
+        && (!('description' in data) || (data.description is string && data.description.size() <= 2000))
         && data.imageUrl is string
         && (!('images' in data) || (data.images is list && data.images.size() <= 6))
         && (!('salePrice' in data) || (data.salePrice is number && data.salePrice >= 0))
@@ -295,7 +296,7 @@ service cloud.firestore {
         allow read: if isMember(shopId);
         allow create: if isMember(shopId)
           && request.resource.data.keys().hasOnly([
-            'name', 'sku', 'category', 'minStock', 'imageUrl', 'images', 'totalQuantity',
+            'name', 'sku', 'category', 'description', 'minStock', 'imageUrl', 'images', 'totalQuantity',
             'customFieldDefinitions', 'customFieldValues', 'updatedAt',
             'costPrice', 'salePrice', 'compareAtPrice', 'supplier', 'catalogHidden', 'createdAt'
           ])
@@ -304,6 +305,8 @@ service cloud.firestore {
           && request.resource.data.name.size() > 0
           && request.resource.data.sku is string
           && request.resource.data.category is string
+          && (!('description' in request.resource.data)
+            || (request.resource.data.description is string && request.resource.data.description.size() <= 2000))
           && request.resource.data.minStock is int
           && request.resource.data.minStock >= 0
           && request.resource.data.totalQuantity is int
@@ -317,9 +320,11 @@ service cloud.firestore {
           || (isMember(shopId) && resource.data.totalQuantity == 0);
         allow update: if isMember(shopId)
           && (request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['name', 'sku', 'category', 'minStock', 'imageUrl', 'images', 'customFieldDefinitions', 'customFieldValues', 'updatedAt', 'costPrice', 'salePrice', 'compareAtPrice', 'supplier', 'catalogHidden'])
+                .hasOnly(['name', 'sku', 'category', 'description', 'minStock', 'imageUrl', 'images', 'customFieldDefinitions', 'customFieldValues', 'updatedAt', 'costPrice', 'salePrice', 'compareAtPrice', 'supplier', 'catalogHidden'])
                 && request.resource.data.minStock is int
                 && request.resource.data.minStock >= 0
+                && (!('description' in request.resource.data)
+                  || (request.resource.data.description is string && request.resource.data.description.size() <= 2000))
                 && validProductImages(request.resource.data)
                 && validProductPricing(request.resource.data)
               || (request.resource.data.diff(resource.data).affectedKeys()

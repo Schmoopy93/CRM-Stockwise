@@ -41,7 +41,14 @@ const majica = item({
     values: { en: "black" },
   }],
 });
-const caj = item({ id: "caj", name: "Čaj od nane", category: "Hrana", salePrice: 300, stockQuantity: 0 });
+const caj = item({
+  id: "caj",
+  name: "Čaj od nane",
+  category: "Hrana",
+  description: "Pržena zrna, 100% arabika",
+  salePrice: 300,
+  stockQuantity: 0,
+});
 const ranac = item({ id: "ranac", name: "Đački ranac", category: "Odeća", stockQuantity: 3 });
 const patike = item({
   id: "patike",
@@ -71,7 +78,7 @@ test("stock is read per variant and a missing quantity means unavailable", () =>
   assert.equal(catalogItemAvailable(item({ id: "no-stock" })), false);
 });
 
-test("search matches folded text, variants and localized custom fields", () => {
+test("search matches folded text, descriptions, variants and localized custom fields", () => {
   const names = (search: string) => filter({ search }).base.map((entry) => entry.id).sort();
   assert.deepEqual(names("caj"), ["caj"]);
   assert.deepEqual(names("MAJICA crna"), ["majica"]);
@@ -79,6 +86,7 @@ test("search matches folded text, variants and localized custom fields", () => {
   assert.deepEqual(names("42"), ["patike"]);
   assert.deepEqual(names("color black"), ["majica"]);
   assert.deepEqual(names("odeca"), ["majica", "ranac"]);
+  assert.deepEqual(names("arabika"), ["caj"]);
   assert.deepEqual(names("nepostojece"), []);
 });
 

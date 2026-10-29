@@ -142,6 +142,7 @@ export function catalogItemFromData(id: string, data: Record<string, unknown>, n
     id,
     name: typeof data.name === "string" ? data.name : "",
     category: typeof data.category === "string" ? data.category : "",
+    description: typeof data.description === "string" ? data.description : "",
     imageUrl,
     images: images.length > 0 ? images : imageUrl ? [imageUrl] : [],
     salePrice: finiteNumber(data.salePrice),
