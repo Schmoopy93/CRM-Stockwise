@@ -84,7 +84,7 @@ export default function CatalogBrandingFields({ shopId, logoUrl, coverUrl }: { s
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
-        style={{ display: "flex", alignItems: "center", gap: 6, alignSelf: "flex-start", padding: 0, background: "transparent", border: "none", cursor: "pointer", fontSize: "0.75rem", fontWeight: 700, color: "var(--text-2)" }}>
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: 38, padding: "0 0.85rem", background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 9, cursor: "pointer", font: "inherit", fontSize: "0.78rem", fontWeight: 650, color: "var(--text-2)" }}>
         {t("catalog.brandingTitle")}
         {open ? <ChevronUp size={14} style={{ color: "var(--text-3)" }} /> : <ChevronDown size={14} style={{ color: "var(--text-3)" }} />}
       </button>

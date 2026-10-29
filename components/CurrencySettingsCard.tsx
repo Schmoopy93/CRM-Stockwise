@@ -6,6 +6,8 @@ import { useExchangeRates, useShop } from "@/lib/hooks";
 import { updateShopCurrency } from "@/lib/actions";
 import { BASE_CURRENCY, hasRate, SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { Coins } from "lucide-react";
+import Select from "@/components/Select";
+import styles from "./settings-card.module.css";
 
 export default function CurrencySettingsCard({ shopId }: { shopId: string }) {
   const { t, locale } = useI18n();
@@ -37,43 +39,36 @@ export default function CurrencySettingsCard({ shopId }: { shopId: string }) {
   if (loading) return null;
 
   return (
-    <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.1rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--accent-glow)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Coins size={17} color="var(--accent-2)" />
+    <div className={`glass ${styles.card}`}>
+      <div className={styles.head}>
+        <div className={styles.icon}>
+          <Coins size={17} />
         </div>
-        <div>
-          <p style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--text-1)", margin: 0 }}>{t("currency.title")}</p>
-          <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("currency.description")}</p>
+        <div className={styles.headText}>
+          <p className={styles.title}>{t("currency.title")}</p>
+          <p className={styles.desc}>{t("currency.description")}</p>
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-        <select
-          className="input"
-          aria-label={t("currency.label")}
+      <div className={styles.actions}>
+        <Select
+          className={styles.inlineSelect}
+          ariaLabel={t("currency.label")}
           value={selected}
-          onChange={(e) => { setDraft(e.target.value); setSaved(false); }}
-          style={{ maxWidth: 260 }}
-        >
-          {SUPPORTED_CURRENCIES.map((option) => (
-            <option key={option.code} value={option.code}>
-              {option.code} — {option.symbol}
-            </option>
-          ))}
-        </select>
+          onChange={(next) => { setDraft(next); setSaved(false); }}
+          options={SUPPORTED_CURRENCIES.map((option) => ({ value: option.code, label: `${option.code} — ${option.symbol}` }))}
+        />
         <button
           onClick={save}
           disabled={!dirty || saving}
           className="btn-primary"
-          style={{ fontSize: "0.78rem", opacity: !dirty || saving ? 0.5 : 1, cursor: !dirty || saving ? "default" : "pointer" }}
         >
           {t("currency.save")}
         </button>
-        {saved && <span style={{ fontSize: "0.75rem", color: "var(--green)", fontWeight: 600 }}>{t("currency.saved")}</span>}
+        {saved && <span className={styles.status} data-on="true">{t("currency.saved")}</span>}
       </div>
 
-      <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0, lineHeight: 1.5 }}>
+      <p className={styles.hint}>
         {selected === BASE_CURRENCY
           ? t("currency.baseNote")
           : rateMissing
@@ -86,7 +81,7 @@ export default function CurrencySettingsCard({ shopId }: { shopId: string }) {
               })}
       </p>
 
-      {error && <p style={{ fontSize: "0.78rem", color: "var(--red)", margin: 0 }}>{error}</p>}
+      {error && <p className={styles.error}>{error}</p>}
     </div>
   );
 }

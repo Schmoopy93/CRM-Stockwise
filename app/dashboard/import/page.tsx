@@ -14,6 +14,7 @@ import {
   ParsedProductImportRow,
 } from "@/lib/product-import";
 import { CheckCircle2, ChevronDown, ChevronUp, Download, FileSpreadsheet, FileText, Sparkles, Upload, XCircle } from "lucide-react";
+import styles from "./import.module.css";
 
 interface ImportResult {
   rowNumber: number;
@@ -227,22 +228,22 @@ export default function ImportPage() {
   const numberFormat = new Intl.NumberFormat(INTL_LOCALES[locale]);
 
   return (
-    <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.5rem", maxWidth: 900 }}>
-      <div>
-        <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{t("import.title")}</h1>
-        <p style={{ fontSize: "0.82rem", color: "var(--text-2)", marginTop: 4 }}>{t("import.subtitle")}</p>
-      </div>
+    <div className={`fade-up ${styles.page}`}>
+      <header className={styles.header}>
+        <h1 className={styles.title}>{t("import.title")}</h1>
+        <p className={styles.subtitle}>{t("import.subtitle")}</p>
+      </header>
 
-      <div className="glass" style={{ padding: "1rem 1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: "0.85rem", color: "var(--text-2)" }}>
-          <FileText size={16} style={{ color: "var(--accent-2)" }} />
+      <div className={`glass ${styles.card} ${styles.templateCard}`}>
+        <p className={styles.templateHint}>
+          <FileText size={16} className={styles.templateIcon} />
           <span>{t("import.templateHint")}</span>
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => downloadTemplate("csv")} className="btn-primary" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", padding: "0.45rem 0.875rem" }}>
+        </p>
+        <div className={styles.templateActions}>
+          <button onClick={() => downloadTemplate("csv")} className={styles.downloadBtn}>
             <Download size={14} /> CSV
           </button>
-          <button onClick={() => downloadTemplate("xlsx")} className="btn-primary" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", padding: "0.45rem 0.875rem" }}>
+          <button onClick={() => downloadTemplate("xlsx")} className={styles.downloadBtn}>
             <FileSpreadsheet size={14} /> Excel (.xlsx)
           </button>
         </div>
@@ -253,127 +254,142 @@ export default function ImportPage() {
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         onClick={() => fileRef.current?.click()}
-        className="import-dropzone"
-        style={{ border: `2px dashed ${dragOver ? "var(--accent)" : "var(--border)"}`, borderRadius: 16, padding: "2.5rem 2rem", textAlign: "center", cursor: reading ? "wait" : "pointer", background: dragOver ? "var(--accent-glow)" : "transparent", transition: "all 0.2s", opacity: reading ? 0.65 : 1 }}
+        className={`import-dropzone ${styles.dropzone}`}
+        data-over={dragOver ? "" : undefined}
+        data-busy={reading ? "" : undefined}
       >
         <input
           ref={fileRef}
           type="file"
           accept=".csv,.xls,.xlsx"
-          style={{ display: "none" }}
+          className={styles.fileInput}
           onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleFile(file); event.target.value = ""; }}
         />
-        <Upload size={28} style={{ color: "var(--text-3)", marginBottom: 12 }} />
-        <p style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-1)", margin: 0 }}>
+        <Upload size={28} className={styles.dropIcon} />
+        <p className={styles.dropTitle}>
           {reading ? t("import.reading") : fileName || t("import.dropzone")}
         </p>
-        <p style={{ fontSize: "0.78rem", color: "var(--text-3)", marginTop: 6 }}>{t("import.fileTypes")}</p>
+        <p className={styles.dropTypes}>{t("import.fileTypes")}</p>
       </div>
 
       {parseErrors.length > 0 && (
-        <div role="alert" className="glass" style={{ padding: "1rem 1.25rem", color: "var(--red)", fontSize: "0.82rem" }}>
-          {parseErrors.map((error) => <p key={error} style={{ margin: "0.2rem 0" }}>{t(`import.parseError.${error}`)}</p>)}
+        <div role="alert" className={`glass ${styles.card} ${styles.alertCard}`}>
+          {parseErrors.map((error) => <p key={error}>{t(`import.parseError.${error}`)}</p>)}
         </div>
       )}
 
       {sourceMatrix && !done && (
-        <div className="glass" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem", padding: "0.9rem 1rem" }}>
-          <div style={{ minWidth: 220, flex: "1 1 300px" }}>
-            <p style={{ fontSize: "0.82rem", fontWeight: 650, color: "var(--text-1)", margin: 0 }}>{t("import.aiTitle")}</p>
-            <p style={{ fontSize: "0.74rem", lineHeight: 1.5, color: "var(--text-3)", margin: "0.25rem 0 0" }}>{t("import.aiPrivacy")}</p>
-            {aiApplied && <p role="status" style={{ fontSize: "0.75rem", color: "var(--green)", margin: "0.3rem 0 0" }}>{t("import.aiApplied")}</p>}
-            {aiError && <p role="alert" style={{ fontSize: "0.75rem", color: "var(--red)", margin: "0.3rem 0 0" }}>{aiError}</p>}
+        <div className={`glass ${styles.card} ${styles.aiCard}`}>
+          <div className={styles.aiMain}>
+            <p className={styles.aiTitle}>{t("import.aiTitle")}</p>
+            <p className={styles.aiNote}>{t("import.aiPrivacy")}</p>
+            {aiApplied && <p role="status" className={styles.aiStatus}>{t("import.aiApplied")}</p>}
+            {aiError && <p role="alert" className={styles.aiError}>{aiError}</p>}
           </div>
           <button
             type="button"
             className="btn-secondary"
             disabled={suggesting || reading || importing || !user}
             onClick={() => void suggestColumnMapping()}
-            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "0.5rem 0.8rem", fontSize: "0.78rem", opacity: suggesting ? 0.65 : 1 }}
           >
-            {suggesting ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <Sparkles size={15} />}
+            {suggesting ? <span className={`spinner ${styles.btnSpinner}`} aria-hidden="true" /> : <Sparkles size={15} />}
             {suggesting ? t("import.aiWorking") : t("import.aiButton")}
           </button>
         </div>
       )}
 
       {rows.length > 0 && !done && (
-        <div className="glass" style={{ padding: "1.25rem 1.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", marginBottom: showPreview ? "1rem" : 0 }} onClick={() => setShowPreview((open) => !open)}>
-            <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-1)" }}>
+        <div className={`glass ${styles.card}`}>
+          <button type="button" className={styles.previewToggle} aria-expanded={showPreview} onClick={() => setShowPreview((open) => !open)}>
+            <span className={styles.previewToggleMain}>
+              <span className={styles.previewSummary}>
                 {t("import.previewSummary", { products: productGroups.size, units: numberFormat.format(totalUnits) })}
               </span>
-              <span className="badge" style={{ background: "var(--accent-glow)", color: "var(--accent-2)", border: "1px solid rgba(99,102,241,0.2)" }}>
+              <span className={`badge ${styles.badgeAccent}`}>
                 {t("import.rowsCount", { n: rows.length })}
               </span>
-              {validationErrors.size > 0 && <span className="badge" style={{ background: "var(--red-dim)", color: "var(--red)", border: "1px solid rgba(239,68,68,0.2)" }}>{t("import.invalidRows", { n: validationErrors.size })}</span>}
-            </div>
-            {showPreview ? <ChevronUp size={16} style={{ color: "var(--text-3)" }} /> : <ChevronDown size={16} style={{ color: "var(--text-3)" }} />}
-          </div>
+              {validationErrors.size > 0 && (
+                <span className={`badge ${styles.badgeDanger}`}>{t("import.invalidRows", { n: validationErrors.size })}</span>
+              )}
+            </span>
+            {showPreview ? <ChevronUp size={16} className={styles.chevron} /> : <ChevronDown size={16} className={styles.chevron} />}
+          </button>
 
           {showPreview && (
-            <div className="import-preview" style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }}>
+            <div className={`import-preview ${styles.tableWrap} ${styles.previewBody}`}>
+              <table className={styles.table}>
                 <thead><tr>
                   {["row", "name", "sku", "category", "variant", "quantity", "costPrice", "salePrice", "supplier", "status"].map((key) => (
-                    <th key={key} style={{ textAlign: "left", padding: "0.5rem 0.65rem", color: "var(--text-3)", fontWeight: 600, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>{t(`import.column.${key}`)}</th>
+                    <th key={key}>{t(`import.column.${key}`)}</th>
                   ))}
                 </tr></thead>
                 <tbody>
                   {rows.slice(0, 100).map((row) => {
                     const errors = validationErrors.get(row.rowNumber) ?? [];
                     return (
-                      <tr key={row.rowNumber} style={{ borderBottom: "1px solid var(--border)", background: errors.length ? "var(--red-dim)" : undefined }}>
-                        <td style={{ padding: "0.5rem 0.65rem", color: "var(--text-3)" }}>{row.rowNumber}</td>
-                        <td style={{ padding: "0.5rem 0.65rem", color: "var(--text-1)", fontWeight: 500 }}>{row.name || "—"}</td>
-                        <td style={{ padding: "0.5rem 0.65rem", color: "var(--text-3)", fontFamily: "monospace" }}>{row.sku || "—"}</td>
-                        <td style={{ padding: "0.5rem 0.65rem", color: "var(--text-2)" }}>{row.category || "—"}</td>
-                        <td style={{ padding: "0.5rem 0.65rem", color: "var(--text-2)" }}>{row.variantLabel || "—"}</td>
-                        <td style={{ padding: "0.5rem 0.65rem", color: "var(--text-1)", fontWeight: 600 }}>{row.quantity}</td>
-                        <td style={{ padding: "0.5rem 0.65rem", color: "var(--text-2)" }}>{row.costPrice ?? "—"}</td>
-                        <td style={{ padding: "0.5rem 0.65rem", color: "var(--text-2)" }}>{row.salePrice ?? "—"}</td>
-                        <td style={{ padding: "0.5rem 0.65rem", color: "var(--text-3)" }}>{row.supplierName ?? "—"}</td>
-                        <td style={{ padding: "0.5rem 0.65rem", color: errors.length ? "var(--red)" : "var(--green)", maxWidth: 240 }}>{errors.length ? errors.map((error) => t(`import.validation.${error}`)).join(", ") : t("import.valid")}</td>
+                      <tr key={row.rowNumber} data-invalid={errors.length ? "" : undefined}>
+                        <td className={styles.cellRow}>{row.rowNumber}</td>
+                        <td className={styles.cellName}>{row.name || "—"}</td>
+                        <td className={styles.cellMono}>{row.sku || "—"}</td>
+                        <td>{row.category || "—"}</td>
+                        <td>{row.variantLabel || "—"}</td>
+                        <td className={styles.cellStrong}>{row.quantity}</td>
+                        <td>{row.costPrice ?? "—"}</td>
+                        <td>{row.salePrice ?? "—"}</td>
+                        <td className={styles.cellRow}>{row.supplierName ?? "—"}</td>
+                        <td className={styles.cellStatus} data-ok={errors.length ? undefined : ""} data-error={errors.length ? "" : undefined}>
+                          {errors.length ? errors.map((error) => t(`import.validation.${error}`)).join(", ") : t("import.valid")}
+                        </td>
                       </tr>
                     );
                   })}
-                  {rows.length > 100 && <tr><td colSpan={10} style={{ padding: "0.65rem", textAlign: "center", color: "var(--text-3)" }}>{t("import.moreRows", { n: rows.length - 100 })}</td></tr>}
+                  {rows.length > 100 && <tr><td colSpan={10} className={styles.moreRows}>{t("import.moreRows", { n: rows.length - 100 })}</td></tr>}
                 </tbody>
               </table>
             </div>
           )}
 
-          <div style={{ marginTop: showPreview ? "1.25rem" : 0, display: "flex", justifyContent: "flex-end" }}>
-            <button onClick={() => void runImport()} disabled={importing || reading || productsLoading || validationErrors.size > 0} className="btn-primary" style={{ display: "flex", alignItems: "center", gap: 8, opacity: importing || productsLoading || validationErrors.size > 0 ? 0.6 : 1 }}>
-              {importing ? <><span className="spinner" style={{ width: 14, height: 14 }} /> {t("import.importing")}</> : <><Upload size={15} /> {t("import.importButton", { n: productGroups.size })}</>}
+          <div className={styles.previewActions} data-collapsed={showPreview ? undefined : ""}>
+            <button onClick={() => void runImport()} disabled={importing || reading || productsLoading || validationErrors.size > 0} className={`btn-primary ${styles.importBtn}`}>
+              {importing ? <><span className={`spinner ${styles.btnSpinner}`} aria-hidden="true" /> {t("import.importing")}</> : <><Upload size={15} /> {t("import.importButton", { n: productGroups.size })}</>}
             </button>
           </div>
         </div>
       )}
 
       {done && (
-        <div className="glass fade-up" style={{ padding: "1.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.9rem", fontWeight: 600, color: "var(--green)" }}><CheckCircle2 size={18} /> {t("import.imported", { n: importedCount })}</div>
-            {failedCount > 0 && <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.9rem", fontWeight: 600, color: "var(--red)" }}><XCircle size={18} /> {t("import.failed", { n: failedCount })}</div>}
+        <div className={`glass fade-up ${styles.doneCard}`}>
+          <div className={styles.doneHead}>
+            <div className={styles.doneStat} data-kind="ok"><CheckCircle2 size={18} /> {t("import.imported", { n: importedCount })}</div>
+            {failedCount > 0 && <div className={styles.doneStat} data-kind="error"><XCircle size={18} /> {t("import.failed", { n: failedCount })}</div>}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+          <div className={styles.doneList}>
             {results.map((result) => (
-              <div key={result.rowNumber} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "0.5rem 0", borderBottom: "1px solid var(--border)", fontSize: "0.82rem" }}>
-                {result.status === "ok" ? <CheckCircle2 size={15} style={{ color: "var(--green)", flexShrink: 0, marginTop: 1 }} /> : <XCircle size={15} style={{ color: "var(--red)", flexShrink: 0, marginTop: 1 }} />}
-                <div><span style={{ fontWeight: 600, color: "var(--text-1)" }}>{result.name}</span><span style={{ marginLeft: 8, color: "var(--text-3)" }}>{t("import.resultRow", { n: result.rowNumber })}</span>{result.message && <p style={{ fontSize: "0.75rem", color: "var(--red)", margin: "2px 0 0" }}>{result.message}</p>}</div>
+              <div key={result.rowNumber} className={styles.doneRow}>
+                {result.status === "ok"
+                  ? <CheckCircle2 size={15} className={styles.doneIcon} data-kind="ok" />
+                  : <XCircle size={15} className={styles.doneIcon} data-kind="error" />}
+                <div>
+                  <span className={styles.doneName}>{result.name}</span>
+                  <span className={styles.doneRowMeta}>{t("import.resultRow", { n: result.rowNumber })}</span>
+                  {result.message && <p className={styles.doneError}>{result.message}</p>}
+                </div>
               </div>
             ))}
           </div>
-          <button onClick={() => { setRows([]); setResults([]); setDone(false); setFileName(""); setParseErrors([]); }} style={{ marginTop: "1rem", padding: "0.45rem 1rem", background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 8, fontSize: "0.8rem", color: "var(--text-2)", cursor: "pointer" }}>{t("import.anotherFile")}</button>
+          <button
+            className={`btn-secondary ${styles.anotherBtn}`}
+            onClick={() => { setRows([]); setResults([]); setDone(false); setFileName(""); setParseErrors([]); }}
+          >
+            {t("import.anotherFile")}
+          </button>
         </div>
       )}
 
       {rows.length === 0 && parseErrors.length === 0 && (
-        <div className="glass" style={{ padding: "1.25rem 1.5rem" }}>
-          <h2 style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-2)", margin: "0 0 0.875rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("import.guideTitle")}</h2>
-          <p style={{ fontSize: "0.82rem", color: "var(--text-2)", margin: 0 }}>{t("import.guideIntro")}</p>
+        <div className={`glass ${styles.card}`}>
+          <h2 className={styles.guideTitle}>{t("import.guideTitle")}</h2>
+          <p className={styles.guideIntro}>{t("import.guideIntro")}</p>
         </div>
       )}
     </div>

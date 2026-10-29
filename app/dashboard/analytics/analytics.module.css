@@ -1,0 +1,321 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+/* ---------- header ---------- */
+
+.header {
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--text-1);
+}
+
+.subtitle {
+  margin: 0.3rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+/* ---------- range toolbar ---------- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 0.6rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.chips {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--bg-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  min-height: 32px;
+  padding: 0 0.8rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.chip:hover {
+  color: var(--text-1);
+}
+
+.chip[data-active] {
+  background: var(--accent-glow);
+  color: var(--accent-2);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.yearSelect {
+  width: auto;
+  min-width: 104px;
+  height: 38px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.rangeEnd {
+  font-size: 0.75rem;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--amber);
+}
+
+.warn svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--red) 22%, transparent);
+  border-radius: 11px;
+  background: var(--red-dim);
+  color: var(--red);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.alert svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ---------- cards ---------- */
+
+.card {
+  min-width: 0;
+  padding: 1.1rem 1.25rem;
+  border-radius: 14px;
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.cardSub {
+  margin: 0.15rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+.muted {
+  margin: 0;
+  padding: 2rem 0;
+  font-size: 0.82rem;
+  text-align: center;
+  color: var(--text-3);
+}
+
+.mutedAlert {
+  color: var(--red);
+}
+
+.mutedGood {
+  color: var(--green);
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  min-width: 0;
+}
+
+/* ---------- compact lists ---------- */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.listRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.listRow:last-child {
+  border-bottom: 0;
+}
+
+.listMain {
+  min-width: 0;
+}
+
+.listName {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}
+
+.listHint {
+  margin: 0.12rem 0 0;
+  font-size: 0.72rem;
+  color: var(--text-3);
+}
+
+.listQty {
+  flex-shrink: 0;
+  font-size: 1.05rem;
+  font-weight: 750;
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- catalog stats ---------- */
+
+.catalogStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 0.6rem;
+}
+
+.miniStat {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--bg-3);
+}
+
+.miniLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--text-2);
+  min-width: 0;
+}
+
+.miniLabel svg {
+  flex-shrink: 0;
+}
+
+.miniValue {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 750;
+  line-height: 1;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.catalogChart {
+  margin-top: 1rem;
+}
+
+/* ---------- chart tooltip ---------- */
+
+.tip {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-2);
+  font-size: 12px;
+}
+
+.tipLabel {
+  margin: 0 0 4px;
+  color: var(--text-2);
+}
+
+.tipValue {
+  margin: 0;
+  color: var(--violet);
+  font-weight: 650;
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 900px) {
+  .panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .card {
+    padding: 0.95rem 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

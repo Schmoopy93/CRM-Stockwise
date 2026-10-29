@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase";
 import { exportToExcel, exportToPrint } from "@/lib/export";
 import { ProductVariant } from "@/lib/types";
 import { FileSpreadsheet, Printer, Download } from "lucide-react";
+import styles from "./export.module.css";
 
 export default function ExportPage() {
   const { profile } = useAuth();
@@ -53,99 +54,69 @@ export default function ExportPage() {
   }
 
   return (
-    <div className="fade-up" style={{ maxWidth: 560 }}>
-      <div style={{ marginBottom: "1.75rem" }}>
-        <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{t("export.title")}</h1>
-        <p style={{ fontSize: "0.82rem", color: "var(--text-2)", marginTop: 4 }}>
-          {t("export.subtitle")}
-        </p>
-      </div>
+    <div className={`fade-up ${styles.page}`}>
+      <header className={styles.header}>
+        <h1 className={styles.title}>{t("export.title")}</h1>
+        <p className={styles.subtitle}>{t("export.subtitle")}</p>
+      </header>
 
       {/* Summary */}
-      <div className="glass export-summary" style={{ padding: "1.25rem 1.5rem", marginBottom: "1.5rem", display: "flex", gap: "2rem" }}>
-        <div>
-          <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("export.articles")}</p>
-          <p style={{ fontSize: "1.75rem", fontWeight: 700, color: "var(--text-1)", margin: 0, lineHeight: 1 }}>{products.length}</p>
+      <div className={`glass ${styles.summary}`}>
+        <div className={styles.summaryItem}>
+          <p className={styles.summaryLabel}>{t("export.articles")}</p>
+          <p className={styles.summaryValue}>{products.length}</p>
         </div>
-        <div>
-          <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("export.totalItems")}</p>
-          <p style={{ fontSize: "1.75rem", fontWeight: 700, color: "var(--text-1)", margin: 0, lineHeight: 1 }}>
+        <div className={styles.summaryItem}>
+          <p className={styles.summaryLabel}>{t("export.totalItems")}</p>
+          <p className={styles.summaryValue}>
             {products.reduce((s, p) => s + p.totalQuantity, 0)}
           </p>
         </div>
-        <div>
-          <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: 0 }}>{t("export.date")}</p>
-          <p style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
-            {new Date().toLocaleDateString(INTL_LOCALES[locale])}
-          </p>
+        <div className={styles.summaryItem}>
+          <p className={styles.summaryLabel}>{t("export.date")}</p>
+          <p className={styles.summaryDate}>{new Date().toLocaleDateString(INTL_LOCALES[locale])}</p>
         </div>
       </div>
 
       {/* Export buttons */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
-        {/* Excel */}
+      <div className={styles.cards}>
         <button
+          type="button"
+          className={`glass ${styles.fileBtn}`}
+          data-tone="green"
           onClick={handleExcel}
           disabled={exporting || loading || products.length === 0}
-          style={{
-            display: "flex", alignItems: "center", gap: "1rem",
-            padding: "1.25rem 1.5rem",
-            background: "rgba(34,197,94,0.08)",
-            border: "1px solid rgba(34,197,94,0.2)",
-            borderRadius: 14,
-            cursor: "pointer",
-            transition: "all 0.15s",
-            textAlign: "left",
-          }}
-          onMouseOver={(e) => (e.currentTarget.style.background = "rgba(34,197,94,0.14)")}
-          onMouseOut={(e) => (e.currentTarget.style.background = "rgba(34,197,94,0.08)")}
         >
-          <div style={{ width: 44, height: 44, background: "var(--green-dim)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <FileSpreadsheet size={22} color="var(--green)" />
-          </div>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontWeight: 600, color: "var(--text-1)", margin: 0, fontSize: "0.95rem" }}>{t("export.excel")}</p>
-            <p style={{ fontSize: "0.78rem", color: "var(--text-2)", margin: "2px 0 0" }}>
-              {t("export.excelNote")}
-            </p>
-          </div>
-          <Download size={18} color="var(--green)" />
+          <span className={styles.fileIcon}>
+            <FileSpreadsheet size={21} />
+          </span>
+          <span className={styles.fileBody}>
+            <span className={styles.fileTitle}>{t("export.excel")}</span>
+            <span className={styles.fileNote}>{t("export.excelNote")}</span>
+          </span>
+          <Download size={18} className={styles.fileArrow} aria-hidden="true" />
         </button>
 
-        {/* PDF/Print */}
         <button
+          type="button"
+          className={`glass ${styles.fileBtn}`}
+          data-tone="accent"
           onClick={handlePrint}
           disabled={exporting || loading || products.length === 0}
-          style={{
-            display: "flex", alignItems: "center", gap: "1rem",
-            padding: "1.25rem 1.5rem",
-            background: "rgba(99,102,241,0.08)",
-            border: "1px solid rgba(99,102,241,0.2)",
-            borderRadius: 14,
-            cursor: "pointer",
-            transition: "all 0.15s",
-            textAlign: "left",
-          }}
-          onMouseOver={(e) => (e.currentTarget.style.background = "rgba(99,102,241,0.14)")}
-          onMouseOut={(e) => (e.currentTarget.style.background = "rgba(99,102,241,0.08)")}
         >
-          <div style={{ width: 44, height: 44, background: "var(--accent-glow)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <Printer size={22} color="var(--accent-2)" />
-          </div>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontWeight: 600, color: "var(--text-1)", margin: 0, fontSize: "0.95rem" }}>{t("export.print")}</p>
-            <p style={{ fontSize: "0.78rem", color: "var(--text-2)", margin: "2px 0 0" }}>
-              {t("export.printNote")}
-            </p>
-          </div>
-          <Printer size={18} color="var(--accent-2)" />
+          <span className={styles.fileIcon}>
+            <Printer size={21} />
+          </span>
+          <span className={styles.fileBody}>
+            <span className={styles.fileTitle}>{t("export.print")}</span>
+            <span className={styles.fileNote}>{t("export.printNote")}</span>
+          </span>
+          <Printer size={18} className={styles.fileArrow} aria-hidden="true" />
         </button>
       </div>
 
       {exporting && (
-        <p style={{ textAlign: "center", color: "var(--text-2)", fontSize: "0.82rem", marginTop: "1rem" }}>
-          {t("export.loading")}
-        </p>
+        <p className={styles.loadingNote} role="status">{t("export.loading")}</p>
       )}
     </div>
   );

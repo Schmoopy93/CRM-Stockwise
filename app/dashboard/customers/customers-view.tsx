@@ -27,6 +27,7 @@ import {
 import { usePagination } from "@/lib/use-pagination";
 import CustomerForm from "@/components/CustomerForm";
 import ListPagination from "@/components/ListPagination";
+import Select from "@/components/Select";
 import StatTiles from "@/components/StatTiles";
 import type { Customer } from "@/lib/types";
 import styles from "./customers.module.css";
@@ -145,16 +146,14 @@ export default function CustomersView({ shopId, customers, loading, spending, or
         </div>
         <div className={styles.sortWrap}>
           <ArrowUpDown size={14} aria-hidden="true" />
-          <select
+          <Select
             className={styles.sortSelect}
+            bare
             value={sort}
-            onChange={(event) => setSort(event.target.value as CustomerSort)}
-            aria-label={t("products.sortLabel")}
-          >
-            {SORTS.map((option) => (
-              <option key={option.value} value={option.value}>{t(option.key)}</option>
-            ))}
-          </select>
+            onChange={(next) => setSort(next as CustomerSort)}
+            options={SORTS.map((option) => ({ value: option.value, label: t(option.key) }))}
+            ariaLabel={t("products.sortLabel")}
+          />
         </div>
       </div>
 

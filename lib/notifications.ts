@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { collection, limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db } from "./firebase";
 import { CatalogOrder, Product } from "./types";
@@ -265,6 +265,41 @@ export interface LowStockToast {
   body: string;
 }
 
+interface ToastQueue<T> {
+  get: () => readonly T[];
+  enqueue: (entries: T[], keyOf: (entry: T) => string) => void;
+  remove: (predicate: (entry: T) => boolean) => void;
+  dropOldest: () => void;
+  subscribe: (listener: () => void) => () => void;
+}
+
+/** Alerts are raised while comparing a fresh Firestore snapshot with the last
+ * one, so the queue lives outside React and the hook only subscribes to it —
+ * `useSyncExternalStore` keeps the state update out of the effect body. */
+function createToastQueue<T>(): ToastQueue<T> {
+  let items: readonly T[] = [];
+  const listeners = new Set<() => void>();
+  const update = (next: readonly T[]) => {
+    items = next;
+    for (const listener of listeners) listener();
+  };
+  return {
+    get: () => items,
+    enqueue: (entries, keyOf) => {
+      const keys = new Set(entries.map(keyOf));
+      update([...items.filter((item) => !keys.has(keyOf(item))), ...entries]);
+    },
+    remove: (predicate) => update(items.filter((item) => !predicate(item))),
+    dropOldest: () => update(items.slice(1)),
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+}
+
 export function useLowStockNotifications(
   shopId: string | undefined,
   products: Product[],
@@ -273,12 +308,11 @@ export function useLowStockNotifications(
   const { t } = useI18n();
   const levelsRef = useRef<AlertLevels>({});
   const seededRef = useRef(false);
-  const [toasts, setToasts] = useState<LowStockToast[]>([]);
-  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
-
-  useEffect(() => {
-    setPermission(typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported");
-  }, []);
+  const [toastQueue] = useState(() => createToastQueue<LowStockToast>());
+  const toasts = useSyncExternalStore(toastQueue.subscribe, toastQueue.get, toastQueue.get);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">(
+    () => (typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported")
+  );
 
   useEffect(() => {
     if (!shopId) return;
@@ -315,6 +349,7 @@ export function useLowStockNotifications(
     levelsRef.current = next;
     writeAlertLevels(shopId, next);
 
+    const newToasts: LowStockToast[] = [];
     for (const { product, level } of alerts) {
       const title = level === "out"
         ? t("notify.outOfStockTitle", { name: product.name })
@@ -323,19 +358,17 @@ export function useLowStockNotifications(
         ? t("notify.outOfStockBody")
         : t("notify.lowStockBody", { qty: product.totalQuantity, min: product.minStock });
 
-      setToasts((current) => [
-        ...current.filter((toast) => toast.productId !== product.id),
-        { id: `${product.id}-${level}-${Date.now()}`, productId: product.id, level, title, body },
-      ]);
+      newToasts.push({ id: `${product.id}-${level}-${Date.now()}`, productId: product.id, level, title, body });
       notifyAndOpen(title, body, `low-stock-${product.id}-${level}`, `/dashboard/products/${product.id}`);
     }
-  }, [shopId, products, loading, t]);
+    if (newToasts.length > 0) toastQueue.enqueue(newToasts, (toast) => toast.productId);
+  }, [shopId, products, loading, t, toastQueue]);
 
   useEffect(() => {
     if (toasts.length === 0) return;
-    const timer = setTimeout(() => setToasts((current) => current.slice(1)), 8000);
+    const timer = setTimeout(toastQueue.dropOldest, 8000);
     return () => clearTimeout(timer);
-  }, [toasts]);
+  }, [toasts, toastQueue]);
 
   const requestPermission = useCallback(async () => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
@@ -347,8 +380,8 @@ export function useLowStockNotifications(
   }, []);
 
   const dismissToast = useCallback((id: string) => {
-    setToasts((current) => current.filter((toast) => toast.id !== id));
-  }, []);
+    toastQueue.remove((toast) => toast.id === id);
+  }, [toastQueue]);
 
   return { toasts, dismissToast, permission, requestPermission };
 }

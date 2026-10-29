@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { deleteOwnAccount, deleteShopAccount } from "@/lib/actions";
 import { useShop } from "@/lib/hooks";
 import { translateError, useI18n } from "@/lib/i18n-context";
+import styles from "./settings-card.module.css";
 
 export default function DangerZone({ shopId }: { shopId: string }) {
   const { profile } = useAuth();
@@ -50,21 +51,21 @@ export default function DangerZone({ shopId }: { shopId: string }) {
   }
 
   return (
-    <section style={{ background: "var(--bg-2)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 16, padding: "1.1rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--red-dim)", color: "var(--red)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+    <section className={`glass ${styles.card}`} data-tone="danger">
+      <div className={styles.head}>
+        <div className={styles.icon} data-tone="danger">
           <AlertTriangle size={17} />
         </div>
-        <div style={{ minWidth: 0 }}>
-          <p style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--text-1)", margin: 0 }}>{t("danger.title")}</p>
-          <p style={{ fontSize: "0.72rem", lineHeight: 1.45, color: "var(--text-3)", margin: "0.15rem 0 0" }}>{isOwner ? t("danger.shopDesc") : t("danger.staffDesc")}</p>
+        <div className={styles.headText}>
+          <p className={styles.title}>{t("danger.title")}</p>
+          <p className={styles.desc}>{isOwner ? t("danger.shopDesc") : t("danger.staffDesc")}</p>
         </div>
       </div>
       <div>
         <button
           type="button"
           onClick={() => { setConfirmText(""); setError(""); setOpen(true); }}
-          style={{ display: "inline-flex", alignItems: "center", gap: 7, border: "1px solid rgba(239,68,68,0.35)", background: "var(--red-dim)", color: "var(--red)", borderRadius: 10, padding: "0.6rem 0.9rem", cursor: "pointer", fontWeight: 700, fontSize: "0.8rem" }}
+          className={styles.dangerBtn}
         >
           <Trash2 size={14} />
           {isOwner ? t("danger.deleteShop") : t("danger.deleteAccount")}

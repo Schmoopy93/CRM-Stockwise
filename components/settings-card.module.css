@@ -1,0 +1,327 @@
+/* Shared chrome for the settings cards stacked on the dashboard home: shop
+   currency, catalog channels, staff catalog access and the danger zone. Kept in
+   one module so all four stay visually identical. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  min-width: 0;
+  padding: 1.05rem 1.2rem;
+  border-radius: 14px;
+}
+
+.card[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--red) 26%, transparent);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.headText {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--accent-glow);
+  color: var(--accent-2);
+  flex-shrink: 0;
+}
+
+.icon[data-tone="danger"] {
+  background: var(--red-dim);
+  color: var(--red);
+}
+
+.title {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+.desc {
+  margin: 0.15rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.status {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-3);
+}
+
+.status[data-on="true"] {
+  color: var(--green);
+}
+
+/* ---------- switch ---------- */
+
+.toggle {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--bg-3);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.18s, border-color 0.18s, opacity 0.18s;
+}
+
+.toggle::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-2);
+  transition: transform 0.18s, background 0.18s;
+}
+
+.toggle[data-on="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.toggle[data-on="true"]::after {
+  transform: translateX(18px);
+  background: #fff;
+}
+
+.toggle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- fields and actions ---------- */
+
+.channels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.5rem;
+}
+
+.inlineSelect {
+  max-width: 260px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.smallBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  align-self: flex-start;
+  min-height: 38px;
+  padding: 0 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-3);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.smallBtn:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-2);
+  color: var(--text-1);
+}
+
+.smallBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.smallBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
+.error {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--red);
+}
+
+.dangerBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  min-height: 38px;
+  padding: 0 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--red) 32%, transparent);
+  border-radius: 9px;
+  background: var(--red-dim);
+  color: var(--red);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.dangerBtn:hover {
+  border-color: var(--red);
+}
+
+.dangerBtn:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}
+
+/* ---------- staff rows ---------- */
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  min-height: 56px;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.rowMain {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.rowBody {
+  min-width: 0;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent-glow);
+  color: var(--accent-2);
+  font-size: 0.7rem;
+  font-weight: 750;
+  flex-shrink: 0;
+}
+
+.rowName {
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowRole {
+  margin: 0.12rem 0 0;
+  font-size: 0.67rem;
+  color: var(--text-3);
+}
+
+.rowEnd {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-shrink: 0;
+}
+
+.rowStatus {
+  min-width: 62px;
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-align: right;
+  color: var(--text-3);
+}
+
+.rowStatus[data-on="true"] {
+  color: var(--green);
+}
+
+.empty {
+  margin: 0;
+  padding: 0.7rem 0 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text-3);
+}
+
+.skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.skeleton {
+  height: 42px;
+  border-radius: 9px;
+  background: var(--bg-3);
+  animation: pulse 1.3s ease-in-out infinite;
+}
+
+.skeleton:nth-child(2) {
+  opacity: 0.45;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}

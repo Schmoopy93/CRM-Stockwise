@@ -13,6 +13,7 @@ import ListPagination from "@/components/ListPagination";
 import { adjustStock, deleteProduct } from "@/lib/actions";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ArrowLeft, Pencil, Trash2, Minus, Plus, Clock, TrendingUp, TrendingDown } from "lucide-react";
+import styles from "./product-detail.module.css";
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -91,11 +92,11 @@ export default function ProductDetailPage() {
 
   const fmtLocale = INTL_LOCALES[locale];
 
-  if (loading) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="spinner" /></div>;
+  if (loading) return <div className={styles.loading}><div className="spinner" /></div>;
 
   if (!product) return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem", padding: "4rem", color: "var(--text-2)" }}>
-      <p style={{ margin: 0 }}>{t("product.notFound")}</p>
+    <div className={styles.missing}>
+      <p>{t("product.notFound")}</p>
       <Link href="/dashboard" className="pform-back">
         <ArrowLeft size={14} /> {t("back")}
       </Link>
@@ -105,7 +106,7 @@ export default function ProductDetailPage() {
   const isLow = product.minStock > 0 && product.totalQuantity <= product.minStock;
 
   return (
-    <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.25rem", maxWidth: 720 }}>
+    <div className={`fade-up ${styles.page}`}>
       <ConfirmDialog
         open={confirmAction !== null}
         title={confirmAction?.type === "delete" ? t("product.deleteConfirmTitle") : t("product.confirmLargeTitle")}
@@ -129,87 +130,60 @@ export default function ProductDetailPage() {
         onCancel={() => setConfirmAction(null)}
       />
 
-      {/* Breadcrumb + actions */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
+      <div className={styles.topBar}>
         <Link href="/dashboard/products" className="pform-back">
           <ArrowLeft size={14} /> {t("back")}
         </Link>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <Link
-            href={`/dashboard/products/${id}/edit`}
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "0.45rem 0.875rem", background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 8, fontSize: "0.8rem", color: "var(--text-2)", textDecoration: "none", transition: "all 0.15s" }}
-          >
+        <div className={styles.topActions}>
+          <Link href={`/dashboard/products/${id}/edit`} className="btn-secondary">
             <Pencil size={13} /> {t("product.edit")}
           </Link>
-          <button
-            onClick={() => setConfirmAction({ type: "delete" })}
-            disabled={deleting}
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "0.45rem 0.875rem", background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, fontSize: "0.8rem", color: "var(--red)", cursor: "pointer", transition: "all 0.15s" }}
-          >
+          <button className={styles.deleteBtn} onClick={() => setConfirmAction({ type: "delete" })} disabled={deleting}>
             <Trash2 size={13} /> {t("delete")}
           </button>
         </div>
       </div>
 
-      {/* Hero */}
-      <div className="glass" style={{ padding: "1.25rem" }}>
-        <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start", flexWrap: "wrap" }}>
+      <section className={`glass ${styles.hero}`}>
+        <div className={styles.heroMain}>
           {product.imageUrl ? (
-            <Image src={product.imageUrl} alt={product.name} width={72} height={72} style={{ width: 72, height: 72, borderRadius: 12, objectFit: "cover", flexShrink: 0 }} />
+            <Image src={product.imageUrl} alt={product.name} width={72} height={72} className={styles.heroImage} />
           ) : (
-            <Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={72} height={72} style={{ width: 72, height: 72, borderRadius: 12, objectFit: "cover", flexShrink: 0 }} />
+            <Image src="/android-chrome-512x512.png" alt="" aria-hidden="true" width={72} height={72} className={styles.heroImage} />
           )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={{ fontSize: "1.25rem", fontWeight: 700, margin: 0, color: "var(--text-1)", wordBreak: "break-word" }}>{product.name}</h1>
-            {product.sku && <p style={{ fontSize: "0.78rem", color: "var(--text-3)", margin: "3px 0 0", fontFamily: "monospace" }}>SKU: {product.sku}</p>}
-            {product.category && (
-              <span className="badge" style={{ marginTop: 8, background: "var(--accent-glow)", color: "var(--accent-2)", border: "1px solid rgba(99,102,241,0.2)" }}>
-                {product.category}
-              </span>
-            )}
+          <div className={styles.heroBody}>
+            <h1 className={styles.heroTitle}>{product.name}</h1>
+            {product.sku && <p className={styles.heroSku}>SKU: {product.sku}</p>}
+            {product.category && <span className={`badge ${styles.heroCategory}`}>{product.category}</span>}
           </div>
         </div>
 
-        {/* Stock numbers */}
-        <div style={{ display: "flex", gap: "1.5rem", marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
+        <div className={styles.stockRow}>
           <div>
-            <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>{t("product.totalStock")}</p>
-            <p style={{ fontSize: "2rem", fontWeight: 800, margin: "2px 0 0", color: isLow ? "var(--amber)" : "var(--text-1)", lineHeight: 1, letterSpacing: "-0.02em" }}>
-              {product.totalQuantity}
-            </p>
+            <p className={styles.stockLabel}>{t("product.totalStock")}</p>
+            <p className={styles.stockValue} data-low={isLow ? "" : undefined}>{product.totalQuantity}</p>
           </div>
           {product.minStock > 0 && (
             <div>
-              <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>{t("product.minStockLabel")}</p>
-              <p style={{ fontSize: "2rem", fontWeight: 800, margin: "2px 0 0", color: "var(--text-3)", lineHeight: 1, letterSpacing: "-0.02em" }}>
-                {product.minStock}
-              </p>
+              <p className={styles.stockLabel}>{t("product.minStockLabel")}</p>
+              <p className={styles.stockValue} data-muted="">{product.minStock}</p>
             </div>
           )}
         </div>
-      </div>
+      </section>
 
-      {error && (
-        <div style={{ background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, padding: "0.75rem 1rem", fontSize: "0.82rem", color: "var(--red)" }}>
-          {error}
-        </div>
-      )}
+      {error && <div role="alert" className={styles.alert}>{error}</div>}
 
-      {/* Pricing */}
       {(product.costPrice !== undefined || product.salePrice !== undefined || product.supplier?.name) && (
-        <section className="glass" style={{ padding: "1.1rem 1.25rem" }}>
-          <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-3)", margin: "0 0 0.75rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>
-            {t("product.pricingSupplier")}
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "0.875rem" }}>
+        <section className={`glass ${styles.section}`}>
+          <h2 className={styles.sectionTitle}>{t("product.pricingSupplier")}</h2>
+          <div className={styles.factGrid}>
             {product.costPrice !== undefined && (
               <div>
-                <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0 }}>{t("product.costPrice")}</p>
-                <p style={{ fontSize: "1.1rem", fontWeight: 700, margin: "3px 0 0", color: "var(--text-1)" }}>
-                  {money(product.costPrice)}
-                </p>
+                <p className={styles.factLabel}>{t("product.costPrice")}</p>
+                <p className={styles.factValue}>{money(product.costPrice)}</p>
                 {product.salePrice !== undefined && product.costPrice > 0 && (
-                  <p style={{ fontSize: "0.7rem", color: "var(--green)", margin: "2px 0 0" }}>
+                  <p className={styles.factNote}>
                     {t("product.margin")}: {(((product.salePrice - product.costPrice) / product.costPrice) * 100).toFixed(0)}%
                   </p>
                 )}
@@ -217,44 +191,37 @@ export default function ProductDetailPage() {
             )}
             {product.salePrice !== undefined && (
               <div>
-                <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0 }}>{t("product.salePrice")}</p>
-                <p style={{ fontSize: "1.1rem", fontWeight: 700, margin: "3px 0 0", color: "var(--text-1)" }}>
-                  {money(product.salePrice)}
-                </p>
+                <p className={styles.factLabel}>{t("product.salePrice")}</p>
+                <p className={styles.factValue}>{money(product.salePrice)}</p>
               </div>
             )}
             {product.costPrice !== undefined && (
               <div>
-                <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0 }}>{t("product.stockValue")}</p>
-                <p style={{ fontSize: "1.1rem", fontWeight: 700, margin: "3px 0 0", color: "#a855f7" }}>
-                  {money(product.costPrice * product.totalQuantity)}
-                </p>
+                <p className={styles.factLabel}>{t("product.stockValue")}</p>
+                <p className={styles.factValue} data-tone="violet">{money(product.costPrice * product.totalQuantity)}</p>
               </div>
             )}
             {product.supplier?.name && (
               <div>
-                <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: 0 }}>{t("product.supplier")}</p>
-                <p style={{ fontSize: "0.9rem", fontWeight: 600, margin: "3px 0 0", color: "var(--text-1)" }}>{product.supplier.name}</p>
-                {product.supplier.contact && <p style={{ fontSize: "0.75rem", color: "var(--accent-2)", margin: "2px 0 0" }}>{product.supplier.contact}</p>}
+                <p className={styles.factLabel}>{t("product.supplier")}</p>
+                <p className={styles.factValue} data-size="sm">{product.supplier.name}</p>
+                {product.supplier.contact && <p className={styles.factLink}>{product.supplier.contact}</p>}
               </div>
             )}
           </div>
         </section>
       )}
 
-      {/* Custom fields */}
       {product.customFieldDefinitions?.length > 0 && (
-        <section className="glass" style={{ padding: "1.1rem 1.25rem" }}>
-          <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-3)", margin: "0 0 0.75rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>
-            {t("product.customDetails")}
-          </p>
-          <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem", margin: 0 }}>
+        <section className={`glass ${styles.section}`}>
+          <h2 className={styles.sectionTitle}>{t("product.customDetails")}</h2>
+          <dl className={styles.defList}>
             {product.customFieldDefinitions.map((field) => {
               const value = product.customFieldValues?.[field.key];
               return (
                 <div key={field.key}>
-                  <dt style={{ fontSize: "0.7rem", color: "var(--text-3)" }}>{field.labels?.[locale] ?? field.label}</dt>
-                  <dd style={{ fontSize: "0.875rem", color: "var(--text-1)", margin: "3px 0 0", overflowWrap: "anywhere" }}>
+                  <dt className={styles.defLabel}>{field.labels?.[locale] ?? field.label}</dt>
+                  <dd className={styles.defValue}>
                     {value === undefined || value === "" ? "—" : typeof value === "boolean" ? value ? t("yes") : t("no") : field.type === "select" ? getLocalizedOptionValue(field, String(value), locale) : String(value)}
                   </dd>
                 </div>
@@ -264,32 +231,26 @@ export default function ProductDetailPage() {
         </section>
       )}
 
-      {/* Variants */}
-      <div>
-        <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-3)", margin: "0 0 0.625rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>
-          {t("product.variants")}
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+      <section>
+        <h2 className={styles.sectionTitle}>{t("product.variants")}</h2>
+        <div className={styles.variantList}>
           {variantsPaging.visible.map((variant) => (
-            <div key={variant.id} className="glass" style={{ padding: "1rem 1.1rem" }}>
-              {/* Top: name + qty */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text-1)", margin: 0 }}>{variant.label}</p>
-                  {variant.sku && <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: "2px 0 0", fontFamily: "monospace" }}>{variant.sku}</p>}
+            <div key={variant.id} className={`glass ${styles.variantCard}`}>
+              <div className={styles.variantTop}>
+                <div className={styles.variantMain}>
+                  <p className={styles.variantName}>{variant.label}</p>
+                  {variant.sku && <p className={styles.variantSku}>{variant.sku}</p>}
                 </div>
-                <span style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--text-1)", lineHeight: 1, letterSpacing: "-0.02em", flexShrink: 0 }}>
-                  {variant.quantity}
-                </span>
+                <span className={styles.variantQty}>{variant.quantity}</span>
               </div>
 
-              {/* Controls */}
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+              <div className={styles.controls}>
                 <button
                   onClick={() => requestAdjust(variant.id, -1)}
                   disabled={adjusting === variant.id || variant.quantity <= 0}
                   aria-label="-1"
-                  style={{ width: 36, height: 36, background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 9, color: "var(--red)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: adjusting === variant.id || variant.quantity <= 0 ? 0.4 : 1 }}
+                  className={styles.stepBtn}
+                  data-kind="minus"
                 >
                   <Minus size={15} />
                 </button>
@@ -298,16 +259,18 @@ export default function ProductDetailPage() {
                   type="number"
                   min="1"
                   placeholder="n"
+                  aria-label={t("sales.quantity")}
                   value={customDelta[variant.id] ?? ""}
                   onChange={(e) => setCustomDelta((p) => ({ ...p, [variant.id]: e.target.value }))}
-                  style={{ width: 60, background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 9, padding: "0.4rem 0.5rem", textAlign: "center", fontSize: "0.875rem", color: "var(--text-1)", outline: "none" }}
+                  className={styles.qtyInput}
                 />
 
                 <button
                   onClick={() => requestAdjust(variant.id, 1)}
                   disabled={adjusting === variant.id}
                   aria-label="+1"
-                  style={{ width: 36, height: 36, background: "var(--green-dim)", border: "1px solid rgba(34,197,94,0.15)", borderRadius: 9, color: "var(--green)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: adjusting === variant.id ? 0.4 : 1 }}
+                  className={styles.stepBtn}
+                  data-kind="plus"
                 >
                   <Plus size={15} />
                 </button>
@@ -317,14 +280,16 @@ export default function ProductDetailPage() {
                     <button
                       onClick={() => handleCustomAdjust(variant.id, false)}
                       disabled={adjusting === variant.id}
-                      style={{ height: 36, padding: "0 0.75rem", background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 9, fontSize: "0.8rem", color: "var(--red)", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}
+                      className={styles.applyBtn}
+                      data-kind="minus"
                     >
                       <TrendingDown size={13} /> −n
                     </button>
                     <button
                       onClick={() => handleCustomAdjust(variant.id, true)}
                       disabled={adjusting === variant.id}
-                      style={{ height: 36, padding: "0 0.75rem", background: "var(--green-dim)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: 9, fontSize: "0.8rem", color: "var(--green)", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}
+                      className={styles.applyBtn}
+                      data-kind="plus"
                     >
                       <TrendingUp size={13} /> +n
                     </button>
@@ -344,35 +309,23 @@ export default function ProductDetailPage() {
           onGoToPage={variantsPaging.goToPage}
           labels={pagingLabels}
         />
-      </div>
+      </section>
 
-      {/* History */}
       {events.length > 0 && (
-        <div>
-          <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-3)", margin: "0 0 0.625rem", textTransform: "uppercase", letterSpacing: "0.07em", display: "flex", alignItems: "center", gap: 6 }}>
+        <section>
+          <h2 className={styles.sectionTitle}>
             <Clock size={13} /> {t("product.history")}
-          </p>
-          <div className="glass" style={{ overflow: "hidden" }}>
-            {historyPaging.visible.map((event, i) => (
-              <div
-                key={event.id}
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", padding: "0.75rem 1.1rem", borderBottom: i < historyPaging.visible.length - 1 ? "1px solid var(--border)" : "none" }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-1)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{event.variantLabel}</p>
-                  <p style={{ fontSize: "0.7rem", color: "var(--text-3)", margin: "2px 0 0" }}>
+          </h2>
+          <div className={`glass ${styles.historyCard}`}>
+            {historyPaging.visible.map((event) => (
+              <div key={event.id} className={styles.historyRow}>
+                <div className={styles.historyMain}>
+                  <p className={styles.historyLabel}>{event.variantLabel}</p>
+                  <p className={styles.historyMeta}>
                     {event.actorName} · {event.createdAt ? event.createdAt.toLocaleString(fmtLocale) : "—"}
                   </p>
                 </div>
-                <span
-                  className="badge"
-                  style={{
-                    background: event.delta > 0 ? "var(--green-dim)" : "var(--red-dim)",
-                    color: event.delta > 0 ? "var(--green)" : "var(--red)",
-                    border: `1px solid ${event.delta > 0 ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)"}`,
-                    fontSize: "0.82rem", fontWeight: 700, letterSpacing: 0, flexShrink: 0,
-                  }}
-                >
+                <span className={`badge ${styles.delta}`} data-kind={event.delta > 0 ? "in" : "out"}>
                   {event.delta > 0 ? "+" : ""}{event.delta}
                 </span>
               </div>
@@ -388,7 +341,7 @@ export default function ProductDetailPage() {
             onGoToPage={historyPaging.goToPage}
             labels={pagingLabels}
           />
-        </div>
+        </section>
       )}
     </div>
   );

@@ -8,6 +8,9 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, LineChart, Line,
 } from "recharts";
 import { TrendingDown, TrendingUp, Activity, AlertCircle, Package, Eye, MessageCircle, Send, AtSign, Share2, Percent, ShoppingBag, DollarSign, Coins } from "lucide-react";
+import StatTiles, { type StatTile } from "@/components/StatTiles";
+import Select from "@/components/Select";
+import styles from "./analytics.module.css";
 
 function formatDay(date: Date, locale: Locale) {
   return date.toLocaleDateString(INTL_LOCALES[locale], { day: "2-digit", month: "2-digit", timeZone: "UTC" });
@@ -52,60 +55,66 @@ function CatalogStatsSection({ shopId, locale }: { shopId: string | undefined; l
   const conversion = totals.views > 0 ? Math.round((clicks / totals.views) * 100) : 0;
   const hasActivity = totals.views + clicks + totals.share + totals.orders > 0;
 
+  const tiles: StatTile[] = [
+    { icon: <Eye size={15} />, label: t("analytics.catalogViews"), value: totals.views, tone: "var(--accent-2)" },
+    { icon: <MessageCircle size={15} />, label: "WhatsApp", value: totals.whatsapp, tone: CHANNEL_COLORS.whatsapp },
+    { icon: <Send size={15} />, label: "Telegram", value: totals.telegram, tone: CHANNEL_COLORS.telegram },
+    { icon: <AtSign size={15} />, label: "Instagram", value: totals.instagram, tone: CHANNEL_COLORS.instagram },
+    { icon: <Share2 size={15} />, label: t("analytics.catalogShares"), value: totals.share, tone: "var(--cyan)" },
+    { icon: <ShoppingBag size={15} />, label: t("orders.title"), value: totals.orders, tone: "var(--violet)" },
+    { icon: <Percent size={15} />, label: t("analytics.catalogConversion"), value: `${conversion}%`, tone: "var(--green)" },
+  ];
+
   return (
-    <div className="glass" style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-      <div>
-        <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-          {t("analytics.catalogTitle")}
-        </h2>
-        <p style={{ fontSize: "0.75rem", color: "var(--text-3)", margin: "4px 0 0" }}>{t("analytics.catalogSubtitle")}</p>
+    <section className={`glass ${styles.card}`}>
+      <div className={styles.cardHead}>
+        <div>
+          <h2 className={styles.cardTitle}>{t("analytics.catalogTitle")}</h2>
+          <p className={styles.cardSub}>{t("analytics.catalogSubtitle")}</p>
+        </div>
       </div>
 
-      <div className="analytics-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(135px, 1fr))", gap: "0.75rem" }}>
-        {[
-          { icon: <Eye size={15} />, label: t("analytics.catalogViews"), value: totals.views, color: "#6366f1" },
-          { icon: <MessageCircle size={15} />, label: "WhatsApp", value: totals.whatsapp, color: CHANNEL_COLORS.whatsapp },
-          { icon: <Send size={15} />, label: "Telegram", value: totals.telegram, color: CHANNEL_COLORS.telegram },
-          { icon: <AtSign size={15} />, label: "Instagram", value: totals.instagram, color: CHANNEL_COLORS.instagram },
-          { icon: <Share2 size={15} />, label: t("analytics.catalogShares"), value: totals.share, color: "#22d3ee" },
-          { icon: <ShoppingBag size={15} />, label: t("orders.title"), value: totals.orders, color: "#a855f7" },
-          { icon: <Percent size={15} />, label: t("analytics.catalogConversion"), value: `${conversion}%`, color: "var(--green)" },
-        ].map(({ icon, label, value, color }) => (
-          <div key={label} style={{ padding: "0.85rem 1rem", borderRadius: 12, background: "var(--bg-3)", display: "flex", flexDirection: "column", gap: 6 }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: "var(--text-2)" }}>
-              <span style={{ color, display: "flex" }}>{icon}</span>
+      <div className={styles.catalogStats}>
+        {tiles.map(({ icon, label, value, tone }) => (
+          <div key={label} className={styles.miniStat}>
+            <span className={styles.miniLabel}>
+              <span style={{ color: tone, display: "inline-flex" }}>{icon}</span>
               {label}
             </span>
-            <p style={{ fontSize: "1.35rem", fontWeight: 700, margin: 0, color: "var(--text-1)", lineHeight: 1 }}>{loading ? "…" : error ? "—" : value}</p>
+            <p className={styles.miniValue}>{loading ? "…" : error ? "—" : value}</p>
           </div>
         ))}
       </div>
 
       {error ? (
-        <p role="alert" style={{ color: "var(--red)", fontSize: "0.82rem", textAlign: "center", padding: "1.5rem 0", margin: 0 }}>{t("analytics.catalogLoadFailed")}</p>
+        <p role="alert" className={`${styles.muted} ${styles.mutedAlert}`}>{t("analytics.catalogLoadFailed")}</p>
       ) : loading ? (
-        <p role="status" style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "1.5rem 0", margin: 0 }}>{t("analytics.catalogLoading")}</p>
+        <p role="status" className={styles.muted}>{t("analytics.catalogLoading")}</p>
       ) : !hasActivity ? (
-        <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "1.5rem 0", margin: 0 }}>{t("analytics.catalogEmpty")}</p>
+        <p className={styles.muted}>{t("analytics.catalogEmpty")}</p>
       ) : (
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-            <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
-            <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
-            <Tooltip
-              contentStyle={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
-              labelStyle={{ color: "var(--text-2)" }}
-              cursor={{ fill: "var(--bg-3)" }}
-            />
-            <Bar dataKey="whatsapp" name="WhatsApp" stackId="clicks" fill={CHANNEL_COLORS.whatsapp} />
-            <Bar dataKey="telegram" name="Telegram" stackId="clicks" fill={CHANNEL_COLORS.telegram} />
-            <Bar dataKey="instagram" name="Instagram" stackId="clicks" fill={CHANNEL_COLORS.instagram} radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <div className={styles.catalogChart}>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
+              <Tooltip
+                contentStyle={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                labelStyle={{ color: "var(--text-2)" }}
+                cursor={{ fill: "var(--bg-3)" }}
+              />
+              <Bar dataKey="whatsapp" name="WhatsApp" stackId="clicks" fill={CHANNEL_COLORS.whatsapp} />
+              <Bar dataKey="telegram" name="Telegram" stackId="clicks" fill={CHANNEL_COLORS.telegram} />
+              <Bar dataKey="instagram" name="Instagram" stackId="clicks" fill={CHANNEL_COLORS.instagram} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       )}
-    </div>
+    </section>
   );
 }
+
+const RANGES: ActivityRange[] = ["30days", "90days", "12months", "year"];
 
 export default function AnalyticsPage() {
   const { profile } = useAuth();
@@ -323,136 +332,110 @@ export default function AnalyticsPage() {
 
   const ACCENT_COLORS = ["#6366f1", "#818cf8", "#a5b4fc", "#c7d2fe", "#e0e7ff", "#4f46e5", "#4338ca", "#3730a3"];
 
+  const tiles: StatTile[] = [
+    { icon: <Package size={16} />, label: t("analytics.products"), value: products.length, tone: "var(--accent-2)" },
+    { icon: <Activity size={16} />, label: t("analytics.changes"), value: eventsLoading ? "—" : events.length, tone: "var(--cyan)" },
+    { icon: <TrendingUp size={16} />, label: t("analytics.received"), value: eventsLoading ? "—" : totalIn, tone: "var(--green)" },
+    { icon: <TrendingDown size={16} />, label: t("analytics.issued"), value: eventsLoading ? "—" : totalOut, tone: lowStock.length > 0 ? "var(--amber)" : "var(--red)" },
+    { icon: <DollarSign size={16} />, label: t("analytics.revenue"), value: money(totalRevenue, { minimumFractionDigits: 2 }), tone: "var(--violet)" },
+    { icon: <Coins size={16} />, label: profitStats.margin !== null ? t("analytics.profitMargin", { pct: profitStats.margin }) : t("analytics.profit"), value: money(profitStats.profit, { minimumFractionDigits: 2 }), tone: "var(--green)" },
+  ];
+
   return (
-    <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+    <div className={`fade-up ${styles.page}`}>
+      <header className={styles.header}>
+        <h1 className={styles.title}>{t("analytics.title")}</h1>
+        <p className={styles.subtitle}>{t("analytics.subtitle", { range: rangeLabel })}</p>
+      </header>
 
-      {/* Header */}
-      <div>
-        <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{t("analytics.title")}</h1>
-        <p style={{ fontSize: "0.82rem", color: "var(--text-2)", marginTop: 4 }}>{t("analytics.subtitle", { range: rangeLabel })}</p>
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-        {(["30days", "90days", "12months", "year"] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={range === value}
-            onClick={() => setRange(value)}
-            style={{
-              padding: "0.45rem 0.8rem",
-              fontSize: "0.78rem",
-              fontWeight: 650,
-              cursor: "pointer",
-              borderRadius: 999,
-              background: range === value ? "var(--accent-glow)" : "var(--bg-2)",
-              border: `1px solid ${range === value ? "rgba(99,102,241,0.3)" : "var(--border)"}`,
-              color: range === value ? "var(--accent-2)" : "var(--text-2)",
-            }}
-          >
-            {t(`analytics.range.${value}`)}
-          </button>
-        ))}
+      <div className={styles.toolbar}>
+        <div className={styles.chips} role="group" aria-label={t("analytics.title")}>
+          {RANGES.map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={styles.chip}
+              data-active={range === value || undefined}
+              aria-pressed={range === value}
+              onClick={() => setRange(value)}
+            >
+              {t(`analytics.range.${value}`)}
+            </button>
+          ))}
+        </div>
         {range === "year" && (
-          <select
-            className="input"
-            value={selectedYear}
-            onChange={(event) => setSelectedYear(Number(event.target.value))}
-            aria-label={t("analytics.selectYear")}
-            style={{ width: "auto", minWidth: 110 }}
-          >
-            {yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
-          </select>
+          <Select
+            className={styles.yearSelect}
+            value={String(selectedYear)}
+            onChange={(next) => setSelectedYear(Number(next))}
+            options={yearOptions.map((year) => ({ value: String(year), label: String(year) }))}
+            ariaLabel={t("analytics.selectYear")}
+          />
         )}
-        <span style={{ fontSize: "0.75rem", color: "var(--text-3)", marginLeft: "0.25rem" }}>
+        <span className={styles.rangeEnd}>
           {dateRange.from.toLocaleDateString(INTL_LOCALES[locale])} – {dateRange.to.toLocaleDateString(INTL_LOCALES[locale])}
         </span>
         {truncated && (
-          <p style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.75rem", color: "var(--amber)", margin: 0, flexBasis: "100%" }}>
-            <AlertCircle size={13} style={{ flexShrink: 0 }} />
+          <p className={styles.warn}>
+            <AlertCircle size={13} />
             {t("analytics.salesTruncated")}
           </p>
         )}
       </div>
 
       {eventsError && (
-        <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, padding: "0.75rem 0.9rem", fontSize: "0.82rem", color: "var(--red)" }}>
-          <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+        <div role="alert" className={styles.alert}>
+          <AlertCircle size={15} />
           {t("analytics.loadFailed")}
         </div>
       )}
 
-      {/* Stats row */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-      <div className="analytics-stats analytics-stats-main" style={{ display: "grid", gap: "1rem" }}>
-        {[
-          { icon: <Package size={16} />, label: t("analytics.products"), value: products.length, color: "#6366f1", bg: "rgba(99,102,241,0.1)", isLoading: false },
-          { icon: <Activity size={16} />, label: t("analytics.changes"), value: events.length, color: "#22d3ee", bg: "rgba(34,211,238,0.1)", isLoading: true },
-          { icon: <TrendingUp size={16} />, label: t("analytics.received"), value: totalIn, color: "var(--green)", bg: "var(--green-dim)", isLoading: true },
-          { icon: <TrendingDown size={16} />, label: t("analytics.issued"), value: totalOut, color: lowStock.length > 0 ? "var(--amber)" : "var(--red)", bg: lowStock.length > 0 ? "var(--amber-dim)" : "var(--red-dim)", isLoading: true },
-          { icon: <DollarSign size={16} />, label: t("analytics.revenue"), value: money(totalRevenue, { minimumFractionDigits: 2 }), color: "#a855f7", bg: "rgba(168,85,247,0.1)", isLoading: false, wide: true },
-          { icon: <Coins size={16} />, label: profitStats.margin !== null ? t("analytics.profitMargin", { pct: profitStats.margin }) : t("analytics.profit"), value: money(profitStats.profit, { minimumFractionDigits: 2 }), color: "var(--green)", bg: "var(--green-dim)", isLoading: false, wide: true },
-        ].map(({ icon, label, value, color, bg, isLoading, wide }) => (
-          <div key={label} className={`glass analytics-stat${wide ? " analytics-stat-wide" : ""}`} style={{ padding: "1.1rem 1.25rem", display: "flex", alignItems: "center", gap: "0.875rem" }}>
-            <div style={{ width: 36, height: 36, background: bg, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0 }}>
-              {icon}
-            </div>
-            <div className="analytics-stat-copy">
-              <p className="analytics-stat-value" style={{ margin: 0, color: "var(--text-1)" }}>
-                {eventsLoading && isLoading ? "—" : value}
-              </p>
-              <p style={{ fontSize: "0.72rem", color: "var(--text-2)", margin: "2px 0 0" }}>{label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-        {profitStats.missingCost && (
-          <p style={{ fontSize: "0.75rem", color: "var(--amber)", margin: 0 }}>{t("analytics.profitIncomplete")}</p>
-        )}
-      </div>
+      <StatTiles items={tiles} size="lg" label={t("analytics.title")} />
 
-      {/* Activity chart */}
-      <div className="glass" style={{ padding: "1.5rem" }}>
-        <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 1.25rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-          {t("analytics.activity")}
-        </h2>
+      {profitStats.missingCost && (
+        <p className={styles.warn}>{t("analytics.profitIncomplete")}</p>
+      )}
+
+      <section className={`glass ${styles.card}`}>
+        <div className={styles.cardHead}>
+          <h2 className={styles.cardTitle}>{t("analytics.activity")}</h2>
+        </div>
         {eventsLoading ? (
-          <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "2rem 0", margin: 0 }}>{t("analytics.loading")}</p>
+          <p className={styles.muted}>{t("analytics.loading")}</p>
         ) : activityData.every((day) => day.received === 0 && day.issued === 0) ? (
-          <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "2rem 0", margin: 0 }}>{t("analytics.noData")}</p>
+          <p className={styles.muted}>{t("analytics.noData")}</p>
         ) : (
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={activityData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-            <defs>
-              <linearGradient id="gIn" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="gOut" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
-            <Tooltip
-              contentStyle={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
-              labelStyle={{ color: "var(--text-2)" }}
-            />
-            <Area type="monotone" dataKey="received" name={t("analytics.chartIn")} stroke="#22c55e" strokeWidth={2} fill="url(#gIn)" />
-            <Area type="monotone" dataKey="issued" name={t("analytics.chartOut")} stroke="#6366f1" strokeWidth={2} fill="url(#gOut)" />
-          </AreaChart>
-        </ResponsiveContainer>
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={activityData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gIn" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gOut" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
+              <Tooltip
+                contentStyle={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                labelStyle={{ color: "var(--text-2)" }}
+              />
+              <Area type="monotone" dataKey="received" name={t("analytics.chartIn")} stroke="#22c55e" strokeWidth={2} fill="url(#gIn)" />
+              <Area type="monotone" dataKey="issued" name={t("analytics.chartOut")} stroke="#6366f1" strokeWidth={2} fill="url(#gOut)" />
+            </AreaChart>
+          </ResponsiveContainer>
         )}
-      </div>
+      </section>
 
-      {/* Revenue chart */}
-      <div className="glass" style={{ padding: "1.5rem" }}>
-        <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 1.25rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-          {t("analytics.revenueTitle")}
-        </h2>
+      <section className={`glass ${styles.card}`}>
+        <div className={styles.cardHead}>
+          <h2 className={styles.cardTitle}>{t("analytics.revenueTitle")}</h2>
+        </div>
         {revenueData.every((d) => d.revenue === 0) ? (
-          <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "2rem 0", margin: 0 }}>{t("analytics.revenueEmpty")}</p>
+          <p className={styles.muted}>{t("analytics.revenueEmpty")}</p>
         ) : (
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={revenueData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
@@ -465,14 +448,12 @@ export default function AnalyticsPage() {
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
               <Tooltip
-                contentStyle={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
-                labelStyle={{ color: "var(--text-2)" }}
                 content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null;
                   return (
-                    <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "0.5rem 0.75rem", fontSize: 12 }}>
-                      <p style={{ margin: "0 0 4px", color: "var(--text-2)" }}>{label}</p>
-                      <p style={{ margin: 0, color: "#a855f7", fontWeight: 600 }}>{money(Number(payload[0].value), { minimumFractionDigits: 2 })}</p>
+                    <div className={styles.tip}>
+                      <p className={styles.tipLabel}>{label}</p>
+                      <p className={styles.tipValue}>{money(Number(payload[0].value), { minimumFractionDigits: 2 })}</p>
                     </div>
                   );
                 }}
@@ -481,19 +462,17 @@ export default function AnalyticsPage() {
             </LineChart>
           </ResponsiveContainer>
         )}
-      </div>
+      </section>
 
-      <div className="analytics-panels" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-
-        {/* Top movers */}
-        <div className="glass" style={{ padding: "1.5rem" }}>
-          <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 1.25rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            {t("analytics.topMovers")}
-          </h2>
+      <div className={styles.panels}>
+        <section className={`glass ${styles.card}`}>
+          <div className={styles.cardHead}>
+            <h2 className={styles.cardTitle}>{t("analytics.topMovers")}</h2>
+          </div>
           {eventsLoading ? (
-            <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "2rem 0" }}>{t("analytics.loading")}</p>
+            <p className={styles.muted}>{t("analytics.loading")}</p>
           ) : topMovers.length === 0 ? (
-            <p style={{ color: "var(--text-3)", fontSize: "0.82rem", textAlign: "center", padding: "2rem 0" }}>{t("analytics.noData")}</p>
+            <p className={styles.muted}>{t("analytics.noData")}</p>
           ) : (
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={topMovers} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }} barCategoryGap="28%">
@@ -523,60 +502,56 @@ export default function AnalyticsPage() {
               </BarChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </section>
 
-        {/* Low stock list */}
-        <div className="glass" style={{ padding: "1.5rem" }}>
-          <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 1.25rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            {t("analytics.lowStockCount", { n: lowStock.length })}
-          </h2>
+        <section className={`glass ${styles.card}`}>
+          <div className={styles.cardHead}>
+            <h2 className={styles.cardTitle}>{t("analytics.lowStockCount", { n: lowStock.length })}</h2>
+          </div>
           {lowStock.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "2rem 0", color: "var(--green)", fontSize: "0.875rem" }}>
-              {t("analytics.allGood")}
-            </div>
+            <p className={`${styles.muted} ${styles.mutedGood}`}>{t("analytics.allGood")}</p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: 220, overflow: "auto" }}>
+            <div className={styles.list}>
               {lowStock.map((p) => (
-                <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", padding: "0.5rem 0", borderBottom: "1px solid var(--border)" }}>
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-1)", margin: 0, overflowWrap: "anywhere" }}>{p.name}</p>
-                    <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: "1px 0 0" }}>{t("analytics.minStock")} {p.minStock}</p>
+                <div key={p.id} className={styles.listRow}>
+                  <div className={styles.listMain}>
+                    <p className={styles.listName}>{p.name}</p>
+                    <p className={styles.listHint}>{t("analytics.minStock")} {p.minStock}</p>
                   </div>
-                  <span style={{ fontWeight: 700, color: "var(--amber)", fontSize: "1.1rem", flexShrink: 0 }}>{p.totalQuantity}</span>
+                  <span className={styles.listQty}>{p.totalQuantity}</span>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </section>
 
-        {/* Dead stock: in stock the whole period, nothing sold */}
-        <div className="glass" style={{ padding: "1.5rem" }}>
-          <h2 style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-2)", margin: "0 0 0.25rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            {t("analytics.deadStockCount", { n: deadStock.length })}
-          </h2>
-          <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: "0 0 1rem" }}>{t("analytics.deadStockSubtitle")}</p>
-          {deadStock.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "2rem 0", color: "var(--green)", fontSize: "0.875rem" }}>
-              {t("analytics.deadStockEmpty")}
+        <section className={`glass ${styles.card}`}>
+          <div className={styles.cardHead}>
+            <div>
+              <h2 className={styles.cardTitle}>{t("analytics.deadStockCount", { n: deadStock.length })}</h2>
+              <p className={styles.cardSub}>{t("analytics.deadStockSubtitle")}</p>
             </div>
+          </div>
+          {deadStock.length === 0 ? (
+            <p className={`${styles.muted} ${styles.mutedGood}`}>{t("analytics.deadStockEmpty")}</p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: 220, overflow: "auto" }}>
+            <div className={styles.list}>
               {deadStock.map((p) => (
-                <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", padding: "0.5rem 0", borderBottom: "1px solid var(--border)" }}>
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-1)", margin: 0, overflowWrap: "anywhere" }}>{p.name}</p>
-                    <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: "1px 0 0" }}>
+                <div key={p.id} className={styles.listRow}>
+                  <div className={styles.listMain}>
+                    <p className={styles.listName}>{p.name}</p>
+                    <p className={styles.listHint}>
                       {p.tiedValue > 0
                         ? t("analytics.deadStockHint", { value: money(p.tiedValue, { minimumFractionDigits: 2 }) })
                         : t("analytics.deadStockNoValue")}
                     </p>
                   </div>
-                  <span style={{ fontWeight: 700, color: "var(--amber)", fontSize: "1.1rem", flexShrink: 0 }}>{p.totalQuantity}</span>
+                  <span className={styles.listQty}>{p.totalQuantity}</span>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </section>
       </div>
 
       <CatalogStatsSection shopId={profile?.shopId} locale={locale} />

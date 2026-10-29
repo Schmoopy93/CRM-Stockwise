@@ -303,7 +303,16 @@ async function selectValue(page, locator, value) {
   await bringIntoView(target);
   await glide(page, target);
   await sleep(180);
-  await target.selectOption(value);
+  const isNative = (await target.evaluate((element) => element.tagName)) === "SELECT";
+  if (isNative) {
+    await target.selectOption(value);
+  } else {
+    await target.click();
+    await sleep(280);
+    const option = page.locator(`[role="option"][data-value="${value}"]`).first();
+    if (await option.count()) await option.click();
+    else await page.keyboard.press("Escape");
+  }
   await sleep(700);
 }
 
@@ -604,7 +613,7 @@ async function sceneDashboard(page) {
     await sleep(600);
   }
 
-  const currencySelect = page.locator(`select[aria-label="${SR["currency.label"]}"]`).first();
+  const currencySelect = page.locator(`[role="combobox"][aria-label="${SR["currency.label"]}"]`).first();
   if (await currencySelect.count()) {
     await bringIntoView(currencySelect);
     await caption(page, "Valuta prodavnice");
@@ -1260,7 +1269,7 @@ async function sceneSales(page) {
         await caption(page, "Cena po komadu se može prepisati na mestu");
         await sleep(900);
       }
-      const channel = page.locator(`select[aria-label="${SR["sales.channel"]}"]`).first();
+      const channel = page.locator(`[role="combobox"][aria-label="${SR["sales.channel"]}"]`).first();
       if (await channel.count()) {
         await selectValue(page, channel, "store");
         await sleep(650);
@@ -1566,7 +1575,7 @@ async function sceneCustomers(page) {
     await sleep(500);
   }
 
-  const sort = page.locator(`select[aria-label="${SR["products.sortLabel"]}"]`).first();
+  const sort = page.locator(`[role="combobox"][aria-label="${SR["products.sortLabel"]}"]`).first();
   if (await sort.count()) {
     await selectValue(page, sort, "spent");
     await sleep(450);
@@ -2270,23 +2279,18 @@ async function sceneImportExportAudit(page) {
     await sleep(800);
     const filterPanel = page.locator(".glass.fade-up").first();
     if (await filterPanel.count()) {
-      const actor = filterPanel.locator("select").nth(0);
+      const actor = filterPanel.getByRole("combobox").nth(0);
       if (await actor.count()) {
         await selectValue(page, actor, "all");
         await sleep(450);
       }
-      const reason = filterPanel.locator("select").nth(1);
-      if (await reason.count()) {
-        await bringIntoView(reason);
-        await selectValue(page, reason, "sale");
-        await sleep(850);
-        await caption(page, "Filter po tipu događaja");
-        await sleep(700);
-      }
-      const product = filterPanel.locator("select").nth(2);
+      const product = filterPanel.getByRole("combobox").nth(1);
       if (await product.count()) {
+        await bringIntoView(product);
         await selectValue(page, product, "all");
-        await sleep(450);
+        await sleep(850);
+        await caption(page, "Filter po zaposlenom i artiklu");
+        await sleep(700);
       }
       const dateFrom = filterPanel.locator('input[type="date"]').nth(0);
       const dateTo = filterPanel.locator('input[type="date"]').nth(1);

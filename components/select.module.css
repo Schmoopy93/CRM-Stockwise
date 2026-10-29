@@ -1,0 +1,193 @@
+/* Custom dropdown. The option list is ours, so it never depends on the native
+   popup surface — Chrome paints that white on the dark theme even with
+   `color-scheme: dark`. Base trigger rules use :where() so every call site's
+   own class (size, font, padding) wins without fighting specificity. */
+
+:where(.trigger) {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-3);
+  color: var(--text-1);
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.25;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+}
+
+:where(.trigger):hover {
+  border-color: var(--border-hover);
+}
+
+:where(.trigger):not([data-bare]):focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+  background: var(--bg-2);
+}
+
+:where(.trigger)[data-open="true"] {
+  border-color: var(--accent);
+}
+
+:where(.trigger):disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Wrapper-owned chrome (label with its own border and chevron). */
+:where(.trigger)[data-bare] {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+:where(.trigger)[data-bare]:focus-visible {
+  outline: none;
+}
+
+.value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.value[data-placeholder="true"] {
+  color: var(--text-3);
+}
+
+.chevron {
+  flex: 0 0 auto;
+  color: var(--text-3);
+  transition: transform 0.16s, color 0.16s;
+}
+
+.trigger[data-open="true"] .chevron {
+  transform: rotate(180deg);
+  color: var(--accent-2);
+}
+
+/* ---------- popup ---------- */
+
+.menu {
+  position: fixed;
+  z-index: 1002;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg-2);
+  border: 1px solid var(--border-hover);
+  border-radius: 10px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42), 0 2px 6px rgba(0, 0, 0, 0.26);
+  animation: menuIn 0.12s ease-out;
+}
+
+:global(.light) .menu {
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.1);
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.menu[data-drop-up="true"] {
+  animation-name: menuInUp;
+}
+
+@keyframes menuInUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 7px;
+  color: var(--text-1);
+  font-size: 0.82rem;
+  line-height: 1.3;
+  cursor: pointer;
+  user-select: none;
+}
+
+.option[data-active="true"] {
+  background: var(--bg-3);
+}
+
+.option[data-selected="true"] {
+  color: var(--accent-2);
+  font-weight: 650;
+}
+
+.option[data-selected="true"][data-active="true"] {
+  background: var(--accent-glow);
+}
+
+.option[data-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.optionLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.check {
+  flex: 0 0 auto;
+  color: var(--accent-2);
+}
+
+.emptyRow {
+  padding: 0.5rem 0.6rem;
+  font-size: 0.78rem;
+  color: var(--text-3);
+}
+
+/* Carries `required` into native form validation for the custom trigger. Kept
+   out of sight but not display:none, which would bar it from validation. */
+.validation {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu,
+  .menu[data-drop-up="true"] {
+    animation: none;
+  }
+}

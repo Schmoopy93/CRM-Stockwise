@@ -6,11 +6,13 @@ import { useProducts, useSales, useShopMoney } from "@/lib/hooks";
 import { INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { findProductByCode, PartialReceiptError, recordSale, stornoSale, linkSaleToCustomer } from "@/lib/actions";
 import CustomerPicker from "@/components/CustomerPicker";
+import Select from "@/components/Select";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { Product, ProductVariant, Sale, SaleChannel } from "@/lib/types";
 import { BASE_CURRENCY } from "@/lib/currency";
-import { Plus, Minus, ShoppingBag, CheckCircle, Barcode, Search, Trash2, AtSign, History, Undo2 } from "lucide-react";
+import { AlertCircle, AtSign, Barcode, CheckCircle, History, Minus, Plus, Search, ShoppingBag, Trash2, Undo2, UserRound, X } from "lucide-react";
+import styles from "./sales.module.css";
 
 const BarcodeScanner = lazy(() =>
   import("@/components/BarcodeScanner").then((m) => ({ default: m.BarcodeScanner }))
@@ -25,7 +27,7 @@ export default function SalesPage() {
   const { locale, t } = useI18n();
   const intlLocale = INTL_LOCALES[locale];
   const { products } = useProducts(profile?.shopId);
-  const { sales, hasMore, loadMore } = useSales(profile?.shopId);
+  const { sales, loading: salesLoading, hasMore, loadMore } = useSales(profile?.shopId);
   // Sales are recorded in the base currency — what was actually charged — and
   // only the display converts, so a rate change never rewrites past revenue.
   const { money, currency } = useShopMoney(profile?.shopId, intlLocale);
@@ -177,216 +179,353 @@ export default function SalesPage() {
   }
 
   if (done) return (
-    <div className="fade-up" style={{ maxWidth: 480, margin: "4rem auto", textAlign: "center" }}>
-      <CheckCircle size={56} color="var(--green)" style={{ marginBottom: "1rem" }} />
-      <h2 style={{ fontSize: "1.3rem", fontWeight: 700, color: "var(--text-1)", margin: "0 0 0.5rem" }}>{t("sales.success")}</h2>
-      <p style={{ color: "var(--text-2)", fontSize: "0.875rem", marginBottom: "1.5rem" }}>{t("sales.successNote")}</p>
+    <div className={`fade-up ${styles.success}`}>
+      <div className={styles.successIcon}>
+        <CheckCircle size={30} />
+      </div>
+      <h2 className={styles.successTitle}>{t("sales.success")}</h2>
+      <p className={styles.successBody}>{t("sales.successNote")}</p>
       <button className="btn-primary" onClick={() => setDone(false)}>{t("sales.newSale")}</button>
     </div>
   );
 
   return (
-    <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: "1.5rem", maxWidth: 640 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
-        <div style={{ minWidth: 0 }}>
-          <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{t("sales.title")}</h1>
-          <p style={{ fontSize: "0.82rem", color: "var(--text-2)", marginTop: 4 }}>{t("sales.subtitle")}</p>
+    <main className={`fade-up ${styles.page}`}>
+      <header className={styles.header}>
+        <div className={styles.headMain}>
+          <h1 className={styles.title}>{t("sales.title")}</h1>
+          <p className={styles.subtitle}>{t("sales.subtitle")}</p>
         </div>
-        <button onClick={() => setShowScanner(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "0.55rem 1rem", background: "var(--accent-glow)", border: "1px solid rgba(99,102,241,0.3)", borderRadius: 10, color: "var(--accent-2)", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" }}>
-          <Barcode size={15} /> {t("receive.scan")}
+        <button type="button" className={styles.scanBtn} onClick={() => setShowScanner(true)}>
+          <Barcode size={15} />
+          {t("receive.scan")}
         </button>
-      </div>
+      </header>
 
-      <div style={{ position: "relative" }}>
-        <Search size={15} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)" }} />
-        <input className="input" placeholder={t("sales.searchAdd")} value={search} onChange={(e) => setSearch(e.target.value)} disabled={loadingVariants || saving} style={{ paddingLeft: "2.5rem" }} />
-        {filtered.length > 0 && (
-          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100, background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.4)" }}>
-            {filtered.slice(0, 6).map((p) => (
-              <button key={p.id} onClick={() => void addLine(p)} disabled={loadingVariants || saving}
-                style={{ width: "100%", textAlign: "left", padding: "0.75rem 1rem", background: "none", border: "none", borderBottom: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", color: "var(--text-1)", fontSize: "0.875rem" }}
-                onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg-3)")}
-                onMouseOut={(e) => (e.currentTarget.style.background = "none")}>
-                <span style={{ fontWeight: 500 }}>{p.name}</span>
-                <span style={{ fontSize: "0.72rem", color: "var(--text-3)" }}>{p.sku || "—"}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {error && <div style={{ background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, padding: "0.75rem 1rem", fontSize: "0.82rem", color: "var(--red)" }}>{error}</div>}
-
-      {lines.length === 0 ? (
-        <div style={{ height: 180, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "1px dashed var(--border)", borderRadius: 16, gap: "0.5rem", color: "var(--text-3)" }}>
-          <ShoppingBag size={28} /><span style={{ fontSize: "0.875rem" }}>{t("sales.empty")}</span>
+      {error && (
+        <div role="alert" className={styles.alert}>
+          <AlertCircle size={15} />
+          {error}
         </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-          {lines.map((line, idx) => (
-            <div key={`${line.product.id}/${line.variantId}`} className="glass receipt-line" style={{ padding: "1rem 1.25rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-              <div className="receipt-line-info" style={{ flex: 1 }}>
-                <p style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text-1)", margin: 0 }}>{line.product.name}</p>
-                <p style={{ fontSize: "0.72rem", color: "var(--text-3)", margin: "2px 0 0" }}>{t("receive.currentStock")}: {line.product.totalQuantity}</p>
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center", marginTop: "0.5rem" }}>
-                  <select
-                    className="input"
-                    aria-label={t("receive.variant")}
-                    value={line.variantId}
-                    onChange={(event) => setLines((current) => current.map((item, i) => i === idx ? { ...item, variantId: event.target.value } : item))}
-                    style={{ maxWidth: 220, padding: "0.4rem 0.6rem", fontSize: "0.78rem" }}
-                  >
-                    {line.variants.map((variant) => (
-                      <option key={variant.id} value={variant.id} disabled={lines.some((other, otherIndex) => otherIndex !== idx && other.product.id === line.product.id && other.variantId === variant.id)}>
-                        {variant.label} · {t("receive.variantStock", { qty: variant.quantity })}
-                      </option>
-                    ))}
-                  </select>
+      )}
+
+      <div className={styles.layout}>
+        <section className={`glass ${styles.composer}`} aria-label={t("sales.title")}>
+          <div className={styles.searchWrap}>
+            <Search size={16} className={styles.searchIcon} aria-hidden="true" />
+            <input
+              className={`input ${styles.searchInput}`}
+              type="search"
+              placeholder={t("sales.searchAdd")}
+              aria-label={t("sales.searchAdd")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              disabled={loadingVariants || saving}
+            />
+            {loadingVariants ? (
+              <span className={styles.searchBusy} aria-hidden="true" />
+            ) : search ? (
+              <button type="button" className={styles.searchClear} onClick={() => setSearch("")} aria-label={t("orders.clearSearch")}>
+                <X size={15} />
+              </button>
+            ) : null}
+
+            {filtered.length > 0 && (
+              <ul className={styles.suggest} role="listbox" aria-label={t("sales.searchAdd")}>
+                {filtered.slice(0, 6).map((p) => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={false}
+                      className={styles.suggestRow}
+                      onClick={() => void addLine(p)}
+                      disabled={loadingVariants || saving}
+                    >
+                      <span>
+                        <span className={styles.suggestName}>{p.name}</span>
+                        <span className={styles.suggestMeta}>{p.sku || "—"}</span>
+                      </span>
+                      <span className={styles.suggestAdd} aria-hidden="true"><Plus size={14} /></span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {lines.length === 0 ? (
+            <div className={styles.empty}>
+              <span className={styles.emptyIcon}><ShoppingBag size={20} /></span>
+              <p className={styles.emptyTitle}>{t("sales.empty")}</p>
+              <p className={styles.emptyBody}>{t("receive.empty")}</p>
+            </div>
+          ) : (
+            <ul className={styles.lines}>
+              {lines.map((line, idx) => {
+                const unit = parseFloat(line.unitPrice.replace(",", "."));
+                const lineTotal = Number.isFinite(unit) ? unit * line.quantity : null;
+                return (
+                  <li key={`${line.product.id}/${line.variantId}`} className={styles.line}>
+                    <div className={styles.lineHead}>
+                      <div className={styles.lineInfo}>
+                        <p className={styles.lineName}>{line.product.name}</p>
+                        <p className={styles.lineStock}>
+                          {t("receive.currentStock")}: {line.product.totalQuantity}
+                        </p>
+                      </div>
+                      <span className={styles.lineTotal} data-empty={lineTotal === null || undefined}>
+                        {lineTotal === null ? "—" : money(lineTotal, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className={styles.lineFields}>
+                      <Select
+                        className={styles.variantSelect}
+                        ariaLabel={t("receive.variant")}
+                        value={line.variantId}
+                        onChange={(next) => setLines((current) => current.map((item, i) => i === idx ? { ...item, variantId: next } : item))}
+                        options={line.variants.map((variant) => ({
+                          value: variant.id,
+                          label: `${variant.label} · ${t("receive.variantStock", { qty: variant.quantity })}`,
+                          disabled: lines.some((other, otherIndex) => otherIndex !== idx && other.product.id === line.product.id && other.variantId === variant.id),
+                        }))}
+                      />
+                      <input
+                        className={`input ${styles.priceInput}`}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        aria-label={`${t("sales.unitPrice")} (${BASE_CURRENCY})`}
+                        placeholder={`${t("catalog.price")} (${BASE_CURRENCY})`}
+                        value={line.unitPrice}
+                        onChange={(event) => setLines((current) => current.map((item, i) => i === idx ? { ...item, unitPrice: event.target.value } : item))}
+                      />
+                      <div className={styles.stepper}>
+                        <button type="button" className={styles.stepBtn} onClick={() => updateQty(idx, -1)} aria-label={`${t("sales.quantity")} −`}>
+                          <Minus size={13} />
+                        </button>
+                        <input
+                          className={styles.stepInput}
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={line.quantity}
+                          aria-label={t("sales.quantity")}
+                          onChange={(e) => setLines((p) => p.map((l, i) => i === idx ? { ...l, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) } : l))}
+                        />
+                        <button type="button" className={styles.stepBtn} onClick={() => updateQty(idx, 1)} aria-label={`${t("sales.quantity")} +`}>
+                          <Plus size={13} />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.removeBtn}
+                        onClick={() => setLines((current) => current.filter((_, i) => i !== idx))}
+                        aria-label={t("receive.removeLine")}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {lines.length > 0 && (
+            <div className={styles.checkout}>
+              <h2 className={styles.sectionLabel}>
+                <UserRound size={13} aria-hidden="true" />
+                {t("sales.buyer")}
+              </h2>
+              <div className={styles.fields}>
+                <Select
+                  className={styles.control}
+                  ariaLabel={t("sales.channel")}
+                  value={channel}
+                  onChange={(next) => setChannel(next as SaleChannel)}
+                  options={CHANNELS.map((ch) => ({ value: ch, label: t(`sales.channel.${ch}`) }))}
+                />
+                <input
+                  className={`input ${styles.control}`}
+                  placeholder={t("sales.buyerNamePlaceholder")}
+                  aria-label={t("sales.buyerNamePlaceholder")}
+                  maxLength={100}
+                  value={buyerName}
+                  onChange={(e) => setBuyerName(e.target.value)}
+                  disabled={saving}
+                />
+                <div className={styles.contactWrap}>
+                  {channel === "instagram" && <AtSign size={14} className={styles.contactIcon} aria-hidden="true" />}
                   <input
-                    className="input"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    aria-label={`${t("sales.unitPrice")} (${BASE_CURRENCY})`}
-                    placeholder={`${t("sales.unitPrice")} (${BASE_CURRENCY})`}
-                    value={line.unitPrice}
-                    onChange={(event) => setLines((current) => current.map((item, i) => i === idx ? { ...item, unitPrice: event.target.value } : item))}
-                    style={{ width: 100, padding: "0.4rem 0.6rem", fontSize: "0.78rem" }}
+                    className={`input ${styles.control} ${styles.contactInput}`}
+                    data-icon={channel === "instagram" || undefined}
+                    placeholder={channel === "instagram" ? t("sales.instagramPlaceholder") : t("sales.buyerContact")}
+                    aria-label={channel === "instagram" ? t("sales.instagramPlaceholder") : t("sales.buyerContact")}
+                    maxLength={100}
+                    value={buyerContact}
+                    onChange={(e) => setBuyerContact(e.target.value)}
+                    disabled={saving}
+                  />
+                </div>
+                <div className={styles.fieldNote}>
+                  <input
+                    className={`input ${styles.control} ${styles.noteInput}`}
+                    placeholder={t("sales.notePlaceholder")}
+                    aria-label={t("sales.notePlaceholder")}
+                    maxLength={500}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    disabled={saving}
                   />
                 </div>
               </div>
-              <div className="receipt-controls" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <button onClick={() => updateQty(idx, -1)} style={{ width: 30, height: 30, background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Minus size={13} /></button>
-                <input type="number" min="1" step="1" value={line.quantity} onChange={(e) => setLines((p) => p.map((l, i) => i === idx ? { ...l, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) } : l))}
-                  style={{ width: 56, background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 8, padding: "0.3rem 0.5rem", textAlign: "center", fontSize: "0.9rem", fontWeight: 700, color: "var(--text-1)", outline: "none" }} />
-                <button onClick={() => updateQty(idx, 1)} style={{ width: 30, height: 30, background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Plus size={13} /></button>
-                <button onClick={() => setLines((current) => current.filter((_, i) => i !== idx))} aria-label={t("receive.removeLine")} style={{ width: 30, height: 30, background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, color: "var(--red)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={13} /></button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {lines.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", padding: "1.25rem", background: "var(--bg-3)", borderRadius: 14, border: "1px solid var(--border)" }}>
-          <p style={{ margin: 0, fontWeight: 600, color: "var(--text-1)", fontSize: "0.9rem" }}>{t("sales.buyer")}</p>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <select className="input" aria-label={t("sales.channel")} value={channel} onChange={(e) => setChannel(e.target.value as SaleChannel)} style={{ width: 160, padding: "0.5rem 0.6rem", fontSize: "0.82rem" }}>
-              {CHANNELS.map((ch) => <option key={ch} value={ch}>{t(`sales.channel.${ch}`)}</option>)}
-            </select>
-            <input className="input" placeholder={t("sales.buyerNamePlaceholder")} maxLength={100} value={buyerName} onChange={(e) => setBuyerName(e.target.value)} disabled={saving} style={{ flex: 1, minWidth: 140, padding: "0.5rem 0.75rem", fontSize: "0.82rem" }} />
-            <div style={{ position: "relative", flex: 1, minWidth: 160 }}>
-              {channel === "instagram" && <AtSign size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)" }} />}
-              <input className="input" placeholder={channel === "instagram" ? t("sales.instagramPlaceholder") : t("sales.buyerContact")} maxLength={100}
-                value={buyerContact} onChange={(e) => setBuyerContact(e.target.value)} disabled={saving}
-                style={{ width: "100%", padding: `0.5rem 0.75rem 0.5rem ${channel === "instagram" ? "2rem" : "0.75rem"}`, fontSize: "0.82rem" }} />
-            </div>
-          </div>
-          <input className="input" placeholder={t("sales.notePlaceholder")} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} disabled={saving} style={{ padding: "0.5rem 0.75rem", fontSize: "0.82rem" }} />
-          {/* Attribution is separate from the buyer fields above: those record
-              what was typed at the till, this records who the shop already knows
-              the person to be, which is what makes their history findable. */}
-          {profile && <CustomerPicker shopId={profile.shopId} value={customerId} onChange={setCustomerId} />}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
-            <div>
-              <p style={{ margin: 0, fontWeight: 600, color: "var(--text-1)" }}>
-                {t("sales.summary", { n: lines.length, qty: lines.reduce((s, l) => s + l.quantity, 0) })}
-                {total > 0 && <span style={{ color: "var(--accent-2)" }}> · {money(total, { minimumFractionDigits: 2 })}</span>}
-              </p>
-              <p style={{ margin: "2px 0 0", fontSize: "0.78rem", color: "var(--text-2)" }}>
-                {currency === BASE_CURRENCY ? t("sales.summaryNote") : t("sales.unitPriceBaseNote", { base: BASE_CURRENCY, currency })}
-              </p>
-            </div>
-            <button className="btn-primary" onClick={handleConfirm} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <CheckCircle size={15} />{saving ? t("sales.confirming") : t("sales.confirm")}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {sales.length > 0 && (
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.75rem" }}>
-            <History size={15} color="var(--text-3)" />
-            <h2 style={{ fontSize: "1rem", fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{t("sales.history")}</h2>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            {sales.map((sale) => {
-              const isStorno = Boolean(sale.stornoOf);
-              const isStornoed = stornoedIds.has(sale.id);
-              const confirming = stornoId === sale.id;
-              return (
-              <div key={sale.id} className="glass" style={{ padding: "0.875rem 1.125rem", borderRadius: 12, display: "flex", alignItems: "center", gap: "0.875rem", flexWrap: "wrap", ...(isStorno ? { border: "1px solid rgba(239,68,68,0.3)" } : {}) }}>
-                <div style={{ flex: 1, minWidth: 180 }}>
-                  <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600, color: "var(--text-1)" }}>
-                    {isStorno && (
-                      <span style={{ display: "inline-block", marginRight: 6, padding: "1px 6px", borderRadius: 6, background: "var(--red-dim)", color: "var(--red)", fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.04em", verticalAlign: "middle" }}>
-                        {t("sales.stornoBadge")}
-                      </span>
-                    )}
-                    {sale.lines.map((line) => `${line.productName} ×${line.quantity}`).join(", ")}
-                  </p>
-                  <p style={{ margin: "2px 0 0", fontSize: "0.72rem", color: "var(--text-3)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span>{t(`sales.channel.${sale.channel}`)}</span>
-                    {sale.sourceOrderCode && <span>· {t("sales.catalogOrder", { code: sale.sourceOrderCode })}</span>}
-                    {sale.buyerName && <span>· {sale.buyerName}</span>}
-                    {sale.buyerContact && <span>· {sale.channel === "instagram" ? `@${sale.buyerContact}` : sale.buyerContact}</span>}
-                    {sale.createdAt && <span>· {sale.createdAt.toLocaleString(intlLocale)}</span>}
-                  </p>
-                  {profile && !sale.sourceOrderId && !isStorno && (
-                    <div style={{ marginTop: "0.4rem" }}>
-                      <CustomerPicker
-                        shopId={profile.shopId}
-                        value={sale.customerId ?? ""}
-                        onChange={(cid) => void linkSaleToCustomer(profile.shopId, sale.id, cid || null)}
-                      />
-                    </div>
-                  )}
-                  {isStornoed && (
-                    <p style={{ margin: "0.4rem 0 0", fontSize: "0.75rem", color: "var(--red)", fontWeight: 600 }}>{t("sales.stornoedBadge")}</p>
-                  )}
-                  {!isStorno && !isStornoed && (confirming ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
-                      <span style={{ fontSize: "0.75rem", color: "var(--text-2)" }}>{t("sales.stornoConfirm")}</span>
-                      <button onClick={() => void handleStorno(sale)} disabled={stornoBusy}
-                        style={{ padding: "0.3rem 0.7rem", background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, color: "var(--red)", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer" }}>
-                        {stornoBusy ? t("sales.stornoBusy") : t("sales.storno")}
-                      </button>
-                      <button onClick={() => { setStornoId(""); setStornoRestored(null); }} disabled={stornoBusy}
-                        style={{ padding: "0.3rem 0.7rem", background: "none", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-2)", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer" }}>
-                        {t("cancel")}
-                      </button>
-                    </div>
-                  ) : (
-                    <button onClick={() => { setStornoId(sale.id); setStornoRestored(null); setError(""); }}
-                      style={{ marginTop: "0.5rem", display: "inline-flex", alignItems: "center", gap: 5, padding: "0.3rem 0.7rem", background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, color: "var(--red)", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer" }}>
-                      <Undo2 size={12} /> {t("sales.storno")}
-                    </button>
-                  ))}
+              {/* Attribution is separate from the buyer fields above: those record
+                  what was typed at the till, this records who the shop already knows
+                  the person to be, which is what makes their history findable. */}
+              {profile && (
+                <div className={styles.linker}>
+                  <CustomerPicker shopId={profile.shopId} value={customerId} onChange={setCustomerId} />
                 </div>
-                <span style={{ fontWeight: 700, fontSize: "0.9rem", color: isStorno ? "var(--red)" : "var(--green)" }}>
-                  {isStorno ? `−${money(sale.total, { minimumFractionDigits: 2 })}` : money(sale.total, { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              );
-            })}
-          </div>
-          {hasMore && (
-            <div className="list-pagination" style={{ marginTop: "0.75rem" }}>
-              <p className="list-pagination-count">{t("paging.showing")} {sales.length}</p>
-              <div className="list-pagination-actions">
-                <button type="button" className="list-pagination-more" onClick={loadMore}>{t("paging.loadMore")}</button>
+              )}
+              <div className={styles.confirmRow}>
+                <div className={styles.summary}>
+                  <p className={styles.summaryTotal}>{money(total, { minimumFractionDigits: 2 })}</p>
+                  <p className={styles.summaryMeta}>
+                    {t("sales.summary", { n: lines.length, qty: lines.reduce((s, l) => s + l.quantity, 0) })}
+                  </p>
+                  <p className={styles.summaryNote}>
+                    {currency === BASE_CURRENCY ? t("sales.summaryNote") : t("sales.unitPriceBaseNote", { base: BASE_CURRENCY, currency })}
+                  </p>
+                </div>
+                <button className={`btn-primary ${styles.confirmBtn}`} onClick={handleConfirm} disabled={saving}>
+                  {saving ? <span className="spinner" aria-hidden="true" /> : <CheckCircle size={15} />}
+                  {saving ? t("sales.confirming") : t("sales.confirm")}
+                </button>
               </div>
             </div>
           )}
-        </div>
-      )}
+        </section>
+
+        <aside className={styles.history} aria-label={t("sales.history")}>
+          <header className={styles.historyHead}>
+            <span className={styles.historyIcon}><History size={15} /></span>
+            <h2 className={styles.historyTitle}>{t("sales.history")}</h2>
+            {!salesLoading && <span className={styles.countPill}>{sales.length}</span>}
+          </header>
+
+          <div className={styles.historyBody}>
+            {salesLoading ? (
+              <div className={styles.skeletons} aria-label={t("loading")} aria-busy="true">
+                {[0, 1, 2].map((index) => <div key={index} className={styles.skeleton} />)}
+              </div>
+            ) : sales.length === 0 ? (
+              <div className={styles.historyEmpty}>
+                <span className={styles.emptyIcon}><History size={18} /></span>
+                <p className={styles.emptyTitle}>{t("sales.historyEmpty")}</p>
+              </div>
+            ) : (
+              <ul className={styles.saleList}>
+                {sales.map((sale) => {
+                  const isStorno = Boolean(sale.stornoOf);
+                  const isStornoed = stornoedIds.has(sale.id);
+                  const confirming = stornoId === sale.id;
+                  return (
+                    <li key={sale.id}>
+                      <article className={`glass ${styles.saleCard}`} data-storno={isStorno || undefined}>
+                        <div className={styles.saleTop}>
+                          <div className={styles.saleMain}>
+                            <p className={styles.saleLines}>
+                              {isStorno && <span className={styles.stornoTab}>{t("sales.stornoBadge")}</span>}
+                              {sale.lines.map((line) => `${line.productName} ×${line.quantity}`).join(", ")}
+                            </p>
+                            <p className={styles.saleMeta}>
+                              <span className={styles.channelTag}>{t(`sales.channel.${sale.channel}`)}</span>
+                              {sale.sourceOrderCode && (
+                                <>
+                                  <span className={styles.metaSep} aria-hidden="true">·</span>
+                                  <span>{t("sales.catalogOrder", { code: sale.sourceOrderCode })}</span>
+                                </>
+                              )}
+                              {sale.buyerName && (
+                                <>
+                                  <span className={styles.metaSep} aria-hidden="true">·</span>
+                                  <span>{sale.buyerName}</span>
+                                </>
+                              )}
+                              {sale.buyerContact && (
+                                <>
+                                  <span className={styles.metaSep} aria-hidden="true">·</span>
+                                  <span>{sale.channel === "instagram" ? `@${sale.buyerContact}` : sale.buyerContact}</span>
+                                </>
+                              )}
+                              {sale.createdAt && (
+                                <>
+                                  <span className={styles.metaSep} aria-hidden="true">·</span>
+                                  <time dateTime={sale.createdAt.toISOString()}>{sale.createdAt.toLocaleString(intlLocale)}</time>
+                                </>
+                              )}
+                            </p>
+                          </div>
+                          <div className={styles.saleAmount}>
+                            <span className={styles.saleTotal}>
+                              {isStorno ? `−${money(sale.total, { minimumFractionDigits: 2 })}` : money(sale.total, { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className={styles.saleFoot}>
+                          {profile && !sale.sourceOrderId && !isStorno && (
+                            <div className={styles.linker}>
+                              <CustomerPicker
+                                shopId={profile.shopId}
+                                value={sale.customerId ?? ""}
+                                onChange={(cid) => void linkSaleToCustomer(profile.shopId, sale.id, cid || null)}
+                              />
+                            </div>
+                          )}
+                          {isStornoed && <p className={styles.voidNote}>{t("sales.stornoedBadge")}</p>}
+                          {!isStorno && !isStornoed && (confirming ? (
+                            <div className={styles.stornoPanel}>
+                              <p className={styles.stornoQuestion}>{t("sales.stornoConfirm")}</p>
+                              <button type="button" className={styles.stornoConfirm} onClick={() => void handleStorno(sale)} disabled={stornoBusy}>
+                                {stornoBusy ? t("sales.stornoBusy") : t("sales.storno")}
+                              </button>
+                              <button type="button" className={styles.cancelBtn} onClick={() => { setStornoId(""); setStornoRestored(null); }} disabled={stornoBusy}>
+                                {t("cancel")}
+                              </button>
+                            </div>
+                          ) : (
+                            <button type="button" className={styles.stornoBtn} onClick={() => { setStornoId(sale.id); setStornoRestored(null); setError(""); }}>
+                              <Undo2 size={12} />
+                              {t("sales.storno")}
+                            </button>
+                          ))}
+                        </div>
+                      </article>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {hasMore && sales.length > 0 && (
+              <div className="list-pagination">
+                <p className="list-pagination-count">{t("paging.showing")} {sales.length}</p>
+                <div className="list-pagination-actions">
+                  <button type="button" className="list-pagination-more" onClick={loadMore}>{t("paging.loadMore")}</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </aside>
+      </div>
 
       {showScanner && (
         <Suspense fallback={null}>
           <BarcodeScanner onScan={handleScan} onClose={() => setShowScanner(false)} />
         </Suspense>
       )}
-    </div>
+    </main>
   );
 }

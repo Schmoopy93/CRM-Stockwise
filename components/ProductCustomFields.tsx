@@ -4,6 +4,7 @@ import { useState } from "react";
 import { auth } from "@/lib/firebase";
 import { ProductCustomField, ProductCustomFieldType } from "@/lib/types";
 import { useI18n } from "@/lib/i18n-context";
+import Select from "@/components/Select";
 import { ListPlus, Plus, Sparkles, Trash2 } from "lucide-react";
 
 type FieldValue = string | number | boolean;
@@ -198,20 +199,23 @@ export default function ProductCustomFields({
         <div key={field.key} className="pform-field-card">
           <div className="product-custom-field-row">
             <input aria-label={t("product.customFieldName")} className="input" value={field.labels?.[locale] ?? field.label} maxLength={50} onChange={(event) => updateDefinition(field.key, { label: event.target.value })} />
-            <select aria-label={t("product.customFieldType")} className="input" value={field.type} onChange={(event) => {
-              const type = event.target.value as ProductCustomFieldType;
-              if (type === "select") {
-                const options = field.optionsByLocale?.[locale] ?? field.options ?? [t("product.customFieldOther")];
-                const optionsByLocale = { ...field.optionsByLocale, [locale]: options };
-                const existingValues = field.optionValues ?? field.optionsByLocale?.en ?? field.options ?? [];
-                const optionValues = options.map((_, index) => existingValues[index] ?? `option_${index + 1}`);
-                updateDefinition(field.key, { type, options, optionsByLocale, optionValues });
-              } else {
-                updateDefinition(field.key, { type, options: undefined, optionsByLocale: undefined, optionValues: undefined });
-              }
-            }}>
-              {fieldTypes.map((type) => <option key={type.value} value={type.value}>{t(type.labelKey)}</option>)}
-            </select>
+            <Select
+              ariaLabel={t("product.customFieldType")}
+              value={field.type}
+              onChange={(next) => {
+                const type = next as ProductCustomFieldType;
+                if (type === "select") {
+                  const options = field.optionsByLocale?.[locale] ?? field.options ?? [t("product.customFieldOther")];
+                  const optionsByLocale = { ...field.optionsByLocale, [locale]: options };
+                  const existingValues = field.optionValues ?? field.optionsByLocale?.en ?? field.options ?? [];
+                  const optionValues = options.map((_, index) => existingValues[index] ?? `option_${index + 1}`);
+                  updateDefinition(field.key, { type, options, optionsByLocale, optionValues });
+                } else {
+                  updateDefinition(field.key, { type, options: undefined, optionsByLocale: undefined, optionValues: undefined });
+                }
+              }}
+              options={fieldTypes.map((type) => ({ value: type.value, label: t(type.labelKey) }))}
+            />
             <button type="button" className="pform-icon-btn" aria-label={t("product.removeField", { name: field.labels?.[locale] ?? field.label })} onClick={() => removeField(field.key)}>
               <Trash2 size={14} />
             </button>
@@ -239,22 +243,28 @@ export default function ProductCustomFields({
               {field.labels?.[locale] ?? field.label}
             </label>
           ) : field.type === "select" ? (
-            <select className="input" value={(() => {
-              const currentValue = String(values[field.key] ?? "");
-              const optionValues = field.optionValues ?? field.optionsByLocale?.en ?? field.options ?? [];
-              if (optionValues.includes(currentValue)) return currentValue;
-              for (const language of [locale, "sr", "en", "ru", "de", "es", "it"] as const) {
-                const index = field.optionsByLocale?.[language]?.indexOf(currentValue) ?? -1;
-                if (index >= 0) return optionValues[index] ?? currentValue;
-              }
-              return currentValue;
-            })()} required={field.required} onChange={(event) => updateValue(field.key, event.target.value)}>
-              <option value="">{t("product.customFieldSelect")}</option>
-              {(field.optionsByLocale?.[locale] ?? field.options ?? []).map((option, index) => {
-                const optionValue = field.optionValues?.[index] ?? field.optionsByLocale?.en?.[index] ?? field.options?.[index] ?? option;
-                return <option key={`${optionValue}-${index}`} value={optionValue}>{option}</option>;
-              })}
-            </select>
+            <Select
+              required={field.required}
+              ariaLabel={field.labels?.[locale] ?? field.label}
+              value={(() => {
+                const currentValue = String(values[field.key] ?? "");
+                const optionValues = field.optionValues ?? field.optionsByLocale?.en ?? field.options ?? [];
+                if (optionValues.includes(currentValue)) return currentValue;
+                for (const language of [locale, "sr", "en", "ru", "de", "es", "it"] as const) {
+                  const index = field.optionsByLocale?.[language]?.indexOf(currentValue) ?? -1;
+                  if (index >= 0) return optionValues[index] ?? currentValue;
+                }
+                return currentValue;
+              })()}
+              onChange={(next) => updateValue(field.key, next)}
+              options={[
+                { value: "", label: t("product.customFieldSelect") },
+                ...(field.optionsByLocale?.[locale] ?? field.options ?? []).map((option, index) => {
+                  const optionValue = field.optionValues?.[index] ?? field.optionsByLocale?.en?.[index] ?? field.options?.[index] ?? option;
+                  return { value: optionValue, label: option };
+                }),
+              ]}
+            />
           ) : (
             <input
               className="input"

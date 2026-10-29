@@ -6,6 +6,7 @@ import { orderFulfillment } from "@/lib/orders";
 import { formatCatalogPrice } from "@/lib/catalog-channels";
 import { BASE_CURRENCY } from "@/lib/currency";
 import OrderConversation from "@/components/OrderConversation";
+import Select from "@/components/Select";
 import type { CatalogOrder, Customer, OrderStatus } from "@/lib/types";
 import styles from "./orders.module.css";
 
@@ -119,20 +120,20 @@ export default function OrderCard({
           )}
           {order.note && <p className={styles.note}>{order.note}</p>}
           <div className={styles.customerPicker}>
-            <select
-              className={`input ${styles.customerSelect}`}
+            <Select
+              className={styles.customerSelect}
               value={order.customerId ?? ""}
-              onChange={(event) => onCustomerChange(order.id, event.target.value)}
+              onChange={(next) => onCustomerChange(order.id, next)}
               disabled={busy || customersLoading}
-              aria-label={t("customers.attach")}
-            >
-              <option value="">{t("customers.attach")}</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}{customer.contact ? ` · ${customer.contact}` : ""}
-                </option>
-              ))}
-            </select>
+              ariaLabel={t("customers.attach")}
+              options={[
+                { value: "", label: t("customers.attach") },
+                ...customers.map((customer) => ({
+                  value: customer.id,
+                  label: `${customer.name}${customer.contact ? ` · ${customer.contact}` : ""}`,
+                })),
+              ]}
+            />
           </div>
         </div>
 

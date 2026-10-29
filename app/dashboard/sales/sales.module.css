@@ -1,0 +1,999 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 1040px;
+  min-width: 0;
+}
+
+/* ---------- header ---------- */
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.headMain {
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--text-1);
+}
+
+.subtitle {
+  max-width: 620px;
+  margin: 0.3rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.scanBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 10px;
+  background: var(--accent-glow);
+  color: var(--accent-2);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.scanBtn:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--accent);
+}
+
+.scanBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--red) 22%, transparent);
+  border-radius: 11px;
+  background: var(--red-dim);
+  color: var(--red);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.alert svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ---------- layout ---------- */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
+  align-items: start;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+  padding: 1rem;
+  border-radius: 14px;
+}
+
+/* ---------- product search ---------- */
+
+.searchWrap {
+  position: relative;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-3);
+  pointer-events: none;
+}
+
+.searchInput {
+  height: 42px;
+  padding-left: 2.4rem;
+  padding-right: 2.5rem;
+  font-size: 0.85rem;
+}
+
+.searchInput:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+.searchClear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.searchClear:hover {
+  color: var(--text-1);
+  background: var(--bg-3);
+}
+
+.searchClear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.searchBusy {
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  margin-top: -7.5px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.suggest {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 18px 44px -18px rgba(15, 23, 42, 0.45);
+  max-height: 290px;
+  overflow-y: auto;
+}
+
+.suggestRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.suggestRow:hover {
+  background: var(--bg-3);
+}
+
+.suggestRow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.suggestName {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.suggestMeta {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.7rem;
+  color: var(--text-3);
+}
+
+.suggestAdd {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  border-radius: 7px;
+  background: var(--accent-glow);
+  color: var(--accent-2);
+  flex-shrink: 0;
+}
+
+/* ---------- lines ---------- */
+
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.line {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.9rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.line:first-child {
+  padding-top: 0.15rem;
+  border-top: 0;
+}
+
+.lineHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.lineInfo {
+  min-width: 0;
+}
+
+.lineName {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}
+
+.lineStock {
+  margin: 0.2rem 0 0;
+  font-size: 0.71rem;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.lineTotal {
+  flex-shrink: 0;
+  font-size: 0.86rem;
+  font-weight: 750;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lineTotal[data-empty] {
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.lineFields {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.variantSelect {
+  flex: 1 1 170px;
+  min-width: 0;
+  height: 38px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.78rem;
+}
+
+.priceInput {
+  width: 104px;
+  height: 38px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+
+.stepBtn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.stepBtn:hover {
+  background: var(--bg-2);
+  color: var(--text-1);
+}
+
+.stepBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.stepInput {
+  width: 44px;
+  height: 100%;
+  border: 0;
+  border-inline: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-1);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.stepInput::-webkit-outer-spin-button,
+.stepInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.removeBtn {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-left: auto;
+  border: 1px solid color-mix(in srgb, var(--red) 24%, transparent);
+  border-radius: 9px;
+  background: var(--red-dim);
+  color: var(--red);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.removeBtn:hover {
+  border-color: var(--red);
+  background: color-mix(in srgb, var(--red) 20%, transparent);
+}
+
+.removeBtn:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}
+
+/* ---------- empty state ---------- */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 190px;
+  padding: 1.5rem;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+}
+
+.emptyIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--bg-3);
+  color: var(--text-3);
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: var(--text-1);
+}
+
+.emptyBody {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
+/* ---------- checkout ---------- */
+
+.checkout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin-top: 0.15rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.sectionLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem;
+}
+
+.field {
+  min-width: 0;
+}
+
+.fieldNote {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.control {
+  height: 40px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+.contactWrap {
+  position: relative;
+  min-width: 0;
+}
+
+.contactIcon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-3);
+  pointer-events: none;
+}
+
+.contactInput[data-icon] {
+  padding-left: 2rem;
+}
+
+.noteInput {
+  font-size: 0.82rem;
+}
+
+.linker {
+  min-width: 0;
+}
+
+.linker select {
+  height: 38px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.78rem;
+}
+
+.confirmRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-top: 0.15rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.summary {
+  min-width: 0;
+}
+
+.summaryTotal {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.summaryMeta {
+  margin: 0.15rem 0 0;
+  font-size: 0.76rem;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.summaryNote {
+  max-width: 320px;
+  margin: 0.25rem 0 0;
+  font-size: 0.71rem;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+.confirmBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 1.1rem;
+  font-size: 0.84rem;
+}
+
+/* ---------- history ---------- */
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.historyBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 0;
+}
+
+.historyHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.historyIcon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent-glow);
+  color: var(--accent-2);
+  flex-shrink: 0;
+}
+
+.historyTitle {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+.countPill {
+  margin-left: auto;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-3);
+  color: var(--text-2);
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.historyEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 150px;
+  padding: 1.5rem;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+}
+
+.saleList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.saleCard {
+  position: relative;
+  min-width: 0;
+  padding: 0.8rem 0.9rem 0.8rem 1rem;
+  border-radius: 13px;
+  overflow: hidden;
+}
+
+.saleCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--green);
+  opacity: 0.85;
+}
+
+.saleCard[data-storno]::before {
+  background: var(--red);
+  opacity: 1;
+}
+
+.saleTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.saleMain {
+  flex: 1 1 170px;
+  min-width: 0;
+}
+
+.saleLines {
+  margin: 0;
+  font-size: 0.81rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}
+
+.stornoTab {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 0.35rem;
+  border-radius: 5px;
+  background: var(--red-dim);
+  color: var(--red);
+  font-size: 0.62rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+
+.saleMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px 6px;
+  margin: 0.35rem 0 0;
+  font-size: 0.69rem;
+  color: var(--text-3);
+}
+
+.metaSep {
+  opacity: 0.6;
+}
+
+.channelTag {
+  padding: 0.05rem 0.4rem;
+  border-radius: 5px;
+  background: var(--bg-3);
+  color: var(--text-2);
+  font-weight: 650;
+}
+
+.saleAmount {
+  flex: 0 0 auto;
+  margin-left: auto;
+  text-align: right;
+}
+
+.saleTotal {
+  font-size: 0.95rem;
+  font-weight: 750;
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.saleCard[data-storno] .saleTotal {
+  color: var(--red);
+}
+
+.saleFoot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--border);
+}
+
+.voidNote {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: var(--red);
+}
+
+.stornoBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--red) 24%, transparent);
+  border-radius: 8px;
+  background: var(--red-dim);
+  color: var(--red);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.stornoBtn:hover {
+  border-color: var(--red);
+}
+
+.stornoBtn:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}
+
+.stornoPanel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--red) 22%, transparent);
+  border-radius: 9px;
+  background: var(--red-dim);
+}
+
+.stornoQuestion {
+  flex: 1 1 170px;
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+.stornoConfirm {
+  min-height: 30px;
+  padding: 0 0.65rem;
+  border: 1px solid var(--red);
+  border-radius: 7px;
+  /* White text on the raw --red token lands under 4.5:1 in the dark theme, so
+     the fill is darkened while the border keeps the token colour. */
+  background: color-mix(in srgb, var(--red) 84%, #000);
+  color: #fff;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.stornoConfirm:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.stornoConfirm:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}
+
+.cancelBtn {
+  min-height: 30px;
+  padding: 0 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-2);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cancelBtn:hover {
+  color: var(--text-1);
+  border-color: var(--border-hover);
+}
+
+.cancelBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.skeleton {
+  height: 88px;
+  border-radius: 13px;
+  background: var(--bg-3);
+  animation: pulse 1.3s ease-in-out infinite;
+}
+
+.skeleton:nth-child(2) {
+  opacity: 0.8;
+}
+
+.skeleton:nth-child(3) {
+  opacity: 0.6;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ---------- success ---------- */
+
+.success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 430px;
+  margin: 3rem auto;
+  text-align: center;
+}
+
+.successIcon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 0.9rem;
+  border-radius: 50%;
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.successTitle {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  color: var(--text-1);
+}
+
+.successBody {
+  margin: 0.35rem 0 1.25rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Keep the recent-sales rail to one screen next to the composer so the page
+   does not turn into a 20-card scroll with an empty left column. */
+@media (min-width: 901px) {
+  .history {
+    max-height: calc(100vh - 9rem);
+  }
+
+  .historyBody {
+    overflow-y: auto;
+    padding-right: 4px;
+    scrollbar-width: thin;
+  }
+}
+
+@media (max-width: 760px) {
+  .header {
+    align-items: stretch;
+  }
+
+  .scanBtn {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .composer {
+    padding: 0.9rem;
+    gap: 0.75rem;
+  }
+
+  .variantSelect {
+    flex: 1 1 100%;
+  }
+
+  .priceInput {
+    flex: 1 1 90px;
+    width: auto;
+  }
+
+  .fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .confirmBtn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .summaryNote {
+    max-width: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .title {
+    font-size: 1.25rem;
+  }
+
+  .fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .suggest {
+    max-height: 220px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page *,
+  .success * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

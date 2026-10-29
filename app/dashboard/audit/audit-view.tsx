@@ -23,6 +23,7 @@ import {
 import { INTL_LOCALES, useI18n } from "@/lib/i18n-context";
 import { usePagination } from "@/lib/use-pagination";
 import ListPagination from "@/components/ListPagination";
+import Select from "@/components/Select";
 import type { Product, StockEvent } from "@/lib/types";
 import {
   AUDIT_EVENT_LIMIT,
@@ -419,16 +420,18 @@ export default function AuditView({ events, products }: { events: StockEvent[]; 
 
         <div className={styles.sortWrap}>
           <ArrowUpDown size={14} aria-hidden="true" />
-          <select
+          <Select
             className={styles.sortSelect}
+            bare
             value={sort}
-            onChange={(event) => setSort(event.target.value as AuditSort)}
-            aria-label={t("audit.sort")}
-          >
-            <option value="newest">{t("audit.sortNewest")}</option>
-            <option value="oldest">{t("audit.sortOldest")}</option>
-            <option value="largest">{t("audit.sortLargest")}</option>
-          </select>
+            onChange={(next) => setSort(next as AuditSort)}
+            options={[
+              { value: "newest", label: t("audit.sortNewest") },
+              { value: "oldest", label: t("audit.sortOldest") },
+              { value: "largest", label: t("audit.sortLargest") },
+            ]}
+            ariaLabel={t("audit.sort")}
+          />
         </div>
       </div>
 
@@ -464,27 +467,21 @@ export default function AuditView({ events, products }: { events: StockEvent[]; 
         <div id="audit-filters" className={`glass fade-up ${styles.filtersPanel}`}>
           <div className={styles.field}>
             <label className={styles.fieldLabel} htmlFor="audit-staff">{t("audit.staff")}</label>
-            <select
+            <Select
               id="audit-staff"
-              className={`input ${styles.control}`}
               value={actorUid}
-              onChange={(event) => setActorUid(event.target.value)}
-            >
-              <option value="all">{t("all")}</option>
-              {actors.map((actor) => <option key={actor.uid} value={actor.uid}>{actor.name}</option>)}
-            </select>
+              onChange={setActorUid}
+              options={[{ value: "all", label: t("all") }, ...actors.map((actor) => ({ value: actor.uid, label: actor.name }))]}
+            />
           </div>
           <div className={styles.field}>
             <label className={styles.fieldLabel} htmlFor="audit-product">{t("audit.product")}</label>
-            <select
+            <Select
               id="audit-product"
-              className={`input ${styles.control}`}
               value={productId}
-              onChange={(event) => setProductId(event.target.value)}
-            >
-              <option value="all">{t("all")}</option>
-              {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-            </select>
+              onChange={setProductId}
+              options={[{ value: "all", label: t("all") }, ...products.map((product) => ({ value: product.id, label: product.name }))]}
+            />
           </div>
           <div className={styles.field}>
             <label className={styles.fieldLabel} htmlFor="audit-from">{t("audit.from")}</label>

@@ -129,23 +129,17 @@
 }
 
 .sortSelect {
-  border: 0;
-  background: transparent;
+  width: auto;
+  height: 100%;
+  max-width: 190px;
   color: var(--text-1);
   font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
-  height: 100%;
-  max-width: 190px;
 }
 
-.sortSelect:focus {
+.sortSelect:focus-visible {
   outline: none;
-}
-
-.sortSelect option {
-  background: var(--bg-2);
-  color: var(--text-1);
 }
 
 /* Tag chips */

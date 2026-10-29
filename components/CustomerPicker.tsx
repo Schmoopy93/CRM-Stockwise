@@ -5,6 +5,7 @@ import { translateError, useI18n } from "@/lib/i18n-context";
 import { useCustomers } from "@/lib/hooks";
 import { saveCustomer } from "@/lib/actions";
 import { customerMatches } from "@/lib/customers";
+import Select from "@/components/Select";
 import { UserPlus, X } from "lucide-react";
 
 interface Props {
@@ -66,20 +67,19 @@ export default function CustomerPicker({ shopId, value, onChange }: Props) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
       <div style={{ display: "flex", gap: "0.4rem" }}>
-        <select
-          className="input"
+        <Select
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          aria-label={t("customers.pick")}
+          onChange={onChange}
+          ariaLabel={t("customers.pick")}
           style={{ flex: 1, minWidth: 0 }}
-        >
-          <option value="">{t("customers.pickNone")}</option>
-          {customers.map((customer) => (
-            <option key={customer.id} value={customer.id}>
-              {customer.name}{customer.contact ? ` · ${customer.contact}` : ""}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: "", label: t("customers.pickNone") },
+            ...customers.map((customer) => ({
+              value: customer.id,
+              label: `${customer.name}${customer.contact ? ` · ${customer.contact}` : ""}`,
+            })),
+          ]}
+        />
         <button type="button" className="btn-secondary" onClick={() => setFormOpen((open) => !open)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "0.4rem 0.7rem", fontSize: "0.78rem", flexShrink: 0 }}>
           <UserPlus size={13} />
           {t("customers.quickAdd")}
@@ -135,20 +135,17 @@ export function CustomerLinkChip({ shopId, value, onChange }: Props) {
 
   if (!selected) {
     return (
-      <select
-        className="input"
+      <Select
         value=""
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={t("customers.attach")}
-        style={{ width: "auto", maxWidth: 160, padding: "0.25rem 0.5rem", fontSize: "0.7rem" }}
-      >
-        <option value="">{t("customers.attach")}</option>
-        {customers.map((customer) => (
-          <option key={customer.id} value={customer.id}>
-            {customer.name}{customer.contact ? ` · ${customer.contact}` : ""}
-          </option>
-        ))}
-      </select>
+        onChange={onChange}
+        ariaLabel={t("customers.attach")}
+        placeholder={t("customers.attach")}
+        style={{ width: "auto", maxWidth: 160, padding: "0.25rem 0.5rem", fontSize: "0.7rem", gap: 4 }}
+        options={customers.map((customer) => ({
+          value: customer.id,
+          label: `${customer.name}${customer.contact ? ` · ${customer.contact}` : ""}`,
+        }))}
+      />
     );
   }
 

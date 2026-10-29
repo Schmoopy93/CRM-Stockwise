@@ -8,6 +8,7 @@ import { INTL_LOCALES, useI18n } from "@/lib/i18n-context";
 import { useProducts, useShopMoney } from "@/lib/hooks";
 import { usePagination } from "@/lib/use-pagination";
 import ListPagination from "@/components/ListPagination";
+import Select from "@/components/Select";
 import CategoriesManager from "@/components/CategoriesManager";
 import { Plus, Search, AlertTriangle, ArrowRight, Package, X, Tags, Boxes, Layers3, CircleAlert, LayoutGrid, List as ListIcon, ArrowUpDown, ChevronDown } from "lucide-react";
 
@@ -29,7 +30,7 @@ export default function ProductsListPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [sort, setSort] = useState<SortKey>("name");
-  const [view, setView] = useState<"grid" | "list">("list");
+  const [view, setView] = useState<"grid" | "list">("grid");
   const [manageOpen, setManageOpen] = useState(false);
 
   const categories = useMemo(
@@ -152,17 +153,20 @@ export default function ProductsListPage() {
 
           <label className="products-sort-wrap">
             <ArrowUpDown size={14} className="products-sort-icon" aria-hidden="true" />
-            <select
+            <Select
+              bare
+              showChevron={false}
               value={sort}
-              onChange={(e) => setSort(e.target.value as SortKey)}
+              onChange={(next) => setSort(next as SortKey)}
+              options={[
+                { value: "name", label: t("products.sortName") },
+                { value: "qty", label: t("products.sortQuantity") },
+                { value: "priceAsc", label: t("products.sortPriceAsc") },
+                { value: "priceDesc", label: t("products.sortPriceDesc") },
+              ]}
+              ariaLabel={t("products.sortLabel")}
               className="products-sort"
-              aria-label={t("products.sortLabel")}
-            >
-              <option value="name">{t("products.sortName")}</option>
-              <option value="qty">{t("products.sortQuantity")}</option>
-              <option value="priceAsc">{t("products.sortPriceAsc")}</option>
-              <option value="priceDesc">{t("products.sortPriceDesc")}</option>
-            </select>
+            />
             <ChevronDown size={14} className="products-sort-chevron" aria-hidden="true" />
           </label>
           <div className="products-view-toggle" role="group" aria-label={t("products.viewLabel")}>
