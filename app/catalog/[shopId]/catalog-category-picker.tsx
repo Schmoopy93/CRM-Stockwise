@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Check, LayoutGrid, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n-context";
-import { useDialogFocus } from "./use-dialog-focus";
+import { useDialogFocus } from "@/components/use-dialog-focus";
 
 export default function CatalogCategorySheet({ categories, category, onSelect, onClose }: {
   categories: ReadonlyArray<readonly [string, number]>;

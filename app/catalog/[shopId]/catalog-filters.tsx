@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Check, SlidersHorizontal, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n-context";
-import { useDialogFocus } from "./use-dialog-focus";
+import { useDialogFocus } from "@/components/use-dialog-focus";
 
 export interface CatalogFilterControlsProps {
   inStockOnly: boolean;

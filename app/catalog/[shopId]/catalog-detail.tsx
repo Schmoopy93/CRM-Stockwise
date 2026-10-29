@@ -11,7 +11,7 @@ import { CatalogItem, CatalogStatEvent } from "@/lib/types";
 import { catalogLink, MAX_QUANTITY } from "./catalog-store";
 import { catalogItemAvailable, catalogStockForVariant } from "@/lib/catalog-query";
 import { fieldText, itemImages, saleDiscount } from "./catalog-card";
-import { useDialogFocus } from "./use-dialog-focus";
+import { useDialogFocus } from "@/components/use-dialog-focus";
 
 export default function CatalogDetail({ item, locale, prices, shopId, canPurchase, onClose, onAdd, onNotify, onTrack }: {
   item: CatalogItem;

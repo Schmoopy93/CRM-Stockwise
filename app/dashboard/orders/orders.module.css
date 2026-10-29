@@ -32,48 +32,46 @@
 
 /* ---------- shop conversations ---------- */
 
-.panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1rem;
-  border-radius: 14px;
-}
-
-.panelHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.panelTitle {
-  display: flex;
+.conversationsBtn {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--text-1);
+  min-height: 40px;
+  padding: 0 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 11px;
+  background: var(--accent-glow);
+  color: var(--accent-2);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
 }
 
-.panelIcon {
+.conversationsBtn:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--accent);
+}
+
+.conversationsBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.conversationsCount {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--accent-glow);
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--accent-2);
-  flex-shrink: 0;
-}
-
-.panelDesc {
-  margin: 0.25rem 0 0;
-  font-size: 0.75rem;
-  color: var(--text-3);
+  font-size: 0.7rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
 }
 
 .countPill {
@@ -85,6 +83,162 @@
   font-size: 0.7rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.drawerBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: drawerFade 0.2s ease;
+  transition: background-color 0.22s ease;
+}
+
+.drawerBackdrop[data-dragging] {
+  transition: none;
+}
+
+.drawer {
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 100vw);
+  height: 100dvh;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  box-shadow: -24px 0 64px rgba(15, 23, 42, 0.35);
+  animation: drawerIn 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.drawerBackdrop[data-dragging] .drawer {
+  transition: none;
+}
+
+.drawer:focus {
+  outline: none;
+}
+
+.drawerGrabber {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  height: 18px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.drawerGrabber::before {
+  content: "";
+  width: 46px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-hover);
+  transition: background 0.15s, width 0.15s;
+}
+
+.drawerGrabber:hover::before {
+  width: 58px;
+  background: var(--text-3);
+}
+
+.drawerGrabber:active {
+  cursor: grabbing;
+}
+
+.drawerHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.95rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.drawerIcon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--accent-glow);
+  color: var(--accent-2);
+  flex-shrink: 0;
+}
+
+.drawerHeading {
+  min-width: 0;
+}
+
+.drawerTitle {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 750;
+  color: var(--text-1);
+}
+
+.drawerDesc {
+  margin: 0.15rem 0 0;
+  font-size: 0.72rem;
+  color: var(--text-3);
+}
+
+.drawerClose {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-2);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.drawerClose:hover {
+  color: var(--text-1);
+  border-color: var(--border-hover);
+  background: var(--bg-3);
+}
+
+.drawerClose:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.drawerBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.9rem 1rem 1rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.drawerBody[data-thread="true"] {
+  overflow: hidden;
+}
+
+.drawerEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-height: 180px;
+  padding: 1.5rem;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
 }
 
 .panelError {
@@ -99,29 +253,181 @@
   color: var(--text-3);
 }
 
-.thread {
+.convRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: rowIn 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.convRow:nth-child(2) { animation-delay: 0.03s; }
+.convRow:nth-child(3) { animation-delay: 0.06s; }
+.convRow:nth-child(4) { animation-delay: 0.09s; }
+.convRow:nth-child(5) { animation-delay: 0.12s; }
+
+.convOpen {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-2);
+  color: var(--text-1);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.convOpen:hover {
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+  background: var(--bg-3);
+  transform: translateY(-1px);
+}
+
+.convOpen:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.convAvatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  background: var(--accent-glow);
+  color: var(--accent-2);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.convText {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
-  padding-top: 0.8rem;
-  border-top: 1px solid var(--border);
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.convEmail {
+  font-size: 0.82rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.convProduct {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.convProduct svg {
+  flex-shrink: 0;
+}
+
+.convTime {
+  font-size: 0.68rem;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.convChevron {
+  flex-shrink: 0;
+  color: var(--text-3);
+  transition: color 0.15s, transform 0.15s;
+}
+
+.convOpen:hover .convChevron {
+  color: var(--accent-2);
+  transform: translateX(2px);
+}
+
+.threadHead {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--border);
+  animation: rowIn 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .threadTop {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.threadInfo {
+.threadBack {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-2);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.threadBack:hover {
+  color: var(--text-1);
+  border-color: var(--border-hover);
+}
+
+.threadBack:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.threadTop .iconBtn {
+  margin-left: auto;
+}
+
+.threadIdentity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.threadAvatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  background: linear-gradient(135deg, var(--accent-glow), color-mix(in srgb, var(--accent) 10%, transparent));
+  color: var(--accent-2);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.threadWho {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   min-width: 0;
 }
 
 .threadEmail {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   font-weight: 700;
   color: var(--text-1);
   overflow-wrap: anywhere;
@@ -131,32 +437,120 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  margin: 0.25rem 0 0;
+  margin: 0;
   font-size: 0.72rem;
   color: var(--text-2);
 }
 
-.threadTime {
+.threadProductLink {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-2);
+  color: var(--text-1);
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.threadProductLink:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  background: var(--bg-3);
+  transform: translateY(-1px);
+}
+
+.threadProductLink:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.threadProductThumb {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--accent-glow);
+  color: var(--accent-2);
+}
+
+.threadProductThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: block;
-  margin-top: 3px;
+}
+
+.threadProductBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.threadProductLabel {
+  font-size: 0.64rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.threadProductName {
+  font-size: 0.82rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.threadProductOpen {
+  flex-shrink: 0;
+  color: var(--text-3);
+  transition: color 0.15s, transform 0.15s;
+}
+
+.threadProductLink:hover .threadProductOpen {
+  color: var(--accent-2);
+  transform: translate(1px, -1px);
+}
+
+.threadTime {
   font-size: 0.68rem;
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
 }
 
-.threadActions {
+.threadChat {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  animation: rowIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 0.04s;
 }
 
-.threadToggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0.4rem 0.65rem;
-  font-size: 0.74rem;
+@keyframes drawerIn {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes drawerFade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rowIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
 .iconBtn {
@@ -999,8 +1393,32 @@
   .cancelAction {
     flex: 1 1 auto;
   }
-  .panelHead {
-    align-items: flex-start;
+  .conversationsBtn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Matches the app's mobile shell breakpoint: the sheet owns the full screen
+   instead of sitting under the sticky app bar, and pads for the notch/home bar. */
+@media (max-width: 700px) {
+  .drawerBackdrop {
+    /* Above the sticky app bar (999) so the sheet owns the whole screen instead
+       of its header hiding under it; ConfirmDialog sits above at 1005. */
+    z-index: 1003;
+    justify-content: stretch;
+  }
+  .drawer {
+    width: 100%;
+    max-width: none;
+    border-left: 0;
+    padding-top: env(safe-area-inset-top);
+  }
+  .drawerGrabber {
+    height: 22px;
+  }
+  .drawerBody {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 }
 
@@ -1008,8 +1426,11 @@
   .card {
     padding: 0.85rem 0.85rem 0.85rem 1rem;
   }
-  .panel {
+  .drawerHead {
     padding: 0.85rem;
+  }
+  .drawerBody {
+    padding: 0.8rem;
   }
   .empty {
     padding: 2rem 1rem;
@@ -1025,7 +1446,17 @@
   .chevron,
   .progressBar,
   .skeleton,
-  .cancelAction {
+  .cancelAction,
+  .drawerBackdrop,
+  .drawer,
+  .drawerGrabber::before,
+  .convRow,
+  .convOpen,
+  .convChevron,
+  .threadHead,
+  .threadChat,
+  .threadProductLink,
+  .threadProductOpen {
     transition: none;
     animation: none;
   }

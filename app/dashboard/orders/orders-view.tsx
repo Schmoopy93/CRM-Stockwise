@@ -1,11 +1,12 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
   ClipboardList,
   Clock3,
+  MessageCircle,
   PackageCheck,
   Search,
   ShoppingBag,
@@ -16,7 +17,7 @@ import { filterOrders, orderFulfillment, orderStatusCounts, ORDER_FILTERS, type 
 import StatTiles from "@/components/StatTiles";
 import type { CatalogOrder, Customer, OrderStatus, ShopConversation } from "@/lib/types";
 import OrderCard from "./order-card";
-import ShopConversationsPanel from "./shop-conversations-panel";
+import ShopConversationsDrawer from "./shop-conversations-drawer";
 import styles from "./orders.module.css";
 
 interface Props {
@@ -86,6 +87,12 @@ export default function OrdersView({
   const deferredSearch = useDeferredValue(search);
   const searchRef = useRef<HTMLInputElement>(null);
   const [openConversations, setOpenConversations] = useState<Set<string>>(() => new Set());
+  const [conversationsOpen, setConversationsOpen] = useState(false);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const closeConversations = useCallback(() => {
+    setConversationsOpen(false);
+    setActiveConversationId(null);
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -101,22 +108,22 @@ export default function OrdersView({
   }, []);
 
   useEffect(() => {
-    const openConversationFromHash = () => {
+    const openFromHash = () => {
       const conversationMatch = window.location.hash.match(/^#conversation-(.+)$/);
+      if (conversationMatch) {
+        setActiveConversationId(conversationMatch[1]);
+        setConversationsOpen(true);
+        return;
+      }
       const orderMatch = window.location.hash.match(/^#order-chat-(.+)$/);
-      if (!conversationMatch && !orderMatch) return;
+      if (!orderMatch) return;
       setFilter("all");
       setSearch("");
-      const threadKey = conversationMatch
-        ? `conversation-${conversationMatch[1]}`
-        : orderMatch?.[1];
-      if (threadKey) {
-        setOpenConversations((current) => new Set(current).add(threadKey));
-      }
+      setOpenConversations((current) => new Set(current).add(orderMatch[1]));
     };
-    openConversationFromHash();
-    window.addEventListener("hashchange", openConversationFromHash);
-    return () => window.removeEventListener("hashchange", openConversationFromHash);
+    openFromHash();
+    window.addEventListener("hashchange", openFromHash);
+    return () => window.removeEventListener("hashchange", openFromHash);
   }, []);
 
   const counts = useMemo(() => orderStatusCounts(orders), [orders]);
@@ -133,17 +140,14 @@ export default function OrdersView({
 
   useEffect(() => {
     const hash = window.location.hash;
-    const conversationId = hash.startsWith("#conversation-") ? hash.slice("#conversation-".length) : "";
     const orderId = hash.startsWith("#order-chat-") ? hash.slice("#order-chat-".length) : "";
-    const targetId = conversationId
-      ? conversations.some((conversation) => conversation.id === conversationId) ? hash.slice(1) : ""
-      : orderId && filteredOrders.some((order) => order.id === orderId) ? hash.slice(1) : "";
+    const targetId = orderId && filteredOrders.some((order) => order.id === orderId) ? hash.slice(1) : "";
     if (!targetId) return;
     const frame = window.requestAnimationFrame(() => {
       document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [conversations, filteredOrders, openConversations]);
+  }, [filteredOrders, openConversations]);
 
   function toggleConversation(orderId: string) {
     setOpenConversations((current) => {
@@ -178,21 +182,25 @@ export default function OrdersView({
           <h1 className={styles.title}>{t("orders.title")}</h1>
           <p className={styles.subtitle}>{t("orders.subtitle")}</p>
         </div>
+        <button
+          type="button"
+          className={styles.conversationsBtn}
+          onClick={() => {
+            setActiveConversationId(null);
+            setConversationsOpen(true);
+          }}
+          aria-haspopup="dialog"
+          aria-expanded={conversationsOpen}
+        >
+          <MessageCircle size={15} />
+          {t("chat.shopConversations")}
+          {!conversationsLoading && (
+            <span className={styles.conversationsCount}>{visibleConversations.length.toLocaleString(intl)}</span>
+          )}
+        </button>
       </header>
 
       <StatTiles items={tiles} size="lg" label={t("orders.title")} />
-
-      <ShopConversationsPanel
-        shopId={shopId}
-        conversations={visibleConversations}
-        loading={conversationsLoading}
-        error={conversationsError}
-        actionError={conversationActionError}
-        openIds={openConversations}
-        authorName={authorName}
-        onToggle={toggleConversation}
-        onRequestHide={onRequestHideConversation}
-      />
 
       <section className={styles.filtersSection}>
         <div className={styles.toolbar}>
@@ -331,6 +339,21 @@ export default function OrdersView({
         <ClipboardList size={14} />
         {t("orders.stockNote")}
       </p>
+
+      {conversationsOpen && (
+        <ShopConversationsDrawer
+          shopId={shopId}
+          conversations={visibleConversations}
+          loading={conversationsLoading}
+          error={conversationsError}
+          actionError={conversationActionError}
+          activeId={activeConversationId}
+          authorName={authorName}
+          onSelect={setActiveConversationId}
+          onClose={closeConversations}
+          onRequestHide={onRequestHideConversation}
+        />
+      )}
     </main>
   );
 }

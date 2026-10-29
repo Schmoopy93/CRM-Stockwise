@@ -40,7 +40,7 @@ export function ConfirmDialog({
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 60,
+        zIndex: 1005,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

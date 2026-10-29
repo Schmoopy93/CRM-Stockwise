@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   addDoc,
   collection,
@@ -10,10 +10,11 @@ import {
   query,
   serverTimestamp,
 } from "firebase/firestore";
-import { Send } from "lucide-react";
+import { MessageCircle, Send } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { Locale, INTL_LOCALES, translateError, useI18n } from "@/lib/i18n-context";
 import { markOrderMessagesRead, markShopConversationRead } from "@/lib/notifications";
+import styles from "./order-conversation.module.css";
 
 interface ConversationMessage {
   id: string;
@@ -32,6 +33,7 @@ export default function OrderConversation({
   authorName,
   customerEmail,
   locale,
+  fill,
 }: {
   shopId: string;
   orderId?: string;
@@ -40,6 +42,8 @@ export default function OrderConversation({
   authorName: string;
   customerEmail?: string;
   locale: Locale;
+  /** Stretch to the host's height instead of capping the thread at 320px. */
+  fill?: boolean;
 }) {
   const { t } = useI18n();
   const intl = INTL_LOCALES[locale];
@@ -48,6 +52,7 @@ export default function OrderConversation({
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const listRef = useRef<HTMLDivElement>(null);
   const threadId = conversationId ?? orderId ?? "";
   const messagesCollection = useMemo(() => conversationId
     ? collection(db, "shops", shopId, "conversations", conversationId, "messages")
@@ -85,6 +90,11 @@ export default function OrderConversation({
     });
   }, [shopId, threadId, conversationId, messagesCollection, authorRole, t]);
 
+  useEffect(() => {
+    const list = listRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+  }, [messages.length]);
+
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const body = text.trim();
@@ -112,50 +122,52 @@ export default function OrderConversation({
   }
 
   return (
-    <section aria-label={t("chat.title")} style={{
-      display: "flex", flexDirection: "column", gap: "0.75rem", minWidth: 0,
-      border: "1px solid var(--border)", borderRadius: 12, padding: "0.85rem",
-      background: "var(--bg-2)",
-    }}>
-      <h3 style={{ margin: 0, color: "var(--text-1)", fontSize: "0.85rem", fontWeight: 750 }}>
-        {t("chat.title")}
-      </h3>
-      <div aria-live="polite" style={{
-        display: "flex", flexDirection: "column", gap: "0.55rem", minHeight: 56,
-        maxHeight: 320, overflowY: "auto", padding: "0.1rem",
-      }}>
+    <section aria-label={t("chat.title")} className={`${styles.chat} ${fill ? styles.fill : ""}`}>
+      <header className={styles.head}>
+        <span className={styles.headIcon} aria-hidden="true">
+          <MessageCircle size={13} />
+        </span>
+        <h3 className={styles.title}>{t("chat.title")}</h3>
+      </header>
+      <div aria-live="polite" className={styles.messages} ref={listRef}>
         {loading ? (
-          <p style={{ margin: 0, color: "var(--text-3)", fontSize: "0.78rem" }}>{t("loading")}</p>
+          <p className={styles.note}>{t("loading")}</p>
         ) : messages.length === 0 ? (
-          <p style={{ margin: 0, color: "var(--text-3)", fontSize: "0.78rem" }}>{t("chat.empty")}</p>
+          <div className={styles.empty}>
+            <span className={styles.emptyIcon} aria-hidden="true">
+              <MessageCircle size={16} />
+            </span>
+            <p className={styles.note}>{t("chat.empty")}</p>
+          </div>
         ) : messages.map((message) => {
           const mine = message.authorUid === auth.currentUser?.uid;
+          const sender = message.authorRole === "customer" ? customerEmail || message.authorName : message.authorName;
           return (
-            <article key={message.id} style={{
-              alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "88%",
-              borderRadius: mine ? "12px 12px 3px 12px" : "12px 12px 12px 3px",
-              padding: "0.55rem 0.7rem",
-              background: mine ? "var(--accent-glow)" : "var(--bg-3)",
-            }}>
-              <p style={{ margin: 0, color: "var(--text-3)", fontSize: "0.66rem", fontWeight: 700 }}>
-                {message.authorRole === "customer" ? customerEmail || message.authorName : message.authorName}
-                {message.createdAt && (
-                  <time dateTime={message.createdAt.toISOString()} style={{ marginLeft: 7, fontWeight: 500 }}>
-                    {message.createdAt.toLocaleString(intl)}
-                  </time>
-                )}
-              </p>
-              <p style={{ margin: "0.25rem 0 0", color: "var(--text-1)", fontSize: "0.8rem", lineHeight: 1.45, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-                {message.text}
-              </p>
+            <article key={message.id} className={styles.row} data-mine={mine || undefined}>
+              {!mine && (
+                <span className={styles.avatar} aria-hidden="true">
+                  {(sender.trim()[0] ?? "?").toUpperCase()}
+                </span>
+              )}
+              <div className={styles.bubble} data-mine={mine || undefined}>
+                <p className={styles.meta}>
+                  {sender}
+                  {message.createdAt && (
+                    <time dateTime={message.createdAt.toISOString()} className={styles.time}>
+                      {message.createdAt.toLocaleString(intl)}
+                    </time>
+                  )}
+                </p>
+                <p className={styles.text}>{message.text}</p>
+              </div>
             </article>
           );
         })}
       </div>
-      {error && <p role="alert" style={{ margin: 0, color: "var(--red)", fontSize: "0.76rem" }}>{error}</p>}
-      <form onSubmit={send} style={{ display: "flex", alignItems: "flex-end", gap: "0.5rem" }}>
+      {error && <p role="alert" className={styles.error}>{error}</p>}
+      <form onSubmit={send} className={styles.composer}>
         <textarea
-          className="input"
+          className={`input ${styles.input}`}
           value={text}
           onChange={(event) => setText(event.target.value.slice(0, 2000))}
           onKeyDown={(event) => {
@@ -168,17 +180,15 @@ export default function OrderConversation({
           rows={2}
           maxLength={2000}
           required
-          style={{ flex: 1, minWidth: 0, resize: "vertical", fontSize: "0.8rem" }}
         />
         <button
           type="submit"
-          className="btn-primary"
+          className={`btn-primary ${styles.send}`}
           disabled={sending || !text.trim()}
           aria-label={t("chat.send")}
-          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 40, padding: "0.5rem 0.7rem", fontSize: "0.76rem" }}
+          title={t("chat.send")}
         >
-          <Send size={14} />
-          {t("chat.send")}
+          <Send size={15} />
         </button>
       </form>
     </section>

@@ -13,7 +13,7 @@ import { placeCatalogOrder } from "@/lib/actions";
 import { catalogLink, MAX_QUANTITY } from "./catalog-store";
 import { itemImages } from "./catalog-card";
 import OrderChannels, { availableChannels } from "./order-channels";
-import { useDialogFocus } from "./use-dialog-focus";
+import { useDialogFocus } from "@/components/use-dialog-focus";
 
 export interface ResolvedCartLine {
   item: CatalogItem;
