@@ -476,7 +476,7 @@ export default function SalesPage() {
 
                         <div className={styles.saleFoot}>
                           {profile && !sale.sourceOrderId && !isStorno && (
-                            <div className={styles.linker}>
+                            <div className={`${styles.linker} ${styles.footLinker}`}>
                               <CustomerPicker
                                 shopId={profile.shopId}
                                 value={sale.customerId ?? ""}

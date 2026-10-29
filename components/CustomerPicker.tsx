@@ -53,7 +53,7 @@ export default function CustomerPicker({ shopId, value, onChange }: Props) {
   if (selected) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 5, padding: "0.25rem 0.6rem", fontSize: "0.78rem", fontWeight: 600, background: "var(--accent-glow)", border: "1px solid rgba(99,102,241,0.25)", borderRadius: 99, color: "var(--accent-2)" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 5, padding: "0.3rem 0.7rem", fontSize: "0.8rem", fontWeight: 600, background: "var(--accent-glow)", border: "1px solid rgba(99,102,241,0.25)", borderRadius: 99, color: "var(--accent-2)" }}>
           {selected.name}
           <button type="button" onClick={() => onChange("")} aria-label={t("customers.unlink")} style={{ display: "flex", padding: 0, background: "transparent", border: "none", color: "inherit", cursor: "pointer" }}>
             <X size={11} />
@@ -71,7 +71,7 @@ export default function CustomerPicker({ shopId, value, onChange }: Props) {
           value={value}
           onChange={onChange}
           ariaLabel={t("customers.pick")}
-          style={{ flex: 1, minWidth: 0 }}
+          style={{ flex: 1, minWidth: 0, height: 38, padding: "0 0.8rem", fontSize: "0.8rem" }}
           options={[
             { value: "", label: t("customers.pickNone") },
             ...customers.map((customer) => ({
@@ -80,7 +80,7 @@ export default function CustomerPicker({ shopId, value, onChange }: Props) {
             })),
           ]}
         />
-        <button type="button" className="btn-secondary" onClick={() => setFormOpen((open) => !open)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "0.4rem 0.7rem", fontSize: "0.78rem", flexShrink: 0 }}>
+        <button type="button" className="btn-secondary" onClick={() => setFormOpen((open) => !open)} style={{ height: 38, padding: "0 0.95rem", fontSize: "0.78rem", flexShrink: 0 }}>
           <UserPlus size={13} />
           {t("customers.quickAdd")}
         </button>
